@@ -10,10 +10,19 @@ async fn main() -> Result<()> {
 
     info!("Starting JAMES Core v{}", env!("CARGO_PKG_VERSION"));
 
-    let config = CoreConfig::load().unwrap_or_else(|e| {
+    let mut config = CoreConfig::load().unwrap_or_else(|e| {
         error!("Failed to load config: {}, using defaults", e);
         CoreConfig::default()
     });
+
+    if let Err(errors) = config.validate() {
+        error!(
+            "Invalid configuration ({} problem(s)), using defaults: {}",
+            errors.len(),
+            errors.join("; ")
+        );
+        config = CoreConfig::default();
+    }
 
     if let Err(e) = config.save() {
         error!("Failed to save config: {}", e);
