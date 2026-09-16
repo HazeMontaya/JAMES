@@ -314,8 +314,8 @@ impl RegistryEventBus {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_registry_register_unregister() {
+    #[tokio::test]
+    async fn test_registry_register_unregister() {
         let registry = Registry::new();
         
         let entry = RegistryEntry {
@@ -333,7 +333,7 @@ mod tests {
             heartbeat_interval_secs: Some(30),
         };
 
-        let id = registry.register(entry).unwrap();
+        let id = registry.register(entry).await.unwrap();
         assert_ne!(id, Uuid::nil());
 
         let retrieved = registry.get(id).unwrap();
@@ -343,15 +343,15 @@ mod tests {
         let found = registry.get_by_name("test-service").unwrap();
         assert_eq!(found.id, id);
 
-        let unregistered = registry.unregister(id).unwrap();
+        let unregistered = registry.unregister(id).await.unwrap();
         assert!(unregistered);
 
         assert!(registry.get(id).is_none());
         assert!(registry.get_by_name("test-service").is_none());
     }
 
-    #[test]
-    fn test_registry_query() {
+    #[tokio::test]
+    async fn test_registry_query() {
         let registry = Registry::new();
         
         let entry1 = RegistryEntry {
@@ -384,8 +384,8 @@ mod tests {
             heartbeat_interval_secs: Some(30),
         };
 
-        registry.register(entry1).unwrap();
-        registry.register(entry2).unwrap();
+        registry.register(entry1).await.unwrap();
+        registry.register(entry2).await.unwrap();
 
         let services = registry.query(RegistryQuery {
             entry_type: Some(RegistryEntryType::Service),
@@ -416,8 +416,8 @@ mod tests {
         assert_eq!(by_cap.len(), 1);
     }
 
-    #[test]
-    fn test_duplicate_name_fails() {
+    #[tokio::test]
+    async fn test_duplicate_name_fails() {
         let registry = Registry::new();
         
         let entry = RegistryEntry {
@@ -435,8 +435,8 @@ mod tests {
             heartbeat_interval_secs: Some(30),
         };
 
-        registry.register(entry.clone()).unwrap();
-        let result = registry.register(entry);
+        registry.register(entry.clone()).await.unwrap();
+        let result = registry.register(entry).await;
         assert!(result.is_err());
     }
 }

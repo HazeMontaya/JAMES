@@ -675,7 +675,7 @@ mod tests {
             experimental: false,
         };
 
-        registry.register(cap, "test").unwrap();
+        registry.register(cap, "test").await.unwrap();
 
         let retrieved = registry.get("test.capability").unwrap();
         assert_eq!(retrieved.definition.id, "test.capability");
@@ -707,8 +707,8 @@ mod tests {
             experimental: false,
         };
 
-        registry.register(cap, "test").unwrap();
-        let unregistered = registry.unregister("test.capability").unwrap();
+        registry.register(cap, "test").await.unwrap();
+        let unregistered = registry.unregister("test.capability").await.unwrap();
         assert!(unregistered);
         assert!(registry.get("test.capability").is_none());
     }
@@ -718,11 +718,13 @@ mod tests {
         let registry = CapabilityRegistry::new();
         registry.start().await.unwrap();
 
+        // Builtins (see register_builtin_capabilities): File x2 (read/write),
+        // Voice x2 (transcribe/synthesize). No System builtins exist.
         let file_caps = registry.list_by_category(CapabilityCategory::File);
         assert!(file_caps.len() >= 2);
 
-        let sys_caps = registry.list_by_category(CapabilityCategory::System);
-        assert!(sys_caps.len() >= 2);
+        let voice_caps = registry.list_by_category(CapabilityCategory::Voice);
+        assert!(voice_caps.len() >= 2);
     }
 
     #[tokio::test]
@@ -748,7 +750,7 @@ mod tests {
             experimental: false,
         };
 
-        registry.register(cap, "test").unwrap();
+        registry.register(cap, "test").await.unwrap();
         assert_eq!(registry.get("test.usage").unwrap().usage_count, 0);
 
         registry.record_usage("test.usage").unwrap();
@@ -794,7 +796,7 @@ mod tests {
             experimental: false,
         };
 
-        registry.register(cap, "test").unwrap();
+        registry.register(cap, "test").await.unwrap();
 
         let valid = registry.validate_input("test.validation", &serde_json::json!({
             "name": "test",
