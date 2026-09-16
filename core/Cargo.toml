@@ -14,6 +14,8 @@ members = [
     "crates/james-app-api",
     "crates/james-app",
     "crates/james-module-host",
+    "crates/james-identity",
+    "crates/james-audit",
 ]
 
 [workspace.package]
@@ -39,6 +41,8 @@ james-health = { path = "crates/james-health" }
 james-app-api = { path = "crates/james-app-api" }
 james-app = { path = "crates/james-app" }
 james-module-host = { path = "crates/james-module-host" }
+james-identity = { path = "crates/james-identity" }
+james-audit = { path = "crates/james-audit" }
 
 # Core dependencies
 tokio = { version = "1.38", features = ["full"] }
@@ -57,7 +61,8 @@ once_cell = "1.19"
 toml = "0.8"
 config = { version = "0.14", features = ["toml"] }
 clap = { version = "4.5", features = ["derive", "env"] }
-schemars = "0.8"
+schemars = { version = "0.8", features = ["chrono", "uuid1"] }
+sha2 = "0.10"
 
 # Serialization
 bincode = "1.3"
