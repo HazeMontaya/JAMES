@@ -1,0 +1,10 @@
+[package]
+name = "james-errors"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "JAMES Error Taxonomy - stable error codes, severity and recovery"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

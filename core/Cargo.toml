@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/james-core",
+    "crates/james-errors",
     "crates/james-events",
     "crates/james-registry",
     "crates/james-capabilities",
@@ -22,6 +23,7 @@ description = "JAMES Core - Local Agent & Automation Platform"
 [workspace.dependencies]
 # Local crates
 james-core = { path = "crates/james-core" }
+james-errors = { path = "crates/james-errors" }
 james-events = { path = "crates/james-events" }
 james-registry = { path = "crates/james-registry" }
 james-capabilities = { path = "crates/james-capabilities" }

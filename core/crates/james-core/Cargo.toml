@@ -6,6 +6,7 @@ license = { workspace = true }
 description = "JAMES Core - Main lifecycle and coordination"
 
 [dependencies]
+james-errors = { workspace = true }
 james-events = { workspace = true }
 james-registry = { workspace = true }
 james-capabilities = { workspace = true }

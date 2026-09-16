@@ -197,11 +197,13 @@ impl CoreConfig {
     /// Refuses files NEWER than this binary (no silent downgrade).
     fn migrate(&mut self) -> anyhow::Result<()> {
         if self.version > CONFIG_VERSION {
-            anyhow::bail!(
-                "config version {} is newer than supported v{}; refusing to downgrade",
-                self.version,
-                CONFIG_VERSION
-            );
+            anyhow::bail!(james_errors::tagged(
+                james_errors::CORE_VERSION_TOO_NEW,
+                format!(
+                    "config version {} is newer than supported v{}; refusing to downgrade",
+                    self.version, CONFIG_VERSION
+                )
+            ));
         }
         // v0 -> v1: sections did not exist; serde defaults filled them.
         self.version = CONFIG_VERSION;

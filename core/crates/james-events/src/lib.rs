@@ -350,7 +350,10 @@ impl EventBus {
         if running {
             Ok(())
         } else {
-            anyhow::bail!("event bus is stopped; event would be lost")
+            anyhow::bail!(james_errors::tagged(
+                james_errors::CORE_BUS_STOPPED,
+                "event bus is stopped; event would be lost"
+            ))
         }
     }
 

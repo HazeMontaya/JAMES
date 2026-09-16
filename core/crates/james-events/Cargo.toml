@@ -6,6 +6,7 @@ license = { workspace = true }
 description = "JAMES Event System - Types and Event Bus"
 
 [dependencies]
+james-errors = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

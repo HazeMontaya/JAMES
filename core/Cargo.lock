@@ -923,6 +923,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "james-capabilities",
+ "james-errors",
  "james-events",
  "james-health",
  "james-registry",
@@ -942,12 +943,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "james-errors"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "james-events"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
  "dashmap",
+ "james-errors",
  "serde",
  "serde_json",
  "thiserror",
