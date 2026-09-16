@@ -39,6 +39,7 @@ node_modules/
 
 # Rust
 target/
+/out/
 
 # IDE
 .vscode/

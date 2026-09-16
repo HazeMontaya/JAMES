@@ -6,6 +6,7 @@ members = [
     "crates/james-events",
     "crates/james-registry",
     "crates/james-capabilities",
+    "crates/james-capability-broker",
     "crates/james-services",
     "crates/james-tasks",
     "crates/james-scheduler",
@@ -30,6 +31,7 @@ james-errors = { path = "crates/james-errors" }
 james-events = { path = "crates/james-events" }
 james-registry = { path = "crates/james-registry" }
 james-capabilities = { path = "crates/james-capabilities" }
+james-capability-broker = { path = "crates/james-capability-broker" }
 james-services = { path = "crates/james-services" }
 james-tasks = { path = "crates/james-tasks" }
 james-scheduler = { path = "crates/james-scheduler" }
