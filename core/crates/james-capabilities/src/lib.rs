@@ -1,15 +1,13 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 use tokio::sync::RwLock;
-use tracing::{info, debug, warn};
-use uuid::Uuid;
+use tracing::info;
 use chrono::{DateTime, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use schemars::{JsonSchema, schema_for};
 use dashmap::DashMap;
 
-use james_events::{Event, EventEnvelope, builtin_events, create_system_event, EventBus};
+use james_events::{EventEnvelope, builtin_events, create_system_event, EventBus};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 pub enum CapabilityCategory {
@@ -265,11 +263,11 @@ impl CapabilityRegistry {
     }
 
     pub fn get_input_schema(&self, id: &str) -> Option<serde_json::Value> {
-        self.capabilities.get(id).map(|c| c.definition.input_schema.clone()).flatten()
+        self.capabilities.get(id).and_then(|c| c.definition.input_schema.clone())
     }
 
     pub fn get_output_schema(&self, id: &str) -> Option<serde_json::Value> {
-        self.capabilities.get(id).map(|c| c.definition.output_schema.clone()).flatten()
+        self.capabilities.get(id).and_then(|c| c.definition.output_schema.clone())
     }
 
     pub fn validate_input(&self, id: &str, input: &serde_json::Value) -> Result<()> {
@@ -614,7 +612,7 @@ impl CapabilityRegistry {
     }
 
     pub fn get_schema(&self, id: &str) -> Option<schemars::schema::RootSchema> {
-        if let Some(cap) = self.capabilities.get(id) {
+        if let Some(_cap) = self.capabilities.get(id) {
             Some(schema_for!(CapabilityDefinition))
         } else {
             None
@@ -625,26 +623,6 @@ impl CapabilityRegistry {
 impl Default for CapabilityRegistry {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub struct CapabilityEventBus {
-    inner: Arc<EventBus>,
-}
-
-impl CapabilityEventBus {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(EventBus::with_default_buffer()),
-        }
-    }
-
-    pub fn subscribe(&self, event_type: &str) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe(event_type)
-    }
-
-    pub fn subscribe_all(&self) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe_all()
     }
 }
 

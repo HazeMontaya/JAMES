@@ -1,15 +1,13 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 use tokio::sync::RwLock;
-use tracing::{info, debug, warn, error};
+use tracing::info;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
-use parking_lot::Mutex;
 
-use james_events::{Event, EventEnvelope, builtin_events, create_system_event, EventBus};
+use james_events::{EventEnvelope, builtin_events, create_system_event, EventBus};
 use james_registry::{Registry, RegistryEntry, RegistryEntryType, RegistryStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -322,26 +320,6 @@ impl ServiceRegistry {
 impl Default for ServiceRegistry {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-pub struct ServiceEventBus {
-    inner: Arc<EventBus>,
-}
-
-impl ServiceEventBus {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(EventBus::with_default_buffer()),
-        }
-    }
-
-    pub fn subscribe(&self, event_type: &str) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe(event_type)
-    }
-
-    pub fn subscribe_all(&self) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe_all()
     }
 }
 

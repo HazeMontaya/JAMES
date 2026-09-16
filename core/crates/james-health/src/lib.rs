@@ -3,22 +3,17 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tokio::time::interval;
-use tracing::{info, debug, warn, error};
-use uuid::Uuid;
+use tracing::info;
 use chrono::{DateTime, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
-use parking_lot::Mutex;
 
-use james_events::{Event, EventEnvelope, builtin_events, create_system_event, EventBus};
+use james_events::EventBus;
 use james_registry::Registry;
 use james_services::ServiceRegistry;
 use james_tasks::{TaskManager, TaskStatus};
 use james_scheduler::Scheduler;
-use dirs;
-use sysinfo;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum HealthStatus {
@@ -536,26 +531,6 @@ impl Default for HealthMonitor {
             None,
             None,
         )
-    }
-}
-
-pub struct HealthEventBus {
-    inner: Arc<EventBus>,
-}
-
-impl HealthEventBus {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(EventBus::with_default_buffer()),
-        }
-    }
-
-    pub fn subscribe(&self, event_type: &str) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe(event_type)
-    }
-
-    pub fn subscribe_all(&self) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe_all()
     }
 }
 

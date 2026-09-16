@@ -14,3 +14,4 @@ chrono = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 dashmap = { workspace = true }
+tracing = { workspace = true }

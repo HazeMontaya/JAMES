@@ -2,18 +2,17 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{info, warn, error, debug};
+use tracing::{info, error};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use clap::Parser;
 
 use james_events::{
-    Event, EventSeverity, EventEnvelope, builtin_events,
-    create_system_event, create_error_event, EventBus,
+    Event, builtin_events,
+    create_system_event, EventBus,
 };
-use james_registry::{Registry, RegistryEntry, RegistryEntryType};
+use james_registry::Registry;
 use james_capabilities::CapabilityRegistry;
 use james_services::ServiceRegistry;
 use james_tasks::TaskManager;
@@ -145,25 +144,28 @@ impl JamesCore {
         self.service_registry.stop().await?;
         self.capability_registry.stop().await?;
         self.registry.stop().await?;
-        self.event_bus.stop().await?;
-        self.health_monitor.stop().await?;
 
         {
             let mut state = self.state.write().await;
             state.status = CoreStatus::Stopped;
         }
-        
+
         *self.health_status.write().await = "Stopped".to_string();
 
+        // SYSTEM_STOPPED must be emitted BEFORE the bus stops: since F1-01
+        // publish-on-stopped-bus returns Err instead of silently dropping.
         self.emit_event(create_system_event(builtin_events::SYSTEM_STOPPED, "james-core"))
             .await?;
+
+        self.event_bus.stop().await?;
+        self.health_monitor.stop().await?;
 
         info!("JAMES Core stopped");
         Ok(())
     }
 
     async fn spawn_background_tasks(&mut self) -> Result<()> {
-        let event_bus = self.event_bus.clone();
+        let _event_bus = self.event_bus.clone();
         let health_monitor = self.health_monitor.clone();
         let interval = Duration::from_secs(self.config.health_check_interval_secs);
 
@@ -178,7 +180,7 @@ impl JamesCore {
         });
         self.background_tasks.push(handle);
 
-        let event_bus2 = self.event_bus.clone();
+        let _event_bus2 = self.event_bus.clone();
         let scheduler = self.scheduler.clone();
         let interval2 = Duration::from_secs(self.config.scheduler_tick_interval_secs);
 

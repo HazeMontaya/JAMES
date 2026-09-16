@@ -1,17 +1,15 @@
 use std::sync::Arc;
-use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tokio::time::interval;
-use tracing::{info, debug, warn, error};
+use tracing::info;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
 use cron::Schedule;
 
-use james_events::{Event, EventEnvelope, builtin_events, create_system_event, EventBus};
+use james_events::EventBus;
 use james_tasks::{TaskManager, Task, TaskStatus, TaskPriority, RetryPolicy};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -175,7 +173,7 @@ impl Scheduler {
         let mut task = scheduled.task_template.to_task();
         task.name = format!("{} (scheduled)", scheduled.name);
         
-        let task_id = self.task_manager.create_task(task).await?;
+        let _task_id = self.task_manager.create_task(task).await?;
         
         if let Some(mut scheduled) = self.scheduled_tasks.get_mut(&scheduled.id) {
             scheduled.last_run = Some(Utc::now());
@@ -242,26 +240,6 @@ impl TaskTemplate {
 impl Default for Scheduler {
     fn default() -> Self {
         Self::new(Arc::new(TaskManager::new(None)))
-    }
-}
-
-pub struct SchedulerEventBus {
-    inner: Arc<EventBus>,
-}
-
-impl SchedulerEventBus {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(EventBus::with_default_buffer()),
-        }
-    }
-
-    pub fn subscribe(&self, event_type: &str) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe(event_type)
-    }
-
-    pub fn subscribe_all(&self) -> tokio::sync::mpsc::UnboundedReceiver<EventEnvelope> {
-        self.inner.subscribe_all()
     }
 }
 
