@@ -10,6 +10,7 @@ james-core = { workspace = true }
 james-events = { workspace = true }
 james-registry = { workspace = true }
 james-capabilities = { workspace = true }
+james-capability-broker = { workspace = true }
 james-errors = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

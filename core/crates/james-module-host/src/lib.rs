@@ -85,6 +85,8 @@ pub enum ModuleState {
     Disabled,
     Starting,
     Running,
+    Blocked,
+    Updating,
     Stopping,
     Stopped,
     Failed,
@@ -128,6 +130,7 @@ pub struct ModuleHost {
     event_bus: Arc<james_events::EventBus>,
     module_loader: crate::loader::ModuleLoader,
     permission_checker: crate::permissions::ModulePermissionChecker,
+    broker: Arc<tokio::sync::RwLock<Option<Arc<james_capability_broker::CapabilityBroker>>>>,
     running: Arc<tokio::sync::RwLock<bool>>,
 }
 
@@ -147,7 +150,7 @@ let module_loader = crate::loader::ModuleLoader::new(crate::loader::ModuleLoader
         
         let permission_checker = crate::permissions::ModulePermissionChecker::default();
         
-        Self {
+Self {
             config,
             modules: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
             registry,
@@ -155,8 +158,24 @@ let module_loader = crate::loader::ModuleLoader::new(crate::loader::ModuleLoader
             event_bus,
             module_loader,
             permission_checker,
+            broker: Arc::new(tokio::sync::RwLock::new(None)),
             running: Arc::new(tokio::sync::RwLock::new(false)),
         }
+    }
+
+    /// Attach a capability broker so permission checks are enforced through
+    /// the full §6/§7 chain.
+    pub async fn set_broker(&self, broker: Arc<james_capability_broker::CapabilityBroker>) {
+        {
+            let mut guard = self.broker.write().await;
+            *guard = Some(broker.clone());
+        }
+        self.permission_checker.set_broker(broker).await;
+    }
+
+    /// Access the attached capability broker, if any.
+    pub async fn broker(&self) -> Option<Arc<james_capability_broker::CapabilityBroker>> {
+        self.broker.read().await.clone()
     }
     
     /// Start the module host
@@ -272,15 +291,26 @@ if modules.contains_key(&manifest.id) {
     
 /// Enable a module
     pub async fn enable_module(&self, id: &str) -> Result<()> {
-        let mut modules = self.modules.write().await;
-        let mut meta = modules.get_mut(id)
-            .ok_or_else(|| crate::ModuleHostError::NotFound(id.to_string()))?;
+        let manifest = {
+            let mut modules = self.modules.write().await;
+            let meta = modules.get_mut(id)
+                .ok_or_else(|| crate::ModuleHostError::NotFound(id.to_string()))?;
+            
+            if matches!(meta.state, ModuleState::Enabled | ModuleState::Starting | ModuleState::Running) {
+                return Ok(()); // Already enabled
+            }
+            
+            meta.state = ModuleState::Enabled;
+            meta.manifest.clone()
+        };
         
-        if matches!(meta.state, ModuleState::Enabled | ModuleState::Starting | ModuleState::Running) {
-            return Ok(()); // Already enabled
+        // Mirror grants into the capability broker (enforced chain §6/§7).
+        if let Some(broker) = self.broker().await {
+            for cap_id in &manifest.capabilities {
+                broker.grant_capability_permissions(id, cap_id);
+            }
         }
         
-        meta.state = ModuleState::Enabled;
         Ok(())
     }
     

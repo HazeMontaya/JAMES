@@ -19,6 +19,9 @@ pub struct ModulePermissionChecker {
     
     // Policy engine (simplified)
     policies: Vec<PermissionPolicy>,
+
+    // Optional capability broker (forwarded enforcement, §6/§7 chain)
+    broker: Arc<RwLock<Option<Arc<james_capability_broker::CapabilityBroker>>>>,
 }
 
 impl Default for ModulePermissionChecker {
@@ -45,11 +48,30 @@ impl Default for ModulePermissionChecker {
             grants: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             capability_requirements: reqs,
             policies: Vec::new(),
+            broker: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }
 }
 
 impl ModulePermissionChecker {
+    /// Attach a capability broker for forwarded enforcement.
+    pub async fn set_broker(&self, broker: Arc<james_capability_broker::CapabilityBroker>) {
+        let mut guard = self.broker.write().await;
+        *guard = Some(broker);
+    }
+
+    /// Broker decision for a capability a module wants to use.
+    async fn broker_decision(&self, module_id: &str, capability: &str) -> Option<james_capability_broker::PolicyDecision> {
+        let guard = self.broker.read().await;
+        let broker = guard.as_ref()?;
+        let request = james_capability_broker::CapabilityRequest {
+            caller: module_id.to_string(),
+            capability_id: capability.to_string(),
+            input: serde_json::json!({}),
+        };
+        broker.decide(&request).await.ok()
+    }
+
     /// Check if a module has a specific permission
     pub async fn has_permission(&self, module_id: &str, permission: &str) -> bool {
         let grants = self.grants.read().await;
@@ -58,8 +80,17 @@ impl ModulePermissionChecker {
             .unwrap_or(false)
     }
     
-    /// Check if a module has all required permissions for a capability
+    /// Check if a module has all required permissions for a capability.
+    ///
+    /// When a broker is attached, its decision is authoritative: an explicit
+    /// Deny/Ask/Conditional blocks usage even if local grants exist.
     pub async fn can_use_capability(&self, module_id: &str, capability: &str) -> bool {
+        if let Some(decision) = self.broker_decision(module_id, capability).await {
+            return match decision {
+                james_capability_broker::PolicyDecision::Allow => true,
+                _ => false,
+            };
+        }
         let required = self.capability_requirements.get(capability);
         if let Some(required_perms) = required {
             for perm in required_perms {
@@ -330,5 +361,66 @@ mod tests {
         let result = checker.validate_module_permissions("mod1", &caps).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), caps);
+    }
+
+    #[tokio::test]
+    async fn test_broker_enforcement_blocks_denied_capability() {
+        use james_capability_broker::{CapabilityBroker, PolicyRule};
+        use james_capabilities::{CapabilityDefinition, CapabilityCategory, ExecutionTarget, RiskLevel};
+
+        fn def(id: &str, perms: Vec<&str>) -> CapabilityDefinition {
+            CapabilityDefinition {
+                id: id.to_string(),
+                name: id.to_string(),
+                category: CapabilityCategory::Custom("test".to_string()),
+                version: "1.0.0".to_string(),
+                provider: "james-core".to_string(),
+                description: "test".to_string(),
+                risk_level: RiskLevel::Low,
+                required_permissions: perms.into_iter().map(str::to_string).collect(),
+                dependencies: vec![],
+                input_schema: None,
+                output_schema: None,
+                execution_target: ExecutionTarget::Local,
+                tags: vec![],
+                deprecated: false,
+                experimental: false,
+            }
+        }
+
+        // Broker without grant -> denied even if local grants exist.
+        let reg = james_capabilities::CapabilityRegistry::new();
+        reg.register(def("test.broker.cap", vec!["filesystem.read"]), "james-core")
+            .await
+            .unwrap();
+        let broker = CapabilityBroker::new(Arc::new(reg)).without_audit();
+        let checker = ModulePermissionChecker::default();
+        checker.set_broker(Arc::new(broker)).await;
+
+        checker.grant_permission("mod1", "filesystem.read").await;
+        assert!(!checker.can_use_capability("mod1", "test.broker.cap").await);
+
+        // Broker grant mirrors local grant -> allowed.
+        let reg2 = james_capabilities::CapabilityRegistry::new();
+        reg2.register(def("test.broker.cap", vec!["filesystem.read"]), "james-core")
+            .await
+            .unwrap();
+        let broker2 = CapabilityBroker::new(Arc::new(reg2)).without_audit();
+        broker2.grant_capability_permissions("mod1", "test.broker.cap");
+        let checker2 = ModulePermissionChecker::default();
+        checker2.set_broker(Arc::new(broker2)).await;
+        assert!(checker2.can_use_capability("mod1", "test.broker.cap").await);
+
+        // Policy deny blocks despite grants.
+        let reg3 = james_capabilities::CapabilityRegistry::new();
+        reg3.register(def("test.broker.cap", vec!["filesystem.read"]), "james-core")
+            .await
+            .unwrap();
+        let broker3 = CapabilityBroker::new(Arc::new(reg3)).without_audit();
+        broker3.grant_capability_permissions("mod1", "test.broker.cap");
+        broker3.add_policy(PolicyRule::deny("test.broker.cap", "test policy"));
+        let checker3 = ModulePermissionChecker::default();
+        checker3.set_broker(Arc::new(broker3)).await;
+        assert!(!checker3.can_use_capability("mod1", "test.broker.cap").await);
     }
 }

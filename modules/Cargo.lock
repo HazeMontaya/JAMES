@@ -1257,6 +1257,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "james-capability-broker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dashmap",
+ "james-capabilities",
+ "james-events",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "james-chat"
 version = "0.1.0"
 dependencies = [
@@ -1452,6 +1470,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "james-capabilities",
+ "james-capability-broker",
  "james-core",
  "james-errors",
  "james-events",

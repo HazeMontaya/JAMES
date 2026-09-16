@@ -41,23 +41,44 @@ impl ModuleLifecycle {
             // Enable/Disable
             (Enabled, Starting) => true,
             (Enabled, Disabled) => true,
+            (Enabled, Updating) => true,
+            (Enabled, Blocked) => true,
             (Disabled, Enabled) => true,
             (Disabled, Failed) => true,
             
             // Start/Stop
             (Starting, Running) => true,
             (Starting, Failed) => true,
+            (Starting, Blocked) => true,
             (Running, Stopping) => true,
             (Running, Failed) => true,
             (Running, Disabled) => true,
+            (Running, Updating) => true,
+            (Running, Blocked) => true,
             (Stopping, Stopped) => true,
             (Stopping, Failed) => true,
+            
+            // Blocked
+            (Blocked, Enabled) => true,
+            (Blocked, Failed) => true,
+            (Blocked, Updating) => true,
+            (Blocked, Disabled) => true,
+            (Blocked, Unloaded) => true,
+            
+            // Updating
+            (Updating, Running) => true,
+            (Updating, Enabled) => true,
+            (Updating, Failed) => true,
+            (Updating, Blocked) => true,
+            (Updating, Stopped) => true,
             
             // Recovery
             (Failed, Discovered) => true,  // Retry from discovery
             (Stopped, Enabled) => true,     // Re-enable
             (Stopped, Disabled) => true,    // Disable after stop
+            (Stopped, Updating) => true,    // Update while stopped
             (Failed, Enabled) => true,      // Retry after failure
+            (Failed, Updating) => true,     // Update before retry
             
             // Unloaded can go back to discovery
             (Unloaded, Discovered) => true,
@@ -78,13 +99,15 @@ impl ModuleLifecycle {
             Validating => vec![Installed, Failed],
             Installed => vec![Registered, Failed],
             Registered => vec![Enabled, Disabled, Failed],
-            Enabled => vec![Starting, Disabled],
+            Enabled => vec![Starting, Disabled, Updating, Blocked],
             Disabled => vec![Enabled, Failed],
-            Starting => vec![Running, Failed],
-            Running => vec![Stopping, Disabled, Failed],
+            Starting => vec![Running, Failed, Blocked],
+            Running => vec![Stopping, Disabled, Failed, Updating, Blocked],
+            Blocked => vec![Enabled, Failed, Updating, Disabled, Unloaded],
+            Updating => vec![Running, Enabled, Failed, Blocked, Stopped],
             Stopping => vec![Stopped, Failed],
-            Stopped => vec![Enabled, Disabled, Failed],
-            Failed => vec![Discovered, Enabled, Failed],
+            Stopped => vec![Enabled, Disabled, Failed, Updating],
+            Failed => vec![Discovered, Enabled, Updating, Failed],
             Unloaded => vec![Discovered, Failed],
         }
     }
@@ -96,7 +119,10 @@ impl ModuleLifecycle {
     
     /// Check if a state represents an active module
     pub fn is_active(state: ModuleState) -> bool {
-        matches!(state, ModuleState::Starting | ModuleState::Running)
+        matches!(
+            state,
+            ModuleState::Starting | ModuleState::Running | ModuleState::Updating
+        )
     }
 }
 
@@ -187,6 +213,17 @@ mod tests {
         assert!(ModuleLifecycle::can_transition(Failed, Discovered));
         assert!(ModuleLifecycle::can_transition(Failed, Enabled));
         
+        // Blocked/Updating transitions (concept §2.2)
+        assert!(ModuleLifecycle::can_transition(Running, Blocked));
+        assert!(ModuleLifecycle::can_transition(Blocked, Enabled));
+        assert!(ModuleLifecycle::can_transition(Blocked, Updating));
+        assert!(ModuleLifecycle::can_transition(Blocked, Unloaded));
+        assert!(ModuleLifecycle::can_transition(Running, Updating));
+        assert!(ModuleLifecycle::can_transition(Updating, Running));
+        assert!(ModuleLifecycle::can_transition(Enabled, Blocked));
+        assert!(ModuleLifecycle::can_transition(Updating, Failed));
+        assert!(!ModuleLifecycle::can_transition(Blocked, Running));
+
         // Invalid transitions
         assert!(!ModuleLifecycle::can_transition(Discovered, Installed));
         assert!(!ModuleLifecycle::can_transition(Running, Enabled));
@@ -194,6 +231,20 @@ mod tests {
         
         // Self transitions allowed
         assert!(ModuleLifecycle::can_transition(Running, Running));
+    }
+    
+    #[test]
+    fn test_blocked_updating_recovery() {
+        use ModuleState::*;
+        // Security block -> recovery paths
+        assert!(ModuleLifecycle::valid_transitions(Blocked).contains(&Enabled));
+        assert!(ModuleLifecycle::valid_transitions(Blocked).contains(&Unloaded));
+        assert!(!ModuleLifecycle::valid_transitions(Blocked).contains(&Running));
+        // Update round-trip
+        assert!(ModuleLifecycle::is_active(Updating));
+        assert!(!ModuleLifecycle::is_active(Blocked));
+        assert!(!ModuleLifecycle::is_terminal(Blocked));
+        assert!(!ModuleLifecycle::is_terminal(Updating));
     }
     
     #[test]
