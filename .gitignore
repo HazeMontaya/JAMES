@@ -2,6 +2,18 @@
 .james/state/
 .james/logs/
 .james/secrets/
+.james/config/
+.james/inventory/current.json
+.james/inventory/snapshots/
+.james/inventory/capabilities.json
+.james/inventory/changes.json
+.james/inventory/devices.json
+.james/inventory/hardware.json
+.james/inventory/host.json
+.james/inventory/network.json
+.james/inventory/recommendations.json
+.james/inventory/requirements.json
+.james/inventory/software.json
 
 # Local AI models
 models/
