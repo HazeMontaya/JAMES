@@ -12,7 +12,7 @@
     "risk_level": "low",
     "status": "available",
     "metadata": {
-      "vram_gb": 4
+      "vram_gb": 11
     }
   },
   {
@@ -26,7 +26,7 @@
     "status": "available",
     "metadata": {
       "cores": 8,
-      "ram_gb": 31.92
+      "ram_gb": 32
     }
   },
   {
@@ -54,6 +54,17 @@
     "status": "available"
   },
   {
+    "id": "dev.vscode",
+    "name": "VS Code Development Environment",
+    "category": "development",
+    "detected": true,
+    "provider": "microsoft",
+    "version": "1.135.0",
+    "dependencies": [],
+    "risk_level": "low",
+    "status": "available"
+  },
+  {
     "id": "dev.git",
     "name": "Git Version Control",
     "category": "development",
@@ -63,5 +74,20 @@
     "dependencies": [],
     "risk_level": "low",
     "status": "available"
+  },
+  {
+    "id": "network.local",
+    "name": "Local Network Access",
+    "category": "network",
+    "detected": true,
+    "provider": "system",
+    "dependencies": [],
+    "risk_level": "low",
+    "status": "available",
+    "metadata": {
+      "interfaces": [
+        "WLAN"
+      ]
+    }
   }
 ]

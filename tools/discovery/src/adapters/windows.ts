@@ -45,12 +45,125 @@ import {
 import { BaseAdapter } from './base';
 import * as child_process from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const exec = promisify(child_process.exec);
-const execSync = child_process.execSync;
+const rawExec = promisify(child_process.exec);
+/**
+ * Central command runner. Adds `-NoProfile -NonInteractive` to every
+ * powershell call: machine PS profiles intermittently prepend banner text
+ * to stdout ("Build Acceleration Profile Loaded..."), which breaks
+ * JSON.parse downstream. Belt & suspenders with psJson() below.
+ */
+const exec = (cmd: string) =>
+  rawExec(
+    cmd.startsWith('powershell ')
+      ? cmd.replace('powershell ', 'powershell -NoProfile -NonInteractive ')
+      : cmd,
+    { timeout: 60000 }
+  );
+
+/**
+ * Parse PowerShell ConvertTo-Json output robustly: slice off any banner
+ * prefix (first { or [) and always return an array (PS collapses
+ * single-element results to a bare object, silently dropping data
+ * in Array.isArray-guarded callers).
+ */
+function psJson(stdout: string): any[] {
+  const start = stdout.search(/[{[]/);
+  const text = start > 0 ? stdout.slice(start) : stdout;
+  const parsed = JSON.parse(text);
+  if (Array.isArray(parsed)) return parsed;
+  return parsed === null || parsed === undefined ? [] : [parsed];
+}
+
+/** Quote-aware CSV line splitter (wmic /format:csv fields contain commas). */
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (quoted && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (c === ',' && !quoted) {
+      out.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+/** Parse wmic /format:csv output into header-keyed rows. */
+function parseCsv(stdout: string): Array<Record<string, string>> {
+  const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) return [];
+  const headers = splitCsvLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const values = splitCsvLine(line);
+    const row: Record<string, string> = {};
+    headers.forEach((h, j) => {
+      row[h.trim()] = (values[j] ?? '').trim();
+    });
+    return row;
+  });
+}
+
+/** SMBIOS memory-device type -> human name (common values only). */
+function smbiosMemoryTypeName(t: number): string | undefined {
+  switch (t) {
+    case 18:
+      return 'DDR2';
+    case 19:
+      return 'DDR2 FB-DIMM';
+    case 24:
+      return 'DDR3';
+    case 26:
+      return 'DDR4';
+    case 34:
+      return 'DDR5';
+    default:
+      return undefined;
+  }
+}
 
 export class WindowsAdapter extends BaseAdapter {
   readonly platform = 'windows' as const;
+
+  /**
+   * Locate the JAMES installation root: $JAMES_HOME first, then an upward
+   * marker search (core/Cargo.toml) from the working directory, then the
+   * legacy S:\JAMES default with low confidence. Never hard-fail: callers
+   * degrade to empty results with an honest source tag.
+   */
+  private jamesRoot(): { path: string; confidence: number; source: string } {
+    const fromEnv = process.env.JAMES_HOME;
+    if (fromEnv && fs.existsSync(fromEnv)) {
+      return { path: fromEnv, confidence: 1.0, source: 'env:JAMES_HOME' };
+    }
+    let dir = path.resolve(process.cwd());
+    for (let i = 0; i < 8; i++) {
+      if (fs.existsSync(path.join(dir, 'core', 'Cargo.toml'))) {
+        return { path: dir, confidence: 0.9, source: 'marker-search' };
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    const legacy = 'S:\\JAMES';
+    if (fs.existsSync(legacy)) {
+      return { path: legacy, confidence: 0.3, source: 'legacy-default' };
+    }
+    return { path: process.cwd(), confidence: 0.2, source: 'cwd-fallback' };
+  }
 
   async detectHardware(): Promise<HardwareInfo> {
     const [cpu, ram, gpu, npu, motherboard, bios, storage, partitions, monitors, audio, microphones, cameras, usb, bluetooth, network_adapters] = await Promise.all([
@@ -162,82 +275,92 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectCPU(): Promise<ReturnType<typeof this.createResult<CPUInfo>>> {
     try {
-      const { stdout } = await exec('wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,L2CacheSize,L3CacheSize,AddressWidth /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const values = lines[1].split(',');
-        const data: Record<string, string> = {};
-        headers.forEach((h, i) => data[h.trim()] = values[i]?.trim() || '');
-        
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,Manufacturer,AddressWidth,L2CacheSize,L3CacheSize | ConvertTo-Json"');
+      const cpus = psJson(stdout);
+      if (cpus.length > 0) {
+        // Multi-socket: report the first processor (documented limitation).
+        const data = cpus[0];
         return this.createResult({
           name: data.Name || 'Unknown',
-          manufacturer: 'GenuineIntel',
+          manufacturer: data.Manufacturer || 'Unknown',
           cores: parseInt(data.NumberOfCores || '0'),
           logical_processors: parseInt(data.NumberOfLogicalProcessors || '0'),
           max_clock_speed_mhz: parseInt(data.MaxClockSpeed || '0'),
           l2_cache_kb: parseInt(data.L2CacheSize || '0'),
           l3_cache_kb: parseInt(data.L3CacheSize || '0'),
           architecture: parseInt(data.AddressWidth || '64'),
-        }, 'wmic', 0.95);
+        }, 'cim', 0.95);
       }
     } catch (e) {}
-    return this.createUnknownResult<CPUInfo>('wmic');
+    return this.createUnknownResult<CPUInfo>('cim');
   }
 
   private async detectRAM(): Promise<ReturnType<typeof this.createResult<RAMInfo>>> {
     try {
-      const { stdout } = await exec('wmic computersystem get TotalPhysicalMemory /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const totalBytes = parseInt(lines[1].split(',')[1] || '0');
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_PhysicalMemory | Select-Object Capacity,Speed,SMBIOSMemoryType | ConvertTo-Json"');
+      const sticks = psJson(stdout);
+      if (sticks.length > 0) {
+        const totalBytes = sticks.reduce((sum: number, s: any) => sum + (parseInt(s.Capacity || '0') || 0), 0);
         const totalGB = Math.round(totalBytes / (1024**3) * 100) / 100;
-        
-        let speed = 'unknown';
-        try {
-          const { stdout: speedOut } = await exec('wmic memorychip get Speed /format:csv');
-          const speedLines = speedOut.trim().split('\n').filter(l => l.trim());
-          if (speedLines.length >= 2) {
-            speed = speedLines[1].split(',')[1]?.trim() || 'unknown';
-          }
-        } catch {}
-
+        const speeds = sticks.map((s: any) => parseInt(s.Speed || '0') || 0).filter((v: number) => v > 0);
+        const typeName = smbiosMemoryTypeName(parseInt(sticks[0].SMBIOSMemoryType || '0'));
         return this.createResult({
           total_gb: totalGB,
-          speed_mhz: speed === 'unknown' ? undefined : parseInt(speed),
-          type: 'DDR4',
-        }, 'wmic', 0.9);
+          speed_mhz: speeds.length > 0 ? Math.max(...speeds) : undefined,
+          type: typeName,
+        }, 'cim', 0.9);
+      }
+      // Fallback: total only, no DIMM detail.
+      const { stdout: sysOut } = await exec('powershell "Get-CimInstance Win32_ComputerSystem | Select-Object TotalPhysicalMemory | ConvertTo-Json"');
+      const sys = psJson(sysOut);
+      if (sys.length > 0 && sys[0].TotalPhysicalMemory) {
+        const totalGB = Math.round(parseInt(sys[0].TotalPhysicalMemory) / (1024**3) * 100) / 100;
+        return this.createResult({ total_gb: totalGB }, 'cim', 0.7);
       }
     } catch (e) {}
-    return this.createUnknownResult<RAMInfo>('wmic');
+    return this.createUnknownResult<RAMInfo>('cim');
   }
 
   private async detectGPU(): Promise<ReturnType<typeof this.createResult<GPUInfo[]>>> {
     try {
-      const { stdout } = await exec('wmic path win32_VideoController get Name,AdapterRAM,DriverVersion,VideoProcessor,VideoModeDescription /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const gpus: GPUInfo[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const data: Record<string, string> = {};
-          headers.forEach((h, j) => data[h.trim()] = values[j]?.trim() || '');
-          
-          if (data.Name && data.AdapterRAM) {
-            gpus.push({
-              name: data.Name,
-              adapter_ram_gb: Math.round(parseInt(data.AdapterRAM) / (1024**3) * 100) / 100,
-              driver_version: data.DriverVersion || 'Unknown',
-              video_processor: data.VideoProcessor || data.Name,
-              video_mode_description: data.VideoModeDescription,
-            });
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoProcessor,VideoModeDescription | ConvertTo-Json"');
+      const controllers = psJson(stdout);
+      const gpus: GPUInfo[] = [];
+      for (const data of controllers) {
+        if (data.Name) {
+          gpus.push({
+            name: data.Name,
+            // NOTE: AdapterRAM is a 32-bit value and wraps on >4GB cards
+            // (verified: 2080 Ti 11GB reports ~4GB). Corrected below via
+            // nvidia-smi when available.
+            adapter_ram_gb: data.AdapterRAM ? Math.round(parseInt(data.AdapterRAM) / (1024**3) * 100) / 100 : 0,
+            driver_version: data.DriverVersion || 'Unknown',
+            video_processor: data.VideoProcessor || data.Name,
+            video_mode_description: data.VideoModeDescription,
+          });
+        }
+      }
+      // Prefer nvidia-smi VRAM over the wrapping WMI counter.
+      try {
+        const { stdout: smi } = await exec('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits');
+        for (const line of smi.split(/\r?\n/)) {
+          const parts = line.split(',');
+          if (parts.length >= 2) {
+            const smiName = parts[0].trim();
+            const smiMemMb = parseInt(parts[1].trim());
+            const match = gpus.find(g => g.name === smiName)
+              ?? gpus.find(g => smiName.includes(g.name) || g.name.includes(smiName));
+            if (match && smiMemMb > 0) {
+              match.adapter_ram_gb = Math.round(smiMemMb / 1024 * 100) / 100;
+            }
           }
         }
-        return this.createResult(gpus, 'wmic', 0.95);
+      } catch {}
+      if (gpus.length > 0) {
+        return this.createResult(gpus, 'cim+nvidia-smi', 0.95);
       }
     } catch (e) {}
-    return this.createResult([], 'wmic', 0.5);
+    return this.createResult([], 'cim', 0.5);
   }
 
   private async detectNPU(): Promise<ReturnType<typeof this.createResult<NPUInfo | null>>> {
@@ -246,123 +369,103 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectMotherboard(): Promise<ReturnType<typeof this.createResult<MotherboardInfo>>> {
     try {
-      const { stdout } = await exec('wmic baseboard get Manufacturer,Product,Version,SerialNumber /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const values = lines[1].split(',');
-        const data: Record<string, string> = {};
-        headers.forEach((h, i) => data[h.trim()] = values[i]?.trim() || '');
-        
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product,Version,SerialNumber | ConvertTo-Json"');
+      const boards = psJson(stdout);
+      if (boards.length > 0) {
+        const data = boards[0];
         return this.createResult({
           manufacturer: data.Manufacturer || 'Unknown',
           product: data.Product || 'Unknown',
           version: data.Version || 'Unknown',
           serial_number: data.SerialNumber || undefined,
-        }, 'wmic', 0.9);
+        }, 'cim', 0.9);
       }
     } catch (e) {}
-    return this.createUnknownResult<MotherboardInfo>('wmic');
+    return this.createUnknownResult<MotherboardInfo>('cim');
   }
 
   private async detectBIOS(): Promise<ReturnType<typeof this.createResult<BIOSInfo>>> {
     try {
-      const { stdout } = await exec('wmic bios get SMBIOSBIOSVersion,ReleaseDate,Manufacturer /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const values = lines[1].split(',');
-        const data: Record<string, string> = {};
-        headers.forEach((h, i) => data[h.trim()] = values[i]?.trim() || '');
-        
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_BIOS | Select-Object SMBIOSBIOSVersion,ReleaseDate,Manufacturer | ConvertTo-Json"');
+      const entries = psJson(stdout);
+      if (entries.length > 0) {
+        const data = entries[0];
         return this.createResult({
           version: data.SMBIOSBIOSVersion || 'Unknown',
           release_date: data.ReleaseDate || 'Unknown',
           vendor: data.Manufacturer || 'Unknown',
-        }, 'wmic', 0.95);
+        }, 'cim', 0.95);
       }
     } catch (e) {}
-    return this.createUnknownResult<BIOSInfo>('wmic');
+    return this.createUnknownResult<BIOSInfo>('cim');
   }
 
   private async detectStorage(): Promise<ReturnType<typeof this.createResult<StorageInfo[]>>> {
     try {
-      const { stdout } = await exec('wmic diskdrive get Model,Size,MediaType,InterfaceType,Partitions /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const storage: StorageInfo[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const data: Record<string, string> = {};
-          headers.forEach((h, j) => data[h.trim()] = values[j]?.trim() || '');
-          
-          if (data.Model && data.Size) {
-            storage.push({
-              model: data.Model,
-              size_gb: Math.round(parseInt(data.Size) / (1024**3) * 100) / 100,
-              media_type: data.MediaType || 'Unknown',
-              interface_type: data.InterfaceType || 'Unknown',
-              partitions: parseInt(data.Partitions || '0'),
-            });
-          }
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,MediaType,InterfaceType,Partitions | ConvertTo-Json"');
+      const drives = psJson(stdout);
+      const storage: StorageInfo[] = [];
+      for (const data of drives) {
+        if (data.Model && data.Size) {
+          storage.push({
+            model: data.Model,
+            size_gb: Math.round(parseInt(data.Size) / (1024**3) * 100) / 100,
+            media_type: data.MediaType || 'Unknown',
+            interface_type: data.InterfaceType || 'Unknown',
+            partitions: parseInt(data.Partitions || '0'),
+          });
         }
-        return this.createResult(storage, 'wmic', 0.9);
+      }
+      if (storage.length > 0) {
+        return this.createResult(storage, 'cim', 0.9);
       }
     } catch (e) {}
-    return this.createResult([], 'wmic', 0.5);
+    return this.createResult([], 'cim', 0.5);
   }
 
   private async detectPartitions(): Promise<ReturnType<typeof this.createResult<PartitionInfo[]>>> {
     try {
-      const { stdout } = await exec('wmic volume get DriveLetter,Label,FileSystem,Capacity,FreeSpace /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const partitions: PartitionInfo[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const data: Record<string, string> = {};
-          headers.forEach((h, j) => data[h.trim()] = values[j]?.trim() || '');
-          
-          if (data.DriveLetter) {
-            partitions.push({
-              drive_letter: data.DriveLetter,
-              label: data.Label || null,
-              file_system: data.FileSystem || null,
-              capacity_gb: data.Capacity ? Math.round(parseInt(data.Capacity) / (1024**3) * 100) / 100 : 0,
-              free_space_gb: data.FreeSpace ? Math.round(parseInt(data.FreeSpace) / (1024**3) * 100) / 100 : 0,
-            });
-          }
+      const { stdout } = await exec('powershell "Get-Volume | Select-Object DriveLetter,FileSystemLabel,FileSystem,Size,SizeRemaining | ConvertTo-Json"');
+      const volumes = psJson(stdout);
+      const partitions: PartitionInfo[] = [];
+      for (const data of volumes) {
+        // Skip unmounted/system entries without a drive letter.
+        if (data.DriveLetter) {
+          partitions.push({
+            drive_letter: data.DriveLetter,
+            label: data.FileSystemLabel || null,
+            file_system: data.FileSystem || null,
+            capacity_gb: data.Size ? Math.round(parseInt(data.Size) / (1024**3) * 100) / 100 : 0,
+            free_space_gb: data.SizeRemaining ? Math.round(parseInt(data.SizeRemaining) / (1024**3) * 100) / 100 : 0,
+          });
         }
-        return this.createResult(partitions, 'wmic', 0.9);
+      }
+      if (partitions.length > 0) {
+        return this.createResult(partitions, 'powershell', 0.9);
       }
     } catch (e) {}
-    return this.createResult([], 'wmic', 0.5);
+    return this.createResult([], 'powershell', 0.5);
   }
 
   private async detectMonitors(): Promise<ReturnType<typeof this.createResult<MonitorInfo[]>>> {
     try {
+      // wmic kept deliberately: the CIM equivalent (WmiMonitorID) returns
+      // encodedEDID blobs needing manual decoding.
       const { stdout } = await exec('wmic desktopmonitor get Name,ScreenWidth,ScreenHeight,MonitorManufacturer,MonitorType /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const monitors: MonitorInfo[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const data: Record<string, string> = {};
-          headers.forEach((h, j) => data[h.trim()] = values[j]?.trim() || '');
-          
-          if (data.Name) {
-            monitors.push({
-              name: data.Name,
-              screen_width: data.ScreenWidth ? parseInt(data.ScreenWidth) : undefined,
-              screen_height: data.ScreenHeight ? parseInt(data.ScreenHeight) : undefined,
-              manufacturer: data.MonitorManufacturer || undefined,
-              monitor_type: data.MonitorType || undefined,
-            });
-          }
+      const rows = parseCsv(stdout);
+      const monitors: MonitorInfo[] = [];
+      for (const data of rows) {
+        if (data.Name) {
+          monitors.push({
+            name: data.Name,
+            screen_width: data.ScreenWidth ? parseInt(data.ScreenWidth) : undefined,
+            screen_height: data.ScreenHeight ? parseInt(data.ScreenHeight) : undefined,
+            manufacturer: data.MonitorManufacturer || undefined,
+            monitor_type: data.MonitorType || undefined,
+          });
         }
+      }
+      if (monitors.length > 0) {
         return this.createResult(monitors, 'wmic', 0.8);
       }
     } catch (e) {}
@@ -371,35 +474,30 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectAudio(): Promise<ReturnType<typeof this.createResult<AudioInfo[]>>> {
     try {
-      const { stdout } = await exec('wmic path win32_SoundDevice get Name,Manufacturer,DeviceID,Status /format:csv');
-      const lines = stdout.trim().split('\n').filter(l => l.trim());
-      if (lines.length >= 2) {
-        const headers = lines[0].split(',');
-        const audio: AudioInfo[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const data: Record<string, string> = {};
-          headers.forEach((h, j) => data[h.trim()] = values[j]?.trim() || '');
-          
-          if (data.Name) {
-            audio.push({
-              name: data.Name,
-              manufacturer: data.Manufacturer || 'Unknown',
-              device_id: data.DeviceID || '',
-              status: data.Status || 'Unknown',
-            });
-          }
+      const { stdout } = await exec('powershell "Get-CimInstance Win32_SoundDevice | Select-Object Name,Manufacturer,DeviceID,Status | ConvertTo-Json"');
+      const devices = psJson(stdout);
+      const audio: AudioInfo[] = [];
+      for (const data of devices) {
+        if (data.Name) {
+          audio.push({
+            name: data.Name,
+            manufacturer: data.Manufacturer || 'Unknown',
+            device_id: data.DeviceID || '',
+            status: data.Status || 'Unknown',
+          });
         }
-        return this.createResult(audio, 'wmic', 0.9);
+      }
+      if (audio.length > 0) {
+        return this.createResult(audio, 'cim', 0.9);
       }
     } catch (e) {}
-    return this.createResult([], 'wmic', 0.5);
+    return this.createResult([], 'cim', 0.5);
   }
 
   private async detectMicrophones(): Promise<ReturnType<typeof this.createResult<MicrophoneInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-PnpDevice -Class AudioEndpoint -Status OK | Where-Object {$_.FriendlyName -like \'*microphone*\' -or $_.FriendlyName -like \'*Mic*\' -or $_.FriendlyName -like \'*Headset*\' } | Select-Object FriendlyName,InstanceId,Status | ConvertTo-Json"');
-      const devices = JSON.parse(stdout);
+      const devices = psJson(stdout);
       const mics: MicrophoneInfo[] = Array.isArray(devices) ? devices.map((d: any) => ({
         name: d.FriendlyName || 'Unknown',
         device_id: d.InstanceId || '',
@@ -413,7 +511,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectCameras(): Promise<ReturnType<typeof this.createResult<CameraInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-PnpDevice -Class Camera -Status OK | Select-Object FriendlyName,InstanceId,Status | ConvertTo-Json"');
-      const devices = JSON.parse(stdout);
+      const devices = psJson(stdout);
       const cameras: CameraInfo[] = Array.isArray(devices) ? devices.map((d: any) => ({
         name: d.FriendlyName || 'Unknown',
         device_id: d.InstanceId || '',
@@ -427,7 +525,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectUSB(): Promise<ReturnType<typeof this.createResult<USBInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-PnpDevice -Class USB | Select-Object FriendlyName,InstanceId,Status,Class,Manufacturer | ConvertTo-Json"');
-      const devices = JSON.parse(stdout);
+      const devices = psJson(stdout);
       const usb: USBInfo[] = Array.isArray(devices) ? devices.map((d: any) => ({
         name: d.FriendlyName || 'Unknown',
         instance_id: d.InstanceId || '',
@@ -443,7 +541,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectBluetooth(): Promise<ReturnType<typeof this.createResult<BluetoothInfo>>> {
     try {
       const { stdout } = await exec('powershell "Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName,InstanceId,Status | ConvertTo-Json"');
-      const rawDevices = JSON.parse(stdout);
+      const rawDevices = psJson(stdout);
       const adapters: BluetoothAdapterInfo[] = Array.isArray(rawDevices) ? rawDevices
         .filter((d: any) => d.FriendlyName?.toLowerCase().includes('adapter') || d.FriendlyName?.toLowerCase().includes('radio'))
         .map((d: any) => ({
@@ -453,7 +551,7 @@ export class WindowsAdapter extends BaseAdapter {
         })) : [];
 
       const { stdout: radioOut } = await exec('powershell "Get-PnpDevice -Class Radio | Select-Object FriendlyName,InstanceId,Status | ConvertTo-Json"');
-      const radioDevices = JSON.parse(radioOut);
+      const radioDevices = psJson(radioOut);
       const btRadio = Array.isArray(radioDevices) ? radioDevices.filter((d: any) => d.FriendlyName?.toLowerCase().includes('bluetooth')) : [];
       btRadio.forEach((d: any) => {
         adapters.push({
@@ -464,7 +562,7 @@ export class WindowsAdapter extends BaseAdapter {
       });
 
       const pairedOut = await exec('powershell "Get-PnpDevice -Class Bluetooth | Where-Object {$_.Status -eq \'OK\'} | Select-Object FriendlyName,InstanceId | ConvertTo-Json"');
-      const pairedDevices = JSON.parse(pairedOut.stdout);
+      const pairedDevices = psJson(pairedOut.stdout);
       const devices: BluetoothDeviceInfo[] = Array.isArray(pairedDevices) ? pairedDevices.map((d: any) => ({
         name: d.FriendlyName || 'Unknown',
         address: '',
@@ -476,7 +574,11 @@ export class WindowsAdapter extends BaseAdapter {
         available: adapters.length > 0,
         adapters,
         devices,
-      }, 'powershell', 0.7);
+      }, 'powershell', 0.7, {
+        // Get-PnpDevice exposes no MAC addresses; real BLE enumeration
+        // needs WinRT APIs (documented future work, not silent data).
+        address_source: 'not-available-via-pnp',
+      });
     } catch (e) {}
     return this.createResult({ available: false, adapters: [], devices: [] }, 'powershell', 0.5);
   }
@@ -484,7 +586,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectNetworkAdapters(): Promise<ReturnType<typeof this.createResult<NetworkAdapterInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-NetAdapter | Where-Object {$_.Status -ne \'Disconnected\'} | Select-Object Name,InterfaceDescription,MacAddress,LinkSpeed,Status,IfIndex | ConvertTo-Json"');
-      const adapters = JSON.parse(stdout);
+      const adapters = psJson(stdout);
       const nets: NetworkAdapterInfo[] = Array.isArray(adapters) ? adapters.map((a: any) => ({
         name: a.Name,
         description: a.InterfaceDescription,
@@ -503,7 +605,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectInstalledPrograms(): Promise<ReturnType<typeof this.createResult<InstalledProgram[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-ItemProperty HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*, HKLM:\\Software\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\* | Where-Object {$_.DisplayName -and $_.DisplayVersion} | Select-Object DisplayName,DisplayVersion,Publisher,InstallDate,InstallLocation | Sort-Object DisplayName | ConvertTo-Json"');
-      const programs = JSON.parse(stdout);
+      const programs = psJson(stdout);
       const installed: InstalledProgram[] = Array.isArray(programs) ? programs.map((p: any) => ({
         name: p.DisplayName,
         version: p.DisplayVersion,
@@ -519,7 +621,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectRunningServices(): Promise<ReturnType<typeof this.createResult<RunningService[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-Service | Where-Object {$_.Status -eq \'Running\'} | Select-Object Name,DisplayName,Status,StartType | ConvertTo-Json"');
-      const services = JSON.parse(stdout);
+      const services = psJson(stdout);
       const running: RunningService[] = Array.isArray(services) ? services.map((s: any) => ({
         name: s.Name,
         display_name: s.DisplayName,
@@ -541,7 +643,7 @@ export class WindowsAdapter extends BaseAdapter {
       { name: 'rust', cmd: 'rustc --version', parse: (out: string) => out.replace('rustc ', '').split(' ')[0] },
       { name: 'cargo', cmd: 'cargo --version', parse: (out: string) => out.replace('cargo ', '').split(' ')[0] },
       { name: 'docker', cmd: 'docker --version', parse: (out: string) => out.replace('Docker version ', '').split(',')[0] },
-      { name: 'code', cmd: 'code --version', parse: (out: string) => out.split('\n')[0] },
+      { name: 'vscode', cmd: 'code --version', parse: (out: string) => out.split('\n')[0].trim() },
       { name: 'wt', cmd: 'wt --version', parse: (out: string) => out.trim() },
     ];
 
@@ -620,7 +722,8 @@ export class WindowsAdapter extends BaseAdapter {
         });
       }
     } catch (e) {
-      containers.push({ name: 'docker', version: '', running: false });
+      // Absent binaries produce no entry (previous phantom
+      // running:false entries polluted the inventory).
     }
 
     try {
@@ -632,9 +735,7 @@ export class WindowsAdapter extends BaseAdapter {
           running: true,
         });
       }
-    } catch (e) {
-      containers.push({ name: 'podman', version: '', running: false });
-    }
+    } catch (e) {}
 
     return this.createResult(containers, 'cli', 0.9);
   }
@@ -650,6 +751,8 @@ export class WindowsAdapter extends BaseAdapter {
       const distributions: WSLDistribution[] = [];
       let defaultDistro: string | undefined;
 
+      // Actual column order of `wsl --list --verbose`: NAME, STATE, VERSION
+      // (previously parsed as NAME, VERSION, STATE — swapped values).
       for (const line of lines) {
         const parts = line.trim().split(/\s+/);
         if (parts.length >= 3) {
@@ -658,8 +761,8 @@ export class WindowsAdapter extends BaseAdapter {
           if (isDefault) defaultDistro = name;
           distributions.push({
             name,
-            version: parts[1] || 'unknown',
-            state: parts[2] || 'unknown',
+            version: parts[2] || 'unknown',
+            state: parts[1] || 'unknown',
             is_default: isDefault,
           });
         }
@@ -708,20 +811,28 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectLocalModels(): Promise<ReturnType<typeof this.createResult<LocalModel[]>>> {
     const models: LocalModel[] = [];
-    
+    // Ollama keeps blobs content-addressed; loose .gguf/.bin files are an
+    // additional signal, not the full picture (`ollama list` covers the
+    // daemon case in detectAIRuntimes).
+    const roots = [
+      process.env.USERPROFILE ? path.join(process.env.USERPROFILE, '.ollama', 'models') : '',
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Ollama', 'models') : '',
+      process.env.PROGRAMDATA ? path.join(process.env.PROGRAMDATA, 'Ollama', 'models') : '',
+    ].filter(p => p.length > 0);
+
     try {
-      const ollamaModelsPath = `${process.env.USERPROFILE}\\.ollama\\models`;
-      const fs = await import('fs');
-      if (fs.existsSync(ollamaModelsPath)) {
-        const files = fs.readdirSync(ollamaModelsPath);
+      for (const modelsPath of roots) {
+        if (!fs.existsSync(modelsPath)) continue;
+        const files = fs.readdirSync(modelsPath);
         for (const file of files) {
           if (file.endsWith('.gguf') || file.endsWith('.bin')) {
-            const stats = fs.statSync(`${ollamaModelsPath}\\${file}`);
+            const full = path.join(modelsPath, file);
+            const stats = fs.statSync(full);
             models.push({
               name: file.replace(/\.(gguf|bin)$/, ''),
               type: 'llm',
               size_gb: Math.round(stats.size / (1024**3) * 100) / 100,
-              path: `${ollamaModelsPath}\\${file}`,
+              path: full,
               format: file.endsWith('.gguf') ? 'gguf' : 'bin',
             });
           }
@@ -735,14 +846,15 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectNetworkInterfaces(): Promise<ReturnType<typeof this.createResult<NetworkInterfaceInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-NetAdapter | Where-Object {$_.Status -ne \'Disconnected\'} | Select-Object Name,InterfaceDescription,MacAddress,LinkSpeed,Status,IfIndex | ConvertTo-Json"');
-      const adapters = JSON.parse(stdout);
+      const adapters = psJson(stdout);
       const interfaces: NetworkInterfaceInfo[] = Array.isArray(adapters) ? adapters.map((a: any) => ({
         name: a.Name,
         description: a.InterfaceDescription,
         mac_address: a.MacAddress,
         link_speed: a.LinkSpeed,
         status: a.Status,
-        index: a.IfIndex,
+        // PowerShell serializes IfIndex as lowercase `ifIndex`.
+        index: a.IfIndex ?? a.ifIndex,
       })) : [];
       return this.createResult(interfaces, 'powershell', 0.9);
     } catch (e) {}
@@ -752,7 +864,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectIPConfig(): Promise<ReturnType<typeof this.createResult<IPConfigInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-NetIPConfiguration | Select-Object InterfaceAlias,IPv4Address,IPv6Address,DNSServer,Ipv4DefaultGateway | ConvertTo-Json"');
-      const configs = JSON.parse(stdout);
+      const configs = psJson(stdout);
       const ipConfigs: IPConfigInfo[] = Array.isArray(configs) ? configs.map((c: any) => ({
         interface_alias: c.InterfaceAlias,
         ipv4_addresses: c.IPv4Address ? (Array.isArray(c.IPv4Address) ? c.IPv4Address.map((a: any) => a.IPAddress) : [c.IPv4Address.IPAddress]) : [],
@@ -769,7 +881,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectRoutes(): Promise<ReturnType<typeof this.createResult<RouteInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-NetRoute -AddressFamily IPv4 | Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric | ConvertTo-Json"');
-      const routes = JSON.parse(stdout);
+      const routes = psJson(stdout);
       const routeInfo: RouteInfo[] = Array.isArray(routes) ? routes.map((r: any) => ({
         destination: r.DestinationPrefix,
         next_hop: r.NextHop,
@@ -784,7 +896,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectDNS(): Promise<ReturnType<typeof this.createResult<DNSInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object {$_.ServerAddresses.Count -gt 0} | Select-Object InterfaceAlias,ServerAddresses | ConvertTo-Json"');
-      const dns = JSON.parse(stdout);
+      const dns = psJson(stdout);
       const dnsInfo: DNSInfo[] = Array.isArray(dns) ? dns.map((d: any) => ({
         interface_alias: d.InterfaceAlias,
         server_addresses: d.ServerAddresses,
@@ -797,7 +909,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectLocalIPs(): Promise<ReturnType<typeof this.createResult<LocalIPInfo[]>>> {
     try {
       const { stdout } = await exec('powershell "Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notmatch \'^127\\.|^169\\.254\\.\'} | Select-Object IPAddress,InterfaceAlias,PrefixLength | ConvertTo-Json"');
-      const ips = JSON.parse(stdout);
+      const ips = psJson(stdout);
       const localIPs: LocalIPInfo[] = Array.isArray(ips) ? ips.map((i: any) => ({
         ip_address: i.IPAddress,
         interface_alias: i.InterfaceAlias,
@@ -811,7 +923,7 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectGateway(): Promise<ReturnType<typeof this.createResult<GatewayInfo>>> {
     try {
       const { stdout } = await exec('powershell "Get-NetRoute -AddressFamily IPv4 | Where-Object {$_.DestinationPrefix -eq \'0.0.0.0/0\'} | Select-Object NextHop,InterfaceAlias | ConvertTo-Json"');
-      const routes = JSON.parse(stdout);
+      const routes = psJson(stdout);
       const route = Array.isArray(routes) ? routes[0] : routes;
       if (route?.NextHop) {
         return this.createResult({
@@ -833,25 +945,24 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectJAMESModules(): Promise<ReturnType<typeof this.createResult<string[]>>> {
     try {
-      const fs = await import('fs');
-      const modulesPath = 'S:\\JAMES';
-      const dirs = fs.readdirSync(modulesPath, { withFileTypes: true })
+      const root = this.jamesRoot();
+      const dirs = fs.readdirSync(root.path, { withFileTypes: true })
         .filter(d => d.isDirectory() && !d.name.startsWith('.'))
         .map(d => d.name);
-      return this.createResult(dirs, 'filesystem', 0.9);
+      return this.createResult(dirs, `filesystem:${root.source}`, root.confidence);
     } catch (e) {}
     return this.createResult([], 'filesystem', 0.5);
   }
 
   private async detectJAMESPlugins(): Promise<ReturnType<typeof this.createResult<string[]>>> {
     try {
-      const fs = await import('fs');
-      const pluginsPath = 'S:\\JAMES\\plugins';
+      const root = this.jamesRoot();
+      const pluginsPath = path.join(root.path, 'plugins');
       if (fs.existsSync(pluginsPath)) {
         const dirs = fs.readdirSync(pluginsPath, { withFileTypes: true })
           .filter(d => d.isDirectory())
           .map(d => d.name);
-        return this.createResult(dirs, 'filesystem', 0.9);
+        return this.createResult(dirs, `filesystem:${root.source}`, root.confidence);
       }
     } catch (e) {}
     return this.createResult([], 'filesystem', 0.5);
@@ -859,18 +970,19 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectJAMESConfig(): Promise<ReturnType<typeof this.createResult<Record<string, unknown>>>> {
     try {
-      const fs = await import('fs');
-      const configPath = 'S:\\JAMES\\.james\\config';
+      const root = this.jamesRoot();
+      const configPath = path.join(root.path, '.james', 'config');
       if (fs.existsSync(configPath)) {
         const files = fs.readdirSync(configPath);
         const config: Record<string, unknown> = {};
         for (const file of files) {
           if (file.endsWith('.json')) {
-            const content = fs.readFileSync(`${configPath}\\${file}`, 'utf-8');
-            config[file.replace('.json', '')] = JSON.parse(content);
+            const raw = fs.readFileSync(path.join(configPath, file), 'utf-8');
+            const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+            config[file.replace('.json', '')] = JSON.parse(text);
           }
         }
-        return this.createResult(config, 'filesystem', 0.9);
+        return this.createResult(config, `filesystem:${root.source}`, root.confidence);
       }
     } catch (e) {}
     return this.createResult({}, 'filesystem', 0.5);
@@ -878,13 +990,13 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectJAMESVersion(): Promise<ReturnType<typeof this.createResult<string>>> {
     try {
-      const fs = await import('fs');
-      const versionPath = 'S:\\JAMES\\.james\\version';
+      const root = this.jamesRoot();
+      const versionPath = path.join(root.path, '.james', 'version');
       if (fs.existsSync(versionPath)) {
         const version = fs.readFileSync(versionPath, 'utf-8').trim();
         return this.createResult(version, 'filesystem', 1.0);
       }
-      const pkgPath = 'S:\\JAMES\\package.json';
+      const pkgPath = path.join(root.path, 'package.json');
       if (fs.existsSync(pkgPath)) {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
         return this.createResult(pkg.version || '0.0.0', 'package.json', 0.9);
@@ -895,23 +1007,24 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectGitStatus(): Promise<ReturnType<typeof this.createResult<GitStatus>>> {
     try {
-      const { stdout: branchOut } = await exec('git -C S:\\JAMES rev-parse --abbrev-ref HEAD');
+      const root = this.jamesRoot();
+      const { stdout: branchOut } = await exec(`git -C "${root.path}" rev-parse --abbrev-ref HEAD`);
       const branch = branchOut.trim();
-      
-      const { stdout: commitOut } = await exec('git -C S:\\JAMES rev-parse HEAD');
+
+      const { stdout: commitOut } = await exec(`git -C "${root.path}" rev-parse HEAD`);
       const commit = commitOut.trim();
-      
-      const { stdout: statusOut } = await exec('git -C S:\\JAMES status --porcelain');
+
+      const { stdout: statusOut } = await exec(`git -C "${root.path}" status --porcelain`);
       const statusLines = statusOut.trim().split('\n').filter(l => l.trim());
       const untracked_files: string[] = [];
       const modified_files: string[] = [];
-      
+
       for (const line of statusLines) {
         const file = line.substring(3).trim();
         if (line.startsWith('??')) untracked_files.push(file);
         else if (line.startsWith(' M') || line.startsWith('M ')) modified_files.push(file);
       }
-      
+
       return this.createResult({
         repo_exists: true,
         branch,

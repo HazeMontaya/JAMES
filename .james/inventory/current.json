@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-16T02:01:45.288Z",
+  "timestamp": "2026-09-16T02:55:36.069Z",
   "scan_mode": "full",
   "platform": "windows",
   "hardware": {
@@ -14,59 +14,59 @@
       "architecture": 64
     },
     "cpu_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.928Z",
+      "source": "cim",
+      "detected_at": "2026-09-16T02:55:34.395Z",
       "confidence": 0.95
     },
     "ram": {
-      "total_gb": 31.92,
+      "total_gb": 32,
       "speed_mhz": 3200,
       "type": "DDR4"
     },
     "ram_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:40.176Z",
+      "source": "cim",
+      "detected_at": "2026-09-16T02:55:32.878Z",
       "confidence": 0.9
     },
     "gpu": [
       {
         "name": "NVIDIA GeForce RTX 2080 Ti",
-        "adapter_ram_gb": 4,
+        "adapter_ram_gb": 11,
         "driver_version": "32.0.16.1047",
         "video_processor": "NVIDIA GeForce RTX 2080 Ti",
         "video_mode_description": "1920 x 1080 x 4294967296 Farben"
       }
     ],
     "gpu_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.928Z",
+      "source": "cim+nvidia-smi",
+      "detected_at": "2026-09-16T02:55:33.166Z",
       "confidence": 0.95
     },
     "npu": null,
     "npu_meta": {
       "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.522Z",
+      "detected_at": "2026-09-16T02:55:31.604Z",
       "confidence": 1
     },
     "motherboard": {
-      "manufacturer": "Gigabyte Technology Co.",
-      "product": "Ltd.",
+      "manufacturer": "Gigabyte Technology Co., Ltd.",
+      "product": "Z390 AORUS ELITE-CF",
       "version": "Default string",
-      "serial_number": "Z390 AORUS ELITE-CF"
+      "serial_number": "Default string"
     },
     "motherboard_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.928Z",
+      "source": "cim",
+      "detected_at": "2026-09-16T02:55:33.859Z",
       "confidence": 0.9
     },
     "bios": {
       "version": "F12c",
-      "release_date": "20250612000000.000000+000",
+      "release_date": "/Date(1749686400000)/",
       "vendor": "American Megatrends Inc."
     },
     "bios_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.928Z",
+      "source": "cim",
+      "detected_at": "2026-09-16T02:55:33.747Z",
       "confidence": 0.95
     },
     "storage": [
@@ -93,43 +93,43 @@
       }
     ],
     "storage_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.873Z",
+      "source": "cim",
+      "detected_at": "2026-09-16T02:55:32.966Z",
       "confidence": 0.9
     },
     "partitions": [
       {
-        "drive_letter": "C:",
+        "drive_letter": "F",
         "label": null,
-        "file_system": "NTFS",
-        "capacity_gb": 232.28,
-        "free_space_gb": 32.37
+        "file_system": null,
+        "capacity_gb": 0,
+        "free_space_gb": 0
       },
       {
-        "drive_letter": "H:",
+        "drive_letter": "H",
         "label": "HDDs",
         "file_system": "NTFS",
         "capacity_gb": 3725.9,
         "free_space_gb": 1829.68
       },
       {
-        "drive_letter": "S:",
+        "drive_letter": "S",
         "label": "SSDs",
         "file_system": "NTFS",
         "capacity_gb": 931.39,
-        "free_space_gb": 305.14
+        "free_space_gb": 299.87
       },
       {
-        "drive_letter": "F:",
+        "drive_letter": "C",
         "label": null,
-        "file_system": null,
-        "capacity_gb": 0,
-        "free_space_gb": 0
+        "file_system": "NTFS",
+        "capacity_gb": 232.28,
+        "free_space_gb": 30.66
       }
     ],
     "partitions_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.928Z",
+      "source": "powershell",
+      "detected_at": "2026-09-16T02:55:35.365Z",
       "confidence": 0.9
     },
     "monitors": [
@@ -141,20 +141,20 @@
     ],
     "monitors_meta": {
       "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.929Z",
+      "detected_at": "2026-09-16T02:55:32.402Z",
       "confidence": 0.8
     },
     "audio": [
       {
         "name": "NVIDIA High Definition Audio",
         "manufacturer": "NVIDIA",
-        "device_id": "HDAUDIO\\FUNC_01&amp;VEN_10DE&amp;DEV_0091&amp;SUBSYS_145837C0&amp;REV_1001\\5&amp;B5FD044&amp;0&amp;0001",
+        "device_id": "HDAUDIO\\FUNC_01&VEN_10DE&DEV_0091&SUBSYS_145837C0&REV_1001\\5&B5FD044&0&0001",
         "status": "OK"
       },
       {
         "name": "Realtek High Definition Audio",
         "manufacturer": "Realtek",
-        "device_id": "HDAUDIO\\FUNC_01&amp;VEN_10EC&amp;DEV_1220&amp;SUBSYS_1458A0C3&amp;REV_1001\\4&amp;21FB307E&amp;0&amp;0001",
+        "device_id": "HDAUDIO\\FUNC_01&VEN_10EC&DEV_1220&SUBSYS_1458A0C3&REV_1001\\4&21FB307E&0&0001",
         "status": "OK"
       },
       {
@@ -165,20 +165,20 @@
       }
     ],
     "audio_meta": {
-      "source": "wmic",
-      "detected_at": "2026-09-16T02:01:39.928Z",
+      "source": "cim",
+      "detected_at": "2026-09-16T02:55:33.318Z",
       "confidence": 0.9
     },
     "microphones": [],
     "microphones_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.855Z",
+      "detected_at": "2026-09-16T02:55:33.859Z",
       "confidence": 0.5
     },
     "cameras": [],
     "cameras_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.995Z",
+      "detected_at": "2026-09-16T02:55:34.389Z",
       "confidence": 0.5
     },
     "usb": [
@@ -187,31 +187,31 @@
         "instance_id": "USB\\VID_05E3&PID_0608\\5&356B5377&0&10",
         "status": "Unknown",
         "class": "USB",
-        "manufacturer": "(Standardmäßige USB-HUBs)"
+        "manufacturer": "(Standardm��ige USB-HUBs)"
       },
       {
         "name": "Generischer USB-Hub",
         "instance_id": "USB\\VID_05E3&PID_0608\\5&356B5377&0&11",
         "status": "OK",
         "class": "USB",
-        "manufacturer": "(Standardmäßige USB-HUBs)"
+        "manufacturer": "(Standardm��ige USB-HUBs)"
       },
       {
         "name": "Generischer USB-Hub",
         "instance_id": "USB\\VID_05E3&PID_0608\\5&356B5377&0&13",
         "status": "OK",
         "class": "USB",
-        "manufacturer": "(Standardmäßige USB-HUBs)"
+        "manufacturer": "(Standardm��ige USB-HUBs)"
       },
       {
-        "name": "Intel(R) USB 3.1 eXtensible-Hostcontroller – 1.10 (Microsoft)",
+        "name": "Intel(R) USB 3.1 eXtensible-Hostcontroller - 1.10 (Microsoft)",
         "instance_id": "PCI\\VEN_8086&DEV_A36D&SUBSYS_50071458&REV_10\\3&11583659&0&A0",
         "status": "OK",
         "class": "USB",
         "manufacturer": "Generischer USB-xHCI-Hostcontroller"
       },
       {
-        "name": "Unbekanntes USB-Gerät (Fehler beim Anfordern einer Konfigurationsbeschreibung.)",
+        "name": "Unbekanntes USB-Ger�t (Fehler beim Anfordern einer Konfigurationsbeschreibung.)",
         "instance_id": "USB\\VID_0000&PID_0003\\5&356B5377&0&4",
         "status": "Unknown",
         "class": "USB",
@@ -222,17 +222,17 @@
         "instance_id": "USB\\ROOT_HUB30\\4&2720BDB3&0&0",
         "status": "OK",
         "class": "USB",
-        "manufacturer": "(Standardmäßige USB-HUBs)"
+        "manufacturer": "(Standardm��ige USB-HUBs)"
       },
       {
-        "name": "NVIDIA USB 3.10 eXtensible-Hostcontroller – 1.10 (Microsoft)",
+        "name": "NVIDIA USB 3.10 eXtensible-Hostcontroller - 1.10 (Microsoft)",
         "instance_id": "PCI\\VEN_10DE&DEV_1AD6&SUBSYS_37C01458&REV_A1\\4&37732CF4&0&0208",
         "status": "OK",
         "class": "USB",
         "manufacturer": "Generischer USB-xHCI-Hostcontroller"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C545\\6&386045BB&0&3",
         "status": "Unknown",
         "class": "USB",
@@ -243,24 +243,24 @@
         "instance_id": "USB\\VID_05E3&PID_0608\\6&386045BB&0&2",
         "status": "OK",
         "class": "USB",
-        "manufacturer": "(Standardmäßige USB-HUBs)"
+        "manufacturer": "(Standardm��ige USB-HUBs)"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C08B\\206F33023342",
         "status": "OK",
         "class": "USB",
         "manufacturer": "(Standard-USB-Hostcontroller)"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C545\\5&356B5377&0&4",
         "status": "Unknown",
         "class": "USB",
         "manufacturer": "(Standard-USB-Hostcontroller)"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C545\\5&356B5377&0&5",
         "status": "OK",
         "class": "USB",
@@ -271,31 +271,31 @@
         "instance_id": "USB\\ROOT_HUB30\\5&F0CABD6&0&0",
         "status": "OK",
         "class": "USB",
-        "manufacturer": "(Standardmäßige USB-HUBs)"
+        "manufacturer": "(Standardm��ige USB-HUBs)"
       },
       {
-        "name": "Unbekanntes USB-Gerät (Fehler beim Anfordern einer Gerätebeschreibung.)",
+        "name": "Unbekanntes USB-Ger�t (Fehler beim Anfordern einer Ger�tebeschreibung.)",
         "instance_id": "USB\\VID_0000&PID_0002\\5&356B5377&0&3",
         "status": "Unknown",
         "class": "USB",
         "manufacturer": "(Standard-USB-Hostcontroller)"
       },
       {
-        "name": "USB-Massenspeichergerät",
+        "name": "USB-Massenspeicherger�t",
         "instance_id": "USB\\VID_0781&PID_5581\\0901D9DAEA2E49BBBA52F791DCEDC03243BF5981AFB35D4CD7F7BAAFA00107A045B9000000000000000000003A6AD17D000184208155810777AEB474",
         "status": "Unknown",
         "class": "USB",
-        "manufacturer": "Kompatibles USB-Speichergerät"
+        "manufacturer": "Kompatibles USB-Speicherger�t"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C545\\5&356B5377&0&10",
         "status": "Unknown",
         "class": "USB",
         "manufacturer": "(Standard-USB-Hostcontroller)"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C336\\016C31663332",
         "status": "Unknown",
         "class": "USB",
@@ -309,7 +309,7 @@
         "manufacturer": "NVIDIA"
       },
       {
-        "name": "USB-Verbundgerät",
+        "name": "USB-Verbundger�t",
         "instance_id": "USB\\VID_046D&PID_C343\\BD12C72C",
         "status": "Unknown",
         "class": "USB",
@@ -318,7 +318,7 @@
     ],
     "usb_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.876Z",
+      "detected_at": "2026-09-16T02:55:34.130Z",
       "confidence": 0.85
     },
     "bluetooth": {
@@ -328,13 +328,24 @@
     },
     "bluetooth_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.907Z",
+      "detected_at": "2026-09-16T02:55:34.341Z",
       "confidence": 0.5
     },
-    "network_adapters": [],
+    "network_adapters": [
+      {
+        "name": "WLAN",
+        "description": "TP-Link Wireless USB Adapter",
+        "mac_address": "D0-37-45-19-30-D8",
+        "link_speed": "144.4 Mbps",
+        "status": "Up",
+        "ipv4_addresses": [],
+        "ipv6_addresses": [],
+        "dns_servers": []
+      }
+    ],
     "network_adapters_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.851Z",
+      "detected_at": "2026-09-16T02:55:34.665Z",
       "confidence": 0.9
     }
   },
@@ -411,14 +422,14 @@
         "install_location": null
       },
       {
-        "name": "Battlefield™ 2042",
+        "name": "BattlefieldT 2042",
         "version": "1.0.78.48270",
         "publisher": "Electronic Arts",
         "install_date": null,
         "install_location": "S:\\EA Games\\Battlefield 2042\\"
       },
       {
-        "name": "Battlefield™ 6",
+        "name": "BattlefieldT 6",
         "version": "1.0.420.18457",
         "publisher": "Electronic Arts",
         "install_date": null,
@@ -498,15 +509,15 @@
         "name": "EA app",
         "version": "13.713.0.6226",
         "publisher": "Electronic Arts",
-        "install_date": "20250709",
-        "install_location": ""
+        "install_date": null,
+        "install_location": null
       },
       {
         "name": "EA app",
         "version": "13.713.0.6226",
         "publisher": "Electronic Arts",
-        "install_date": null,
-        "install_location": null
+        "install_date": "20250709",
+        "install_location": ""
       },
       {
         "name": "Elytra Anti-Cheat Framework",
@@ -526,15 +537,15 @@
         "name": "ENE Video Capture Box HAL",
         "version": "1.0.5.15",
         "publisher": "Ene Tech.",
-        "install_date": "20250804",
-        "install_location": ""
+        "install_date": null,
+        "install_location": null
       },
       {
         "name": "ENE Video Capture Box HAL",
         "version": "1.0.5.15",
         "publisher": "Ene Tech.",
-        "install_date": null,
-        "install_location": null
+        "install_date": "20250804",
+        "install_location": ""
       },
       {
         "name": "ENE_AIC_Marvell_HAL",
@@ -552,14 +563,14 @@
       },
       {
         "name": "ENE_DRAM_RGB_AIO",
-        "version": "1.0.19.0",
+        "version": "1.0.23.1",
         "publisher": "Ene Tech.",
         "install_date": null,
         "install_location": null
       },
       {
         "name": "ENE_DRAM_RGB_AIO",
-        "version": "1.0.23.1",
+        "version": "1.0.19.0",
         "publisher": "Ene Tech.",
         "install_date": null,
         "install_location": null
@@ -596,20 +607,13 @@
         "name": "ENE_External_Device_HAL",
         "version": "1.0.12.7",
         "publisher": "ENE Tech",
-        "install_date": "20250804",
-        "install_location": ""
+        "install_date": null,
+        "install_location": null
       },
       {
         "name": "ENE_External_Device_HAL",
         "version": "1.0.12.7",
         "publisher": "ENE Tech",
-        "install_date": null,
-        "install_location": null
-      },
-      {
-        "name": "ENE_MousePad_HAL",
-        "version": "1.0.1.8",
-        "publisher": "ENE TECHNOLOGY INC.",
         "install_date": "20250804",
         "install_location": ""
       },
@@ -619,6 +623,13 @@
         "publisher": "ENE TECHNOLOGY INC.",
         "install_date": null,
         "install_location": null
+      },
+      {
+        "name": "ENE_MousePad_HAL",
+        "version": "1.0.1.8",
+        "publisher": "ENE TECHNOLOGY INC.",
+        "install_date": "20250804",
+        "install_location": ""
       },
       {
         "name": "ENE_X_AIC_HAL",
@@ -726,6 +737,13 @@
         "install_location": ""
       },
       {
+        "name": "Go Programming Language amd64 go1.27.1",
+        "version": "1.27.1",
+        "publisher": "https://go.dev",
+        "install_date": "20260916",
+        "install_location": ""
+      },
+      {
         "name": "Grand Theft Auto V Legacy",
         "version": "1.0.3889.0",
         "publisher": "Rockstar Games",
@@ -754,7 +772,7 @@
         "install_location": ""
       },
       {
-        "name": "Intel® Optane™ Pinning Explorer Extensions",
+        "name": "Intel� OptaneT Pinning Explorer Extensions",
         "version": "17.2.6.1027",
         "publisher": "Intel Corporation",
         "install_date": "20250709",
@@ -817,7 +835,7 @@
         "install_location": ""
       },
       {
-        "name": "Kumulatives Microsoft .NET Framework Intellisense Pack für Visual Studio (Deutsch)",
+        "name": "Kumulatives Microsoft .NET Framework Intellisense Pack f�r Visual Studio (Deutsch)",
         "version": "4.8.09037",
         "publisher": "Microsoft Corporation",
         "install_date": "20260709",
@@ -1526,7 +1544,7 @@
       {
         "name": "Microsoft Visual C++ 2013 Redistributable (x64) - 12.0.21005 False",
         "version": "12.0.21005.1",
-        "publisher": "Корпорация Майкрософт",
+        "publisher": "?????????? ??????????",
         "install_date": null,
         "install_location": null
       },
@@ -1540,7 +1558,7 @@
       {
         "name": "Microsoft Visual C++ 2013 Redistributable (x64) - 12.0.30501 False",
         "version": "12.0.30501.0",
-        "publisher": "Корпорация Майкрософт",
+        "publisher": "?????????? ??????????",
         "install_date": null,
         "install_location": null
       },
@@ -1561,7 +1579,7 @@
       {
         "name": "Microsoft Visual C++ 2013 Redistributable (x86) - 12.0.21005 False",
         "version": "12.0.21005.1",
-        "publisher": "Корпорация Майкрософт",
+        "publisher": "?????????? ??????????",
         "install_date": null,
         "install_location": null
       },
@@ -1575,7 +1593,7 @@
       {
         "name": "Microsoft Visual C++ 2013 Redistributable (x86) - 12.0.30501 False",
         "version": "12.0.30501.0",
-        "publisher": "Корпорация Майкрософт",
+        "publisher": "?????????? ??????????",
         "install_date": null,
         "install_location": null
       },
@@ -1833,17 +1851,17 @@
       },
       {
         "name": "Microsoft Windows Desktop Runtime - 9.0.18 (x64)",
-        "version": "9.0.18.36217",
-        "publisher": "Microsoft Corporation",
-        "install_date": null,
-        "install_location": null
-      },
-      {
-        "name": "Microsoft Windows Desktop Runtime - 9.0.18 (x64)",
         "version": "72.72.55185",
         "publisher": "Microsoft Corporation",
         "install_date": "20260716",
         "install_location": ""
+      },
+      {
+        "name": "Microsoft Windows Desktop Runtime - 9.0.18 (x64)",
+        "version": "9.0.18.36217",
+        "publisher": "Microsoft Corporation",
+        "install_date": null,
+        "install_location": null
       },
       {
         "name": "Microsoft Windows Desktop Targeting Pack - 10.0.10 (x64)",
@@ -1868,19 +1886,19 @@
       },
       {
         "name": "Microsoft.NET.Sdk.Android.Manifest-10.0.100 (x64)",
-        "version": "36.1.2",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260716",
-        "install_location": ""
-      },
-      {
-        "name": "Microsoft.NET.Sdk.Android.Manifest-10.0.100 (x64)",
         "version": "36.1.43",
         "publisher": "Microsoft Corporation",
         "install_date": "20260709",
         "install_location": ""
       },
       {
+        "name": "Microsoft.NET.Sdk.Android.Manifest-10.0.100 (x64)",
+        "version": "36.1.2",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260716",
+        "install_location": ""
+      },
+      {
         "name": "Microsoft.NET.Sdk.iOS.Manifest-10.0.100 (x64)",
         "version": "26.0.11017",
         "publisher": "Microsoft Corporation",
@@ -1896,19 +1914,19 @@
       },
       {
         "name": "Microsoft.NET.Sdk.MacCatalyst.Manifest-10.0.100 (x64)",
+        "version": "255.225.10284",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260709",
+        "install_location": ""
+      },
+      {
+        "name": "Microsoft.NET.Sdk.MacCatalyst.Manifest-10.0.100 (x64)",
         "version": "26.0.11017",
         "publisher": "Microsoft Corporation",
         "install_date": "20260716",
         "install_location": ""
       },
       {
-        "name": "Microsoft.NET.Sdk.MacCatalyst.Manifest-10.0.100 (x64)",
-        "version": "255.225.10284",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260709",
-        "install_location": ""
-      },
-      {
         "name": "Microsoft.NET.Sdk.macOS.Manifest-10.0.100 (x64)",
         "version": "255.225.10284",
         "publisher": "Microsoft Corporation",
@@ -1918,6 +1936,13 @@
       {
         "name": "Microsoft.NET.Sdk.macOS.Manifest-10.0.100 (x64)",
         "version": "26.0.11017",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260716",
+        "install_location": ""
+      },
+      {
+        "name": "Microsoft.NET.Sdk.Maui.Manifest-10.0.100 (x64)",
+        "version": "10.0.0",
         "publisher": "Microsoft Corporation",
         "install_date": "20260716",
         "install_location": ""
@@ -1930,10 +1955,10 @@
         "install_location": ""
       },
       {
-        "name": "Microsoft.NET.Sdk.Maui.Manifest-10.0.100 (x64)",
-        "version": "10.0.0",
+        "name": "Microsoft.NET.Sdk.tvOS.Manifest-10.0.100 (x64)",
+        "version": "255.225.10284",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260716",
+        "install_date": "20260709",
         "install_location": ""
       },
       {
@@ -1941,13 +1966,6 @@
         "version": "26.0.11017",
         "publisher": "Microsoft Corporation",
         "install_date": "20260716",
-        "install_location": ""
-      },
-      {
-        "name": "Microsoft.NET.Sdk.tvOS.Manifest-10.0.100 (x64)",
-        "version": "255.225.10284",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260709",
         "install_location": ""
       },
       {
@@ -2021,7 +2039,7 @@
         "install_location": ""
       },
       {
-        "name": "Microsoft-System-CLR-Typen für SQL Server 2019",
+        "name": "Microsoft-System-CLR-Typen f�r SQL Server 2019",
         "version": "15.0.2000.5",
         "publisher": "Microsoft Corporation",
         "install_date": "20260709",
@@ -2036,9 +2054,9 @@
       },
       {
         "name": "MSI Development Tools",
-        "version": "10.1.19041.5609",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -2050,9 +2068,9 @@
       },
       {
         "name": "MSI Development Tools",
-        "version": "10.1.26100.7705",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -2241,15 +2259,15 @@
         "name": "Patriot Viper M2 SSD RGB",
         "version": "1.1.0.3",
         "publisher": "Patriot Memory",
-        "install_date": "20251016",
-        "install_location": ""
+        "install_date": null,
+        "install_location": null
       },
       {
         "name": "Patriot Viper M2 SSD RGB",
         "version": "1.1.0.3",
         "publisher": "Patriot Memory",
-        "install_date": null,
-        "install_location": null
+        "install_date": "20251016",
+        "install_location": ""
       },
       {
         "name": "PokeOne version 1.01",
@@ -2554,9 +2572,9 @@
       },
       {
         "name": "Universal CRT Headers Libraries and Sources",
-        "version": "10.1.22000.832",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -2568,9 +2586,9 @@
       },
       {
         "name": "Universal CRT Headers Libraries and Sources",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -2617,13 +2635,6 @@
       },
       {
         "name": "Universal General MIDI DLS Extension SDK",
-        "version": "10.1.22000.832",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
-        "install_location": ""
-      },
-      {
-        "name": "Universal General MIDI DLS Extension SDK",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
@@ -2634,6 +2645,13 @@
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "Universal General MIDI DLS Extension SDK",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -2652,13 +2670,6 @@
       },
       {
         "name": "vcpp_crt.redist.clickonce",
-        "version": "14.29.30157",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "vcpp_crt.redist.clickonce",
         "version": "14.50.35719",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
@@ -2666,9 +2677,9 @@
       },
       {
         "name": "vcpp_crt.redist.clickonce",
-        "version": "14.51.36247",
+        "version": "14.29.30157",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260709",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -2679,10 +2690,10 @@
         "install_location": ""
       },
       {
-        "name": "Verbatim_SureFireGaming_Product",
-        "version": "1.0.3.11",
-        "publisher": "Verbatim",
-        "install_date": "20250804",
+        "name": "vcpp_crt.redist.clickonce",
+        "version": "14.51.36247",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260709",
         "install_location": ""
       },
       {
@@ -2691,6 +2702,13 @@
         "publisher": "Verbatim",
         "install_date": null,
         "install_location": null
+      },
+      {
+        "name": "Verbatim_SureFireGaming_Product",
+        "version": "1.0.3.11",
+        "publisher": "Verbatim",
+        "install_date": "20250804",
+        "install_location": ""
       },
       {
         "name": "Visual Studio Build Tools 2019",
@@ -2841,16 +2859,16 @@
       },
       {
         "name": "vs_minshellinteropmsi",
-        "version": "17.14.36015",
+        "version": "16.10.31306",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260812",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
         "name": "vs_minshellinteropmsi",
-        "version": "16.10.31306",
+        "version": "17.14.36015",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260812",
         "install_location": ""
       },
       {
@@ -2869,23 +2887,16 @@
       },
       {
         "name": "vs_minshellmsi",
-        "version": "17.14.36301",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260812",
-        "install_location": ""
-      },
-      {
-        "name": "vs_minshellmsi",
         "version": "16.11.34902",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
         "install_location": ""
       },
       {
-        "name": "vs_minshellmsires",
-        "version": "17.14.36015",
+        "name": "vs_minshellmsi",
+        "version": "17.14.36301",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20260812",
         "install_location": ""
       },
       {
@@ -2893,6 +2904,13 @@
         "version": "18.8.11829",
         "publisher": "Microsoft Corporation",
         "install_date": "20260804",
+        "install_location": ""
+      },
+      {
+        "name": "vs_minshellmsires",
+        "version": "17.14.36015",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -2960,9 +2978,9 @@
       },
       {
         "name": "WinAppDeploy",
-        "version": "10.1.22000.832",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -2974,9 +2992,9 @@
       },
       {
         "name": "WinAppDeploy",
-        "version": "10.1.26100.7705",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3009,9 +3027,9 @@
       },
       {
         "name": "Windows Desktop Extension SDK",
-        "version": "10.1.22000.832",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3023,9 +3041,9 @@
       },
       {
         "name": "Windows Desktop Extension SDK",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3037,16 +3055,23 @@
       },
       {
         "name": "Windows Desktop Extension SDK Contracts",
+        "version": "10.1.26100.7705",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "Windows Desktop Extension SDK Contracts",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
         "install_location": ""
       },
       {
-        "name": "Windows Desktop Extension SDK Contracts",
-        "version": "10.1.26100.7705",
+        "name": "Windows IoT Extension SDK",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3064,27 +3089,6 @@
         "install_location": ""
       },
       {
-        "name": "Windows IoT Extension SDK",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "Windows IoT Extension SDK Contracts",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "Windows IoT Extension SDK Contracts",
-        "version": "10.1.26100.7705",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
-        "install_location": ""
-      },
-      {
         "name": "Windows IoT Extension SDK Contracts",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
@@ -3092,10 +3096,17 @@
         "install_location": ""
       },
       {
-        "name": "Windows Mobile Extension SDK",
+        "name": "Windows IoT Extension SDK Contracts",
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "Windows IoT Extension SDK Contracts",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3113,6 +3124,20 @@
         "install_location": ""
       },
       {
+        "name": "Windows Mobile Extension SDK",
+        "version": "10.1.26100.7705",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "Windows Mobile Extension SDK Contracts",
+        "version": "10.1.26100.7705",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260410",
+        "install_location": ""
+      },
+      {
         "name": "Windows Mobile Extension SDK Contracts",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
@@ -3124,13 +3149,6 @@
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
-        "install_location": ""
-      },
-      {
-        "name": "Windows Mobile Extension SDK Contracts",
-        "version": "10.1.26100.7705",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -3149,16 +3167,16 @@
       },
       {
         "name": "Windows SDK ARM Desktop Tools",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
         "name": "Windows SDK ARM Desktop Tools",
-        "version": "10.1.22000.832",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3170,30 +3188,23 @@
       },
       {
         "name": "Windows SDK Desktop Headers arm",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
         "name": "Windows SDK Desktop Headers arm",
-        "version": "10.1.22000.832",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK Desktop Headers arm64",
-        "version": "10.1.22000.832",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK Desktop Headers arm64",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK Desktop Headers arm64",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3204,10 +3215,10 @@
         "install_location": ""
       },
       {
-        "name": "Windows SDK Desktop Headers x64",
-        "version": "10.1.22000.832",
+        "name": "Windows SDK Desktop Headers arm64",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3222,6 +3233,13 @@
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK Desktop Headers x64",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3261,6 +3279,13 @@
       },
       {
         "name": "Windows SDK Desktop Libs arm64",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK Desktop Libs arm64",
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
@@ -3274,20 +3299,6 @@
         "install_location": ""
       },
       {
-        "name": "Windows SDK Desktop Libs arm64",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK Desktop Libs x64",
-        "version": "10.1.22000.832",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
-        "install_location": ""
-      },
-      {
         "name": "Windows SDK Desktop Libs x64",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
@@ -3302,7 +3313,7 @@
         "install_location": ""
       },
       {
-        "name": "Windows SDK Desktop Libs x86",
+        "name": "Windows SDK Desktop Libs x64",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
@@ -3317,6 +3328,13 @@
       },
       {
         "name": "Windows SDK Desktop Libs x86",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK Desktop Libs x86",
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
@@ -3324,9 +3342,9 @@
       },
       {
         "name": "Windows SDK Desktop Tools arm64",
-        "version": "10.1.22000.832",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -3338,13 +3356,6 @@
       },
       {
         "name": "Windows SDK Desktop Tools arm64",
-        "version": "10.1.26100.7705",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK Desktop Tools x64",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
@@ -3359,13 +3370,13 @@
       },
       {
         "name": "Windows SDK Desktop Tools x64",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
-        "name": "Windows SDK Desktop Tools x86",
+        "name": "Windows SDK Desktop Tools x64",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
@@ -3383,6 +3394,13 @@
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK Desktop Tools x86",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3401,6 +3419,13 @@
       },
       {
         "name": "Windows SDK EULA",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporations",
+        "install_date": "20250719",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK EULA",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporations",
         "install_date": "20250712",
@@ -3411,13 +3436,6 @@
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporations",
         "install_date": "20260410",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK EULA",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporations",
-        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3450,9 +3468,9 @@
       },
       {
         "name": "Windows SDK for Windows Store Apps Contracts",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3464,16 +3482,16 @@
       },
       {
         "name": "Windows SDK for Windows Store Apps Contracts",
-        "version": "10.1.22000.832",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
         "name": "Windows SDK for Windows Store Apps DirectX x86 Remote",
-        "version": "10.1.22000.832",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3485,16 +3503,9 @@
       },
       {
         "name": "Windows SDK for Windows Store Apps DirectX x86 Remote",
-        "version": "10.1.19041.5609",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK for Windows Store Apps Headers",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3502,6 +3513,13 @@
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK for Windows Store Apps Headers",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3527,27 +3545,13 @@
       },
       {
         "name": "Windows SDK for Windows Store Apps Libs",
-        "version": "10.1.19041.5609",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
         "name": "Windows SDK for Windows Store Apps Libs",
-        "version": "10.1.26100.7705",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK for Windows Store Apps Metadata",
-        "version": "10.1.26100.7705",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK for Windows Store Apps Metadata",
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
@@ -3555,9 +3559,23 @@
       },
       {
         "name": "Windows SDK for Windows Store Apps Metadata",
+        "version": "10.1.26100.7705",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK for Windows Store Apps Metadata",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK for Windows Store Apps Metadata",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3569,16 +3587,16 @@
       },
       {
         "name": "Windows SDK for Windows Store Apps Tools",
-        "version": "10.1.26100.7705",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
         "name": "Windows SDK for Windows Store Apps Tools",
-        "version": "10.1.19041.5609",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -3590,16 +3608,16 @@
       },
       {
         "name": "Windows SDK for Windows Store Managed Apps Libs",
-        "version": "10.1.19041.5609",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
         "name": "Windows SDK for Windows Store Managed Apps Libs",
-        "version": "10.1.26100.7705",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3611,13 +3629,6 @@
       },
       {
         "name": "Windows SDK Modern Versioned Developer Tools",
-        "version": "10.1.22000.832",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
-        "install_location": ""
-      },
-      {
-        "name": "Windows SDK Modern Versioned Developer Tools",
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
@@ -3628,6 +3639,13 @@
         "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
         "install_date": "20250719",
+        "install_location": ""
+      },
+      {
+        "name": "Windows SDK Modern Versioned Developer Tools",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3702,16 +3720,16 @@
       },
       {
         "name": "Windows Team Extension SDK",
-        "version": "10.1.26100.7705",
+        "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
         "name": "Windows Team Extension SDK",
-        "version": "10.1.22000.832",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -3758,20 +3776,13 @@
       },
       {
         "name": "WinRT Intellisense Desktop - en-us",
-        "version": "10.1.26100.7705",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
         "name": "WinRT Intellisense Desktop - en-us",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "WinRT Intellisense Desktop - Other Languages",
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
@@ -3792,10 +3803,10 @@
         "install_location": ""
       },
       {
-        "name": "WinRT Intellisense IoT - en-us",
-        "version": "10.1.19041.5609",
+        "name": "WinRT Intellisense Desktop - Other Languages",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
@@ -3803,6 +3814,13 @@
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
+        "install_location": ""
+      },
+      {
+        "name": "WinRT Intellisense IoT - en-us",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3835,9 +3853,9 @@
       },
       {
         "name": "WinRT Intellisense Mobile - en-us",
-        "version": "10.1.22000.832",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3849,20 +3867,6 @@
       },
       {
         "name": "WinRT Intellisense Mobile - en-us",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "WinRT Intellisense PPI - en-us",
-        "version": "10.1.19041.5609",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
-        "install_location": ""
-      },
-      {
-        "name": "WinRT Intellisense PPI - en-us",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
@@ -3876,6 +3880,20 @@
         "install_location": ""
       },
       {
+        "name": "WinRT Intellisense PPI - en-us",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
+        "install_location": ""
+      },
+      {
+        "name": "WinRT Intellisense PPI - en-us",
+        "version": "10.1.19041.5609",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250719",
+        "install_location": ""
+      },
+      {
         "name": "WinRT Intellisense PPI - Other Languages",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
@@ -3884,16 +3902,16 @@
       },
       {
         "name": "WinRT Intellisense PPI - Other Languages",
-        "version": "10.1.19041.5609",
+        "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
-        "install_date": "20250719",
+        "install_date": "20260410",
         "install_location": ""
       },
       {
         "name": "WinRT Intellisense PPI - Other Languages",
-        "version": "10.1.26100.7705",
+        "version": "10.1.19041.5609",
         "publisher": "Microsoft Corporation",
-        "install_date": "20260410",
+        "install_date": "20250719",
         "install_location": ""
       },
       {
@@ -3901,6 +3919,13 @@
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
+        "install_location": ""
+      },
+      {
+        "name": "WinRT Intellisense UAP - en-us",
+        "version": "10.1.22000.832",
+        "publisher": "Microsoft Corporation",
+        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3911,7 +3936,7 @@
         "install_location": ""
       },
       {
-        "name": "WinRT Intellisense UAP - en-us",
+        "name": "WinRT Intellisense UAP - Other Languages",
         "version": "10.1.22000.832",
         "publisher": "Microsoft Corporation",
         "install_date": "20250712",
@@ -3929,13 +3954,6 @@
         "version": "10.1.26100.7705",
         "publisher": "Microsoft Corporation",
         "install_date": "20260410",
-        "install_location": ""
-      },
-      {
-        "name": "WinRT Intellisense UAP - Other Languages",
-        "version": "10.1.22000.832",
-        "publisher": "Microsoft Corporation",
-        "install_date": "20250712",
         "install_location": ""
       },
       {
@@ -3948,13 +3966,13 @@
     ],
     "installed_programs_meta": {
       "source": "registry",
-      "detected_at": "2026-09-16T02:01:41.843Z",
+      "detected_at": "2026-09-16T02:55:34.395Z",
       "confidence": 0.7
     },
     "running_services": [
       {
         "name": "AESMService",
-        "display_name": "Intel® SGX AESM",
+        "display_name": "Intel� SGX AESM",
         "status": 4,
         "start_type": 2
       },
@@ -3984,7 +4002,7 @@
       },
       {
         "name": "BDESVC",
-        "display_name": "BitLocker-Laufwerkverschlüsselungsdienst",
+        "display_name": "BitLocker-Laufwerkverschl�sselungsdienst",
         "status": 4,
         "start_type": 3
       },
@@ -3995,8 +4013,14 @@
         "start_type": 2
       },
       {
+        "name": "BITS",
+        "display_name": "Background Intelligent Transfer Service",
+        "status": 4,
+        "start_type": 2
+      },
+      {
         "name": "BrokerInfrastructure",
-        "display_name": "Infrastrukturdienst für Hintergrundaufgaben",
+        "display_name": "Infrastrukturdienst f�r Hintergrundaufgaben",
         "status": 4,
         "start_type": 2
       },
@@ -4008,7 +4032,7 @@
       },
       {
         "name": "camsvc",
-        "display_name": "Manager-Dienst für den Funktionszugriff",
+        "display_name": "Manager-Dienst f�r den Funktionszugriff",
         "status": 4,
         "start_type": 3
       },
@@ -4020,13 +4044,13 @@
       },
       {
         "name": "CDPSvc",
-        "display_name": "Plattformdienst für verbundene Geräte",
+        "display_name": "Plattformdienst f�r verbundene Ger�te",
         "status": 4,
         "start_type": 2
       },
       {
         "name": "CDPUserSvc_1bd65d",
-        "display_name": "Benutzerdienst für die Plattform für verbundene Geräte_1bd65d",
+        "display_name": "Benutzerdienst f�r die Plattform f�r verbundene Ger�te_1bd65d",
         "status": 4,
         "start_type": 2
       },
@@ -4056,13 +4080,13 @@
       },
       {
         "name": "DeviceAssociationService",
-        "display_name": "Gerätezuordnungsdienst",
+        "display_name": "Ger�tezuordnungsdienst",
         "status": 4,
         "start_type": 2
       },
       {
         "name": "DeviceInstall",
-        "display_name": "Geräteinstallationsdienst",
+        "display_name": "Ger�teinstallationsdienst",
         "status": 4,
         "start_type": 3
       },
@@ -4086,7 +4110,7 @@
       },
       {
         "name": "DoSvc",
-        "display_name": "Übermittlungsoptimierung",
+        "display_name": "�bermittlungsoptimierung",
         "status": 4,
         "start_type": 3
       },
@@ -4110,7 +4134,7 @@
       },
       {
         "name": "EFS",
-        "display_name": "Verschlüsselndes Dateisystem (EFS)",
+        "display_name": "Verschl�sselndes Dateisystem (EFS)",
         "status": 4,
         "start_type": 3
       },
@@ -4134,7 +4158,7 @@
       },
       {
         "name": "FDResPub",
-        "display_name": "Funktionssuche-Ressourcenveröffentlichung",
+        "display_name": "Funktionssuche-Ressourcenver�ffentlichung",
         "status": 4,
         "start_type": 3
       },
@@ -4146,7 +4170,7 @@
       },
       {
         "name": "FontCache",
-        "display_name": "Windows-Dienst für Schriftartencache",
+        "display_name": "Windows-Dienst f�r Schriftartencache",
         "status": 4,
         "start_type": 2
       },
@@ -4194,7 +4218,7 @@
       },
       {
         "name": "IKEEXT",
-        "display_name": "IKE- und AuthIP IPsec-Schlüsselerstellungsmodule",
+        "display_name": "IKE- und AuthIP IPsec-Schl�sselerstellungsmodule",
         "status": 4,
         "start_type": 2
       },
@@ -4212,7 +4236,7 @@
       },
       {
         "name": "iprip",
-        "display_name": "RIP-Überwachung",
+        "display_name": "RIP-�berwachung",
         "status": 4,
         "start_type": 2
       },
@@ -4224,7 +4248,7 @@
       },
       {
         "name": "KeyIso",
-        "display_name": "CNG-Schlüsselisolation",
+        "display_name": "CNG-Schl�sselisolation",
         "status": 4,
         "start_type": 3
       },
@@ -4301,12 +4325,6 @@
         "start_type": 3
       },
       {
-        "name": "NetSetupSvc",
-        "display_name": "Netzwerkeinrichtungsdienst",
-        "status": 4,
-        "start_type": 3
-      },
-      {
         "name": "NgcCtnrSvc",
         "display_name": "Microsoft Passport-Container",
         "status": 4,
@@ -4350,7 +4368,7 @@
       },
       {
         "name": "PcaSvc",
-        "display_name": "Programmkompatibilitäts-Assistent-Dienst",
+        "display_name": "Programmkompatibilit�ts-Assistent-Dienst",
         "status": 4,
         "start_type": 3
       },
@@ -4440,7 +4458,7 @@
       },
       {
         "name": "seclogon",
-        "display_name": "Sekundäre Anmeldung",
+        "display_name": "Sekund�re Anmeldung",
         "status": 4,
         "start_type": 3
       },
@@ -4452,7 +4470,7 @@
       },
       {
         "name": "SENS",
-        "display_name": "Benachrichtigungsdienst für Systemereignisse",
+        "display_name": "Benachrichtigungsdienst f�r Systemereignisse",
         "status": 4,
         "start_type": 2
       },
@@ -4524,7 +4542,7 @@
       },
       {
         "name": "TabletInputService",
-        "display_name": "Dienst für Bildschirmtastatur und Schreibbereich",
+        "display_name": "Dienst f�r Bildschirmtastatur und Schreibbereich",
         "status": 4,
         "start_type": 3
       },
@@ -4554,7 +4572,7 @@
       },
       {
         "name": "TrkWks",
-        "display_name": "Überwachung verteilter Verknüpfungen (Client)",
+        "display_name": "�berwachung verteilter Verkn�pfungen (Client)",
         "status": 4,
         "start_type": 2
       },
@@ -4681,7 +4699,7 @@
     ],
     "running_services_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:41.116Z",
+      "detected_at": "2026-09-16T02:55:33.704Z",
       "confidence": 0.9
     },
     "developer_tools": [
@@ -4703,20 +4721,20 @@
       },
       {
         "name": "rust",
-        "version": "1.98.0"
+        "version": "1.98.1"
       },
       {
         "name": "cargo",
-        "version": "1.98.0"
+        "version": "1.98.1"
       },
       {
-        "name": "code",
+        "name": "vscode",
         "version": "1.135.0"
       }
     ],
     "developer_tools_meta": {
       "source": "cli",
-      "detected_at": "2026-09-16T02:01:43.626Z",
+      "detected_at": "2026-09-16T02:55:34.712Z",
       "confidence": 0.9
     },
     "runtimes": [
@@ -4739,7 +4757,7 @@
     ],
     "runtimes_meta": {
       "source": "cli",
-      "detected_at": "2026-09-16T02:01:40.854Z",
+      "detected_at": "2026-09-16T02:55:34.165Z",
       "confidence": 0.8
     },
     "browsers": [
@@ -4751,24 +4769,13 @@
     ],
     "browsers_meta": {
       "source": "filesystem",
-      "detected_at": "2026-09-16T02:01:44.632Z",
+      "detected_at": "2026-09-16T02:55:35.344Z",
       "confidence": 0.8
     },
-    "containers": [
-      {
-        "name": "docker",
-        "version": "",
-        "running": false
-      },
-      {
-        "name": "podman",
-        "version": "",
-        "running": false
-      }
-    ],
+    "containers": [],
     "containers_meta": {
       "source": "cli",
-      "detected_at": "2026-09-16T02:01:39.989Z",
+      "detected_at": "2026-09-16T02:55:32.242Z",
       "confidence": 0.9
     },
     "wsl": {
@@ -4777,7 +4784,7 @@
     },
     "wsl_meta": {
       "source": "wsl",
-      "detected_at": "2026-09-16T02:01:39.929Z",
+      "detected_at": "2026-09-16T02:55:32.667Z",
       "confidence": 0.9
     },
     "ai_runtimes": [
@@ -4790,21 +4797,30 @@
     ],
     "ai_runtimes_meta": {
       "source": "cli",
-      "detected_at": "2026-09-16T02:01:40.442Z",
+      "detected_at": "2026-09-16T02:55:33.166Z",
       "confidence": 0.8
     },
     "local_models": [],
     "local_models_meta": {
       "source": "filesystem",
-      "detected_at": "2026-09-16T02:01:39.845Z",
+      "detected_at": "2026-09-16T02:55:31.942Z",
       "confidence": 0.7
     }
   },
   "network": {
-    "interfaces": [],
+    "interfaces": [
+      {
+        "name": "WLAN",
+        "description": "TP-Link Wireless USB Adapter",
+        "mac_address": "D0-37-45-19-30-D8",
+        "link_speed": "144.4 Mbps",
+        "status": "Up",
+        "index": 6
+      }
+    ],
     "interfaces_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.796Z",
+      "detected_at": "2026-09-16T02:55:34.794Z",
       "confidence": 0.9
     },
     "ip_config": [
@@ -4841,7 +4857,7 @@
     ],
     "ip_config_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:45.287Z",
+      "detected_at": "2026-09-16T02:55:36.068Z",
       "confidence": 0.9
     },
     "routes": [
@@ -4950,19 +4966,32 @@
     ],
     "routes_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.595Z",
+      "detected_at": "2026-09-16T02:55:34.390Z",
       "confidence": 0.8
     },
-    "dns": [],
+    "dns": [
+      {
+        "interface_alias": "WLAN",
+        "server_addresses": [
+          "172.20.10.1"
+        ]
+      }
+    ],
     "dns_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:42.193Z",
+      "detected_at": "2026-09-16T02:55:34.341Z",
       "confidence": 0.9
     },
-    "local_ips": [],
+    "local_ips": [
+      {
+        "ip_address": "172.20.10.3",
+        "interface_alias": "WLAN",
+        "prefix_length": 28
+      }
+    ],
     "local_ips_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.555Z",
+      "detected_at": "2026-09-16T02:55:34.395Z",
       "confidence": 0.9
     },
     "gateway": {
@@ -4971,19 +5000,19 @@
     },
     "gateway_meta": {
       "source": "powershell",
-      "detected_at": "2026-09-16T02:01:43.550Z",
+      "detected_at": "2026-09-16T02:55:34.394Z",
       "confidence": 0.95
     },
     "mdns_services": [],
     "mdns_services_meta": {
       "source": "mdns",
-      "detected_at": "2026-09-16T02:01:39.833Z",
+      "detected_at": "2026-09-16T02:55:31.995Z",
       "confidence": 0.3
     },
     "local_devices": [],
     "local_devices_meta": {
       "source": "network",
-      "detected_at": "2026-09-16T02:01:39.833Z",
+      "detected_at": "2026-09-16T02:55:31.995Z",
       "confidence": 0.3
     }
   },
@@ -5009,45 +5038,47 @@
       "workspace"
     ],
     "modules_meta": {
-      "source": "filesystem",
-      "detected_at": "2026-09-16T02:01:39.845Z",
+      "source": "filesystem:marker-search",
+      "detected_at": "2026-09-16T02:55:31.995Z",
       "confidence": 0.9
     },
     "plugins": [],
     "plugins_meta": {
-      "source": "filesystem",
-      "detected_at": "2026-09-16T02:01:39.846Z",
+      "source": "filesystem:marker-search",
+      "detected_at": "2026-09-16T02:55:31.995Z",
       "confidence": 0.9
     },
     "config": {},
     "config_meta": {
-      "source": "filesystem",
-      "detected_at": "2026-09-16T02:01:39.846Z",
+      "source": "filesystem:marker-search",
+      "detected_at": "2026-09-16T02:55:31.996Z",
       "confidence": 0.9
     },
     "version": "0.0.0-dev",
     "version_meta": {
       "source": "default",
-      "detected_at": "2026-09-16T02:01:39.846Z",
+      "detected_at": "2026-09-16T02:55:31.996Z",
       "confidence": 0.5
     },
     "git_status": {
       "repo_exists": true,
       "branch": "master",
-      "commit": "5bba48b2fa0b6f24e01e79bc6404f230f9c57046",
-      "clean": true,
+      "commit": "addbb2ff475f3efca631bd1a79ed9e9f560ee3d9",
+      "clean": false,
       "untracked_files": [],
-      "modified_files": []
+      "modified_files": [
+        "ools/discovery/src/adapters/windows.ts"
+      ]
     },
     "git_status_meta": {
       "source": "git",
-      "detected_at": "2026-09-16T02:01:40.326Z",
+      "detected_at": "2026-09-16T02:55:32.877Z",
       "confidence": 0.95
     },
     "services": [],
     "services_meta": {
       "source": "system",
-      "detected_at": "2026-09-16T02:01:39.844Z",
+      "detected_at": "2026-09-16T02:55:32.007Z",
       "confidence": 0.5
     }
   },
@@ -5065,7 +5096,7 @@
       "risk_level": "low",
       "status": "available",
       "metadata": {
-        "vram_gb": 4
+        "vram_gb": 11
       }
     },
     {
@@ -5079,7 +5110,7 @@
       "status": "available",
       "metadata": {
         "cores": 8,
-        "ram_gb": 31.92
+        "ram_gb": 32
       }
     },
     {
@@ -5107,6 +5138,17 @@
       "status": "available"
     },
     {
+      "id": "dev.vscode",
+      "name": "VS Code Development Environment",
+      "category": "development",
+      "detected": true,
+      "provider": "microsoft",
+      "version": "1.135.0",
+      "dependencies": [],
+      "risk_level": "low",
+      "status": "available"
+    },
+    {
       "id": "dev.git",
       "name": "Git Version Control",
       "category": "development",
@@ -5116,6 +5158,21 @@
       "dependencies": [],
       "risk_level": "low",
       "status": "available"
+    },
+    {
+      "id": "network.local",
+      "name": "Local Network Access",
+      "category": "network",
+      "detected": true,
+      "provider": "system",
+      "dependencies": [],
+      "risk_level": "low",
+      "status": "available",
+      "metadata": {
+        "interfaces": [
+          "WLAN"
+        ]
+      }
     }
   ]
 }
