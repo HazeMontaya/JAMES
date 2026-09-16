@@ -9,7 +9,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
 
-use james_events::EventBus;
+use james_events::{EventBus, CoreStatus};
 use james_registry::Registry;
 use james_services::ServiceRegistry;
 use james_tasks::{TaskManager, TaskStatus};
@@ -51,7 +51,7 @@ pub struct HealthCheckConfig {
 }
 
 pub struct HealthMonitor {
-    core_status: Arc<RwLock<String>>,
+    core_status: Arc<RwLock<CoreStatus>>,
     event_bus: Option<Arc<EventBus>>,
     registry: Option<Arc<Registry>>,
     service_registry: Option<Arc<ServiceRegistry>>,
@@ -73,7 +73,7 @@ fn default_state_dir() -> PathBuf {
 
 impl HealthMonitor {
     pub fn new(
-        core_status: Arc<RwLock<String>>,
+        core_status: Arc<RwLock<CoreStatus>>,
         event_bus: Option<Arc<EventBus>>,
         registry: Option<Arc<Registry>>,
         service_registry: Option<Arc<ServiceRegistry>>,
@@ -260,8 +260,8 @@ impl HealthMonitor {
     }
 
     async fn check_core(&self) -> Result<ComponentHealth> {
-        let status_str = self.core_status.read().await;
-        let status = if *status_str == "Running" {
+        let status = self.core_status.read().await.clone();
+        let health = if status == CoreStatus::Running {
             HealthStatus::Healthy
         } else {
             HealthStatus::Degraded
@@ -269,9 +269,9 @@ impl HealthMonitor {
 
         Ok(ComponentHealth {
             name: "core".to_string(),
-            status,
-            message: Some(format!("Core status: {}", status_str)),
-            details: [("status".to_string(), serde_json::json!(*status_str))].into(),
+            status: health,
+            message: Some(format!("Core status: {}", status.as_str())),
+            details: [("status".to_string(), serde_json::json!(status.as_str()))].into(),
             checked_at: Utc::now(),
             response_time_ms: 0,
         })
@@ -524,7 +524,7 @@ impl HealthMonitor {
 impl Default for HealthMonitor {
     fn default() -> Self {
         Self::new(
-            Arc::new(RwLock::new("Starting".to_string())),
+            Arc::new(RwLock::new(CoreStatus::Starting)),
             None,
             None,
             None,
@@ -542,7 +542,7 @@ mod tests {
     /// threads never share one health.json (previously flaky cross-talk).
     /// Also keeps tests out of the real user profile data dir.
     fn test_monitor(name: &str) -> HealthMonitor {
-        let state = Arc::new(RwLock::new("Running".to_string()));
+        let state = Arc::new(RwLock::new(CoreStatus::Running));
         let dir = std::env::temp_dir().join(format!("james-health-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         HealthMonitor::new(state, None, None, None, None, None).with_state_dir(dir)

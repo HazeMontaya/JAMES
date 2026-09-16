@@ -12,6 +12,7 @@ use james_events::{
     Event, builtin_events,
     create_system_event, EventBus,
 };
+pub use james_events::CoreStatus;
 use james_registry::Registry;
 use james_capabilities::CapabilityRegistry;
 use james_services::ServiceRegistry;
@@ -30,19 +31,10 @@ pub struct CoreState {
     pub status: CoreStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum CoreStatus {
-    Starting,
-    Running,
-    Stopping,
-    Stopped,
-    Failed,
-}
-
 pub struct JamesCore {
     config: CoreConfig,
     state: Arc<RwLock<CoreState>>,
-    health_status: Arc<RwLock<String>>,
+    health_status: Arc<RwLock<CoreStatus>>,
     event_bus: Arc<EventBus>,
     registry: Arc<Registry>,
     capability_registry: Arc<CapabilityRegistry>,
@@ -63,7 +55,7 @@ impl JamesCore {
             status: CoreStatus::Starting,
         }));
 
-        let health_status = Arc::new(RwLock::new("Starting".to_string()));
+        let health_status = Arc::new(RwLock::new(CoreStatus::Starting));
 
         let event_bus = Arc::new(EventBus::new(config.event_bus_buffer_size));
         let registry = Arc::new(Registry::new());
@@ -103,7 +95,7 @@ impl JamesCore {
             state.status = CoreStatus::Running;
         }
         
-        *self.health_status.write().await = "Running".to_string();
+        *self.health_status.write().await = CoreStatus::Running;
 
         self.event_bus.start().await?;
         self.registry.start().await?;
@@ -130,7 +122,7 @@ impl JamesCore {
             state.status = CoreStatus::Stopping;
         }
         
-        *self.health_status.write().await = "Stopping".to_string();
+        *self.health_status.write().await = CoreStatus::Stopping;
 
         self.emit_event(create_system_event(builtin_events::SYSTEM_STOPPING, "james-core"))
             .await?;
@@ -150,7 +142,7 @@ impl JamesCore {
             state.status = CoreStatus::Stopped;
         }
 
-        *self.health_status.write().await = "Stopped".to_string();
+        *self.health_status.write().await = CoreStatus::Stopped;
 
         // SYSTEM_STOPPED must be emitted BEFORE the bus stops: since F1-01
         // publish-on-stopped-bus returns Err instead of silently dropping.

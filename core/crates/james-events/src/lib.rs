@@ -14,6 +14,34 @@ pub enum EventSeverity {
     Critical,
 }
 
+/// Application lifecycle status. Lives in james-events (the leaf crate) so
+/// that james-health and james-core share ONE type without a dependency
+/// cycle (james-core depends on james-health, never the reverse).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum CoreStatus {
+    Starting,
+    Running,
+    Stopping,
+    Stopped,
+    Failed,
+}
+
+impl CoreStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CoreStatus::Starting => "Starting",
+            CoreStatus::Running => "Running",
+            CoreStatus::Stopping => "Stopping",
+            CoreStatus::Stopped => "Stopped",
+            CoreStatus::Failed => "Failed",
+        }
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, CoreStatus::Stopped | CoreStatus::Failed)
+    }
+}
+
 fn default_event_version() -> u32 {
     1
 }

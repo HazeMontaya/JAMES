@@ -92,7 +92,7 @@ impl Diagnostics {
             instance_id: state.instance_id,
             version: state.version.clone(),
             started_at: state.started_at,
-            status: format!("{:?}", state.status),
+            status: state.status.as_str().to_string(),
             uptime_secs: health.uptime_secs,
             registry_entries: registry_count,
             capabilities: capability_count,
@@ -418,8 +418,8 @@ impl Default for Diagnostics {
                 instance_id: Uuid::nil(),
                 version: "0.1.0".to_string(),
                 started_at: Utc::now(),
-                // CoreStatus has no Unknown variant (see F1-02 unification);
-                // Stopped here means "no core attached".
+                // CoreStatus has no Unknown variant by design (terminal states
+                // are Stopped/Failed); Stopped here means "no core attached".
                 status: CoreStatus::Stopped,
             })),
             None,
