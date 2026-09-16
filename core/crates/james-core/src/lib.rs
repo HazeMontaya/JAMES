@@ -235,6 +235,8 @@ impl JamesCore {
     pub async fn status(&self) -> CoreStatus {
         self.state.read().await.status.clone()
     }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,6 +283,4 @@ mod tests {
         let received = rx.recv().await.unwrap();
         assert_eq!(received.event.event_type, "any.event");
     }
-}
-
 }
