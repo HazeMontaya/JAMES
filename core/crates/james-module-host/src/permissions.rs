@@ -317,14 +317,14 @@ mod tests {
         let caps = vec![
             "system.files.read".to_string(),
             "system.process.start".to_string(),
-            "network.connect".to_string(),
+            "system.network.connect".to_string(),
         ];
         
         let result = checker.validate_module_permissions("mod1", &caps).await;
         assert!(result.is_err()); // network.connect missing
         
         let missing = result.unwrap_err();
-        assert_eq!(missing, vec!["network.connect"]);
+        assert_eq!(missing, vec!["system.network.connect"]);
         
         checker.grant_permission("mod1", "network.connect").await;
         let result = checker.validate_module_permissions("mod1", &caps).await;

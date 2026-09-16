@@ -66,11 +66,10 @@ impl TextInputModule {
             capability_registry,
             running: Arc::new(RwLock::new(false)),
             input_tx: tx,
-            input_rx: Arc::new(RwLock::new(Some(rx))),
+            input_rx: Arc::new(RwLock::new(None)),
             session_id,
         };
 
-        let rx = module.input_rx.blocking_write().take().unwrap();
         (module, rx)
     }
 

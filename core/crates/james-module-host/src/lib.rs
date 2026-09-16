@@ -573,8 +573,8 @@ mod tests {
         
         host.start().await.unwrap();
         
-        let manifest = crate::manifest::ModuleManifest {
-            id: "test-module".to_string(),
+let manifest = crate::manifest::ModuleManifest {
+            id: "com.example.test-module".to_string(),
             name: "Test Module".to_string(),
             version: "1.0.0".to_string(),
             description: "A test module".to_string(),
@@ -595,15 +595,15 @@ mod tests {
         };
         
         let id = host.install_module(manifest).await.unwrap();
-        assert_eq!(id, "test-module");
+        assert_eq!(id, "com.example.test-module");
         
         // Verify module is installed
-        let meta = host.get_module("test-module").await.unwrap();
+        let meta = host.get_module("com.example.test-module").await.unwrap();
         assert_eq!(meta.state, ModuleState::Installed);
         
         // Uninstall
-        host.uninstall_module("test-module").await.unwrap();
-        assert!(host.get_module("test-module").await.is_none());
+        host.uninstall_module("com.example.test-module").await.unwrap();
+        assert!(host.get_module("com.example.test-module").await.is_none());
     }
 }
 

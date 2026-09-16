@@ -230,12 +230,17 @@ impl ModuleManifestValidator {
             }
         }
         
-        // Validate version constraint
-        if let Err(e) = semver::VersionReq::parse(&manifest.dependencies.iter()
-            .map(|d| d.version.as_str())
-            .collect::<Vec<_>>()
-            .join(",")) {
-            return Err(ManifestValidationError::InvalidVersionConstraint(e.to_string()));
+        // Validate version constraints (only when dependencies exist)
+        if !manifest.dependencies.is_empty() {
+            let constraints = manifest
+                .dependencies
+                .iter()
+                .map(|d| d.version.as_str())
+                .collect::<Vec<_>>()
+                .join(",");
+            if let Err(e) = semver::VersionReq::parse(&constraints) {
+                return Err(ManifestValidationError::InvalidVersionConstraint(e.to_string()));
+            }
         }
         
         Ok(())

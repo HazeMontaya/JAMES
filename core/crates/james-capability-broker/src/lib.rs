@@ -437,21 +437,18 @@ mod tests {
         }
     }
 
-    fn registry_with(ids: &[(&str, Vec<&str>)]) -> Arc<CapabilityRegistry> {
+    async fn registry_with(ids: &[(&str, Vec<&str>)]) -> Arc<CapabilityRegistry> {
         let reg = Arc::new(CapabilityRegistry::new());
         for (id, perms) in ids {
             let def = test_definition(id, perms.clone());
-            let r = reg.clone();
-            tokio::runtime::Runtime::new().unwrap().block_on(async move {
-                r.register(def, "test").await.unwrap();
-            });
+            reg.register(def, "test").await.unwrap();
         }
         reg
     }
 
     #[tokio::test]
     async fn test_missing_permission_denied() {
-        let reg = registry_with(&[("memory.read", vec!["memory.read"])]);
+        let reg = registry_with(&[("memory.read", vec!["memory.read"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
         let err = broker
             .execute(
@@ -470,7 +467,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_grant_then_execute_ok() {
-        let reg = registry_with(&[("memory.read", vec!["memory.read"])]);
+        let reg = registry_with(&[("memory.read", vec!["memory.read"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
         broker.grant_capability_permissions("void", "memory.read");
         let outcome = broker
@@ -491,7 +488,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_policy_deny_blocks_execution() {
-        let reg = registry_with(&[("ai.inference", vec!["ai.inference"])]);
+        let reg = registry_with(&[("ai.inference", vec!["ai.inference"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
         broker.grant_capability_permissions("ai", "ai.inference");
         broker.add_policy(PolicyRule::deny("ai.inference", "policy test"));
@@ -511,7 +508,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unknown_capability_unavailable() {
-        let reg = registry_with(&[]);
+        let reg = registry_with(&[]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
         let err = broker
             .execute(
@@ -529,7 +526,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_decide_preview() {
-        let reg = registry_with(&[("voice.output", vec!["voice.output"])]);
+        let reg = registry_with(&[("voice.output", vec!["voice.output"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
         // No grant yet -> Deny
         let d = broker
@@ -555,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ask_requires_confirmation() {
-        let reg = registry_with(&[("process.run", vec!["process.execute"])]);
+        let reg = registry_with(&[("process.run", vec!["process.execute"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
         broker.grant_capability_permissions("x", "process.run");
         broker.add_policy(PolicyRule {

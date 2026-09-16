@@ -102,10 +102,9 @@ impl ChatModule {
             output_module,
             current_session: Arc::new(RwLock::new(None)),
             message_tx: tx,
-            message_rx: Arc::new(RwLock::new(Some(rx))),
+            message_rx: Arc::new(RwLock::new(None)),
         };
 
-        let rx = module.message_rx.blocking_write().take().unwrap();
         (module, rx)
     }
 
@@ -384,67 +383,8 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
     };
     registry.register(chat_cap, "james.chat".to_string()).await?;
 
-    // Text input capability (delegated)
-    let input_cap = CapabilityDefinition {
-        id: "text.input".to_string(),
-        name: "Text Input".to_string(),
-        category: james_capabilities::CapabilityCategory::Custom("interface".to_string()),
-        version: "1.0.0".to_string(),
-        provider: "james.chat".to_string(),
-        description: "Read text input from user (via james.textinput)".to_string(),
-        risk_level: RiskLevel::Low,
-        required_permissions: vec![],
-        dependencies: vec![],
-        input_schema: None,
-        output_schema: Some(serde_json::json!({
-            "type": "object",
-            "properties": {
-                "text": {"type": "string"},
-                "session_id": {"type": "string"},
-                "timestamp": {"type": "string", "format": "date-time"}
-            }
-        })),
-        execution_target: ExecutionTarget::Local,
-        tags: vec!["input".to_string(), "text".to_string()],
-        deprecated: false,
-        experimental: false,
-    };
-    registry.register(input_cap, "james.chat".to_string()).await?;
-
-    // Text output capability (delegated)
-    let output_cap = CapabilityDefinition {
-        id: "text.output".to_string(),
-        name: "Text Output".to_string(),
-        category: james_capabilities::CapabilityCategory::Custom("interface".to_string()),
-        version: "1.0.0".to_string(),
-        provider: "james.chat".to_string(),
-        description: "Write text output to user (via james.textoutput)".to_string(),
-        risk_level: RiskLevel::Low,
-        required_permissions: vec![],
-        dependencies: vec![],
-        input_schema: Some(serde_json::json!({
-            "type": "object",
-            "properties": {
-                "text": {"type": "string"},
-                "level": {"type": "string", "enum": ["trace", "debug", "info", "warn", "error", "success", "system"]}
-            },
-            "required": ["text"]
-        })),
-        output_schema: Some(serde_json::json!({
-            "type": "object",
-            "properties": {
-                "session_id": {"type": "string"},
-                "text": {"type": "string"},
-                "level": {"type": "string"},
-                "timestamp": {"type": "string", "format": "date-time"}
-            }
-        })),
-        execution_target: ExecutionTarget::Local,
-        tags: vec!["output".to_string(), "text".to_string()],
-        deprecated: false,
-        experimental: false,
-    };
-    registry.register(output_cap, "james.chat".to_string()).await?;
+    // NOTE: text.input and text.output are owned by james-textinput / james-textoutput.
+    // james-chat depends on them and must not register duplicates.
 
     Ok(())
 }

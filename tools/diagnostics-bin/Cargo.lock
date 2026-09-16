@@ -1036,6 +1036,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
+ "james-capabilities",
  "james-events",
  "parking_lot",
  "serde",
