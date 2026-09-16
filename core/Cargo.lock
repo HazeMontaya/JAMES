@@ -1045,6 +1045,7 @@ name = "james-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "james-app-api",
  "james-core",
@@ -1070,6 +1071,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
