@@ -1,57 +1,67 @@
-﻿{
-    "Automation":  {
-                       "Browser":  true,
-                       "PowerShell":  true,
-                       "Desktop":  true,
-                       "Python":  true
-                   },
-    "Hardware":  {
-                     "NPU_Present":  false,
-                     "RAM_GB":  32,
-                     "CPU_Inference":  true,
-                     "Storage_HDD_GB":  3726,
-                     "GPU_VRAM_GB":  4,
-                     "GPU_Inference":  true,
-                     "Storage_SSD_GB":  931
-                 },
-    "Software":  {
-                     "NodeJS":  true,
-                     "Podman":  false,
-                     "WindowsTerminal":  false,
-                     "Rust":  true,
-                     "Cargo":  true,
-                     "WSL":  true,
-                     "Python":  true,
-                     "Git":  true,
-                     "Docker":  false,
-                     "Ollama":  true,
-                     "VSCode":  true,
-                     "NPM":  true
-                 },
-    "AI":  {
-               "LocalLLM":  true,
-               "ROCm":  false,
-               "OllamaRunning":  false,
-               "OllamaInstalled":  true,
-               "CUDA":  "Unknown - need nvidia-smi",
-               "DirectML":  "Available on Windows"
-           },
-    "Network":  {
-                    "ActiveInterface":  "WLAN",
-                    "LinkSpeed":  "130 Mbps",
-                    "DNSServer":  "10.179.103.150",
-                    "IPAddress":  "10.179.103.109",
-                    "Gateway":  "10.179.103.150"
-                },
-    "Containerization":  {
-                             "Podman":  false,
-                             "WSL2":  true,
-                             "Docker":  false
-                         },
-    "Voice":  {
-                  "Microphone":  "Not detected via WMI",
-                  "Speakers":  "Realtek + NVIDIA HD Audio",
-                  "STT":  "Possible via local models",
-                  "TTS":  "Possible via local models"
-              }
-}
+[
+  {
+    "id": "ai.local.gpu_inference",
+    "name": "GPU-Accelerated Inference",
+    "category": "ai",
+    "detected": true,
+    "provider": "NVIDIA GeForce RTX 2080 Ti",
+    "version": "32.0.16.1047",
+    "dependencies": [
+      "directml"
+    ],
+    "risk_level": "low",
+    "status": "available",
+    "metadata": {
+      "vram_gb": 4
+    }
+  },
+  {
+    "id": "ai.local.cpu_inference",
+    "name": "CPU-Based Inference",
+    "category": "ai",
+    "detected": true,
+    "provider": "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz",
+    "dependencies": [],
+    "risk_level": "low",
+    "status": "available",
+    "metadata": {
+      "cores": 8,
+      "ram_gb": 31.92
+    }
+  },
+  {
+    "id": "voice.output",
+    "name": "Voice Output (Speakers)",
+    "category": "voice",
+    "detected": true,
+    "provider": "system",
+    "dependencies": [],
+    "risk_level": "low",
+    "status": "available"
+  },
+  {
+    "id": "browser.automation",
+    "name": "Browser Automation",
+    "category": "automation",
+    "detected": true,
+    "provider": "Edge",
+    "version": "151.0.4129.101",
+    "dependencies": [
+      "playwright",
+      "puppeteer"
+    ],
+    "risk_level": "medium",
+    "status": "available"
+  },
+  {
+    "id": "dev.git",
+    "name": "Git Version Control",
+    "category": "development",
+    "detected": true,
+    "provider": "git-scm",
+    "version": "2.55.0.windows.3",
+    "dependencies": [],
+    "risk_level": "low",
+    "status": "available"
+  }
+]
