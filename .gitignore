@@ -1,0 +1,52 @@
+# JAMES runtime state
+.james/state/
+.james/logs/
+.james/secrets/
+
+# Local AI models
+models/
+*.gguf
+*.safetensors
+*.bin
+
+# Runtime/cache
+cache/
+tmp/
+temp/
+*.cache
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+.npm/
+
+# Rust
+target/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+dist/
+build/
+release/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log

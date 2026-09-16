@@ -1,0 +1,27 @@
+[package]
+name = "james-health"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "JAMES Health Monitor"
+
+[dependencies]
+james-events = { workspace = true }
+james-registry = { workspace = true }
+james-services = { workspace = true }
+james-tasks = { workspace = true }
+james-scheduler = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true, features = ["process"] }
+tracing = { workspace = true }
+winapi = { version = "0.3", features = ["fileapi", "winnt", "psapi"] }
+dirs = "5"
+sysinfo = "0.30"

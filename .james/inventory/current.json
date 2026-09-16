@@ -1,0 +1,214 @@
+﻿{
+    "capabilities":  {
+                         "Automation":  {
+                                            "Browser":  true,
+                                            "PowerShell":  true,
+                                            "Desktop":  true,
+                                            "Python":  true
+                                        },
+                         "Hardware":  {
+                                          "NPU_Present":  false,
+                                          "RAM_GB":  32,
+                                          "CPU_Inference":  true,
+                                          "Storage_HDD_GB":  3726,
+                                          "GPU_VRAM_GB":  4,
+                                          "GPU_Inference":  true,
+                                          "Storage_SSD_GB":  931
+                                      },
+                         "Software":  {
+                                          "NodeJS":  true,
+                                          "Podman":  false,
+                                          "WindowsTerminal":  false,
+                                          "Rust":  true,
+                                          "Cargo":  true,
+                                          "WSL":  true,
+                                          "Python":  true,
+                                          "Git":  true,
+                                          "Docker":  false,
+                                          "Ollama":  true,
+                                          "VSCode":  true,
+                                          "NPM":  true
+                                      },
+                         "AI":  {
+                                    "LocalLLM":  true,
+                                    "ROCm":  false,
+                                    "OllamaRunning":  false,
+                                    "OllamaInstalled":  true,
+                                    "CUDA":  "Unknown - need nvidia-smi",
+                                    "DirectML":  "Available on Windows"
+                                },
+                         "Network":  {
+                                         "ActiveInterface":  "WLAN",
+                                         "LinkSpeed":  "130 Mbps",
+                                         "DNSServer":  "10.179.103.150",
+                                         "IPAddress":  "10.179.103.109",
+                                         "Gateway":  "10.179.103.150"
+                                     },
+                         "Containerization":  {
+                                                  "Podman":  false,
+                                                  "WSL2":  true,
+                                                  "Docker":  false
+                                              },
+                         "Voice":  {
+                                       "Microphone":  "Not detected via WMI",
+                                       "Speakers":  "Realtek + NVIDIA HD Audio",
+                                       "STT":  "Possible via local models",
+                                       "TTS":  "Possible via local models"
+                                   }
+                     },
+    "james":  {
+                  "version":  "0.1.0-dev",
+                  "plugins":  [
+
+                              ],
+                  "config":  {
+
+                             },
+                  "git_status":  {
+                                     "branch":  "master",
+                                     "clean":  false,
+                                     "repo_exists":  true,
+                                     "modified_files":  [
+
+                                                        ],
+                                     "untracked_files":  [
+                                                             ".gitignore",
+                                                             "BOOTSTRAP.md",
+                                                             ".james/"
+                                                         ]
+                                 },
+                  "services":  [
+
+                               ],
+                  "modules":  [
+                                  "automation",
+                                  "capabilities",
+                                  "core",
+                                  "devices",
+                                  "docs",
+                                  "infrastructure",
+                                  "installers",
+                                  "integrations",
+                                  "intelligence",
+                                  "interfaces",
+                                  "memory",
+                                  "plugins",
+                                  "sdk",
+                                  "security",
+                                  "tests",
+                                  "tools",
+                                  "voice",
+                                  "workspace"
+                              ]
+              },
+    "timestamp":  "2026-09-16T01:13:33.9624308+02:00",
+    "software":  {
+                     "PSEdition":  "Desktop",
+                     "LocalDatabases":  {
+                                            "Name":  "GameInputRedistService",
+                                            "Status":  4,
+                                            "StartType":  2
+                                        },
+                     "Docker":  "Not found",
+                     "NodeJS":  "v25.9.0",
+                     "VSCode":  [
+                                    "1.135.0",
+                                    "08d4889f9ec4a1685d257b9b95de036c8e1ce1e5",
+                                    "x64"
+                                ],
+                     "Podman":  "Not found",
+                     "Ollama":  "Warning: could not connect to a running Ollama instance\nWarning: client version is 0.32.8",
+                     "Cargo":  "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+                     "TextGenWebUI":  false,
+                     "Rust":  "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+                     "WindowsTerminal":  "Not found",
+                     "Python":  "Python 3.14.4",
+                     "WSL":  true,
+                     "Git":  "git version 2.55.0.windows.3",
+                     "PowerShell":  "5.1.19041.7725",
+                     "NPM":  "11.12.1",
+                     "LMStudio":  false
+                 },
+    "platform":  "windows",
+    "hardware":  {
+                     "CPU":  {
+                                 "LogicalProcessors":  8,
+                                 "Architecture":  9,
+                                 "Name":  "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz",
+                                 "Cores":  8,
+                                 "MaxClockSpeed_MHz":  3600
+                             },
+                     "GPUs":  {
+                                  "AdapterRAM_GB":  4,
+                                  "Name":  "NVIDIA GeForce RTX 2080 Ti",
+                                  "DriverVersion":  "32.0.16.1047",
+                                  "VideoProcessor":  "NVIDIA GeForce RTX 2080 Ti"
+                              },
+                     "Disks":  [
+                                   {
+                                       "FreeSpace_GB":  32.06,
+                                       "VolumeName":  "",
+                                       "Size_GB":  232.28,
+                                       "DeviceID":  "C:",
+                                       "FileSystem":  "NTFS"
+                                   },
+                                   {
+                                       "FreeSpace_GB":  1829.79,
+                                       "VolumeName":  "HDDs",
+                                       "Size_GB":  3725.9,
+                                       "DeviceID":  "H:",
+                                       "FileSystem":  "NTFS"
+                                   },
+                                   {
+                                       "FreeSpace_GB":  310.05,
+                                       "VolumeName":  "SSDs",
+                                       "Size_GB":  931.39,
+                                       "DeviceID":  "S:",
+                                       "FileSystem":  "NTFS"
+                                   }
+                               ]
+                 },
+    "scan_mode":  "full",
+    "network":  {
+                    "DNS":  {
+                                "InterfaceAlias":  "WLAN",
+                                "ServerAddresses":  [
+                                                        "10.179.103.150"
+                                                    ]
+                            },
+                    "ActiveInterfaces":  {
+                                             "Name":  "WLAN",
+                                             "InterfaceDescription":  "TP-Link Wireless USB Adapter",
+                                             "MacAddress":  "D0-37-45-19-30-D8",
+                                             "LinkSpeed":  "57.8 Mbps",
+                                             "Status":  "Up"
+                                         },
+                    "IPConfiguration":  [
+                                            {
+                                                "InterfaceAlias":  "WLAN",
+                                                "IPv4Addresses":  "10.179.103.109",
+                                                "DNSServers":  "10.179.103.150",
+                                                "IPv6Addresses":  "2a01:599:216:d51c:b468:aa71:7c:d823"
+                                            },
+                                            {
+                                                "InterfaceAlias":  "Ethernet",
+                                                "IPv4Addresses":  "169.254.229.150",
+                                                "DNSServers":  [
+                                                                   "fec0:0:0:ffff::1",
+                                                                   "fec0:0:0:ffff::2",
+                                                                   "fec0:0:0:ffff::3"
+                                                               ],
+                                                "IPv6Addresses":  null
+                                            }
+                                        ],
+                    "LocalIPs":  {
+                                     "IPAddress":  "10.179.103.109",
+                                     "InterfaceAlias":  "WLAN",
+                                     "PrefixLength":  24
+                                 },
+                    "DefaultGateway":  {
+                                           "NextHop":  "10.179.103.150",
+                                           "InterfaceAlias":  "WLAN"
+                                       }
+                }
+}

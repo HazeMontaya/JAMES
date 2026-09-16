@@ -1,0 +1,58 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/james-core",
+    "crates/james-events",
+    "crates/james-registry",
+    "crates/james-capabilities",
+    "crates/james-services",
+    "crates/james-tasks",
+    "crates/james-scheduler",
+    "crates/james-health",
+    "crates/james-diagnostics",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["JAMES Project"]
+repository = "https://github.com/james-project/james"
+description = "JAMES Core - Local Agent & Automation Platform"
+
+[workspace.dependencies]
+# Local crates
+james-core = { path = "crates/james-core" }
+james-events = { path = "crates/james-events" }
+james-registry = { path = "crates/james-registry" }
+james-capabilities = { path = "crates/james-capabilities" }
+james-services = { path = "crates/james-services" }
+james-tasks = { path = "crates/james-tasks" }
+james-scheduler = { path = "crates/james-scheduler" }
+james-health = { path = "crates/james-health" }
+james-diagnostics = { path = "crates/james-diagnostics" }
+
+# Core dependencies
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = { version = "0.1", features = ["std"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+uuid = { version = "1.7", features = ["v4", "v7", "serde", "fast-rng"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+parking_lot = "0.12"
+dashmap = "5.5"
+async-trait = "0.1"
+once_cell = "1.19"
+toml = "0.8"
+config = { version = "0.14", features = ["toml"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Serialization
+bincode = "1.3"
+rmp-serde = "1.1"
+
+# Testing
+tempfile = { version = "3.9" }

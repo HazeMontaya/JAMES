@@ -1,0 +1,77 @@
+﻿{
+    "USBDevices":  [
+                       {
+                           "FriendlyName":  "Generischer USB-Hub",
+                           "InstanceId":  "USB\\VID_05E3\u0026PID_0608\\5\u0026356B5377\u00260\u002611",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "Generischer USB-Hub",
+                           "InstanceId":  "USB\\VID_05E3\u0026PID_0608\\5\u0026356B5377\u00260\u002613",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "Intel(R) USB 3.1 eXtensible-Hostcontroller – 1.10 (Microsoft)",
+                           "InstanceId":  "PCI\\VEN_8086\u0026DEV_A36D\u0026SUBSYS_50071458\u0026REV_10\\3\u002611583659\u00260\u0026A0",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "USB-Root-Hub (USB 3.0)",
+                           "InstanceId":  "USB\\ROOT_HUB30\\4\u00262720BDB3\u00260\u00260",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "NVIDIA USB 3.10 eXtensible-Hostcontroller – 1.10 (Microsoft)",
+                           "InstanceId":  "PCI\\VEN_10DE\u0026DEV_1AD6\u0026SUBSYS_37C01458\u0026REV_A1\\4\u002637732CF4\u00260\u00260208",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "Generischer USB-Hub",
+                           "InstanceId":  "USB\\VID_05E3\u0026PID_0608\\6\u0026386045BB\u00260\u00262",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "USB-Verbundgerät",
+                           "InstanceId":  "USB\\VID_046D\u0026PID_C08B\\206F33023342",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "USB-Verbundgerät",
+                           "InstanceId":  "USB\\VID_046D\u0026PID_C545\\5\u0026356B5377\u00260\u00265",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "USB-Root-Hub (USB 3.0)",
+                           "InstanceId":  "USB\\ROOT_HUB30\\5\u0026F0CABD6\u00260\u00260",
+                           "Status":  "OK"
+                       },
+                       {
+                           "FriendlyName":  "NVIDIA USB Type-C Port Policy Controller",
+                           "InstanceId":  "PCI\\VEN_10DE\u0026DEV_1AD7\u0026SUBSYS_37C01458\u0026REV_A1\\4\u002637732CF4\u00260\u00260308",
+                           "Status":  "OK"
+                       }
+                   ],
+    "AudioDevices":  [
+                         {
+                             "Name":  "NVIDIA High Definition Audio",
+                             "Manufacturer":  "NVIDIA",
+                             "Status":  "OK"
+                         },
+                         {
+                             "Name":  "Realtek High Definition Audio",
+                             "Manufacturer":  "Realtek",
+                             "Status":  "OK"
+                         },
+                         {
+                             "Name":  "NVIDIA Virtual Audio Device (Wave Extensible) (WDM)",
+                             "Manufacturer":  "NVIDIA",
+                             "Status":  "OK"
+                         }
+                     ],
+    "Cameras":  {
+
+                },
+    "BluetoothDevices":  {
+
+                         }
+}

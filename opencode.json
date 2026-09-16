@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "xkiro": {
+      "options": {
+        "apiKey": "sk-xt-d07e74d176b48f88e6587a810b427027e58fc16552ecec63",
+        "baseURL": "https://api.xkiro.com/v1"
+      }
+    }
+  },
+  "model": "xkiro/deepseek/deepseek-v4-pro"
+}

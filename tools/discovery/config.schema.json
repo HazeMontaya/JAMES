@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JAMES Discovery Configuration",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "scan": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string", "enum": ["fast", "full"], "default": "full" },
+        "timeout_seconds": { "type": "integer", "minimum": 30, "maximum": 600, "default": 120 },
+        "parallel": { "type": "boolean", "default": true },
+        "include": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["hardware", "software", "network", "james", "devices", "capabilities"] },
+          "default": ["hardware", "software", "network", "james", "devices", "capabilities"]
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
+      },
+      "required": ["mode"],
+      "additionalProperties": false
+    },
+    "adapters": {
+      "type": "object",
+      "properties": {
+        "platform": { "type": "string", "enum": ["auto", "windows", "linux", "macos", "android", "ios"], "default": "auto" },
+        "windows": {
+          "type": "object",
+          "properties": {
+            "use_wmi": { "type": "boolean", "default": true },
+            "use_powershell": { "type": "boolean", "default": true },
+            "use_registry": { "type": "boolean", "default": true },
+            "wmi_namespace": { "type": "string", "default": "root\\cimv2" }
+          },
+          "additionalProperties": false
+        },
+        "linux": {
+          "type": "object",
+          "properties": {
+            "use_sysfs": { "type": "boolean", "default": true },
+            "use_proc": { "type": "boolean", "default": true },
+            "use_dmidecode": { "type": "boolean", "default": false },
+            "use_lshw": { "type": "boolean", "default": false }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": ["platform"],
+      "additionalProperties": false
+    },
+    "capability_detection": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "rules_file": { "type": "string", "default": "capability-rules.json" },
+        "custom_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "category": { "type": "string" },
+              "condition": { "type": "string" },
+              "dependencies": { "type": "array", "items": { "type": "string" } },
+              "risk_level": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+              "provider": { "type": "string" }
+            },
+            "required": ["id", "name", "category", "condition"]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "directory": { "type": "string", "default": ".james/inventory/snapshots" },
+        "max_snapshots": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
+        "compress": { "type": "boolean", "default": false },
+        "retention_days": { "type": "integer", "minimum": 1, "maximum": 365, "default": 30 }
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "inventory_dir": { "type": "string", "default": ".james/inventory" },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["json", "yaml", "markdown"] },
+          "default": ["json"]
+        },
+        "pretty_print": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "no_credentials": { "type": "boolean", "default": true },
+        "no_passwords": { "type": "boolean", "default": true },
+        "no_cookies": { "type": "boolean", "default": true },
+        "no_external_scan": { "type": "boolean", "default": true },
+        "redact_sensitive": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "properties": {
+        "level": { "type": "string", "enum": ["debug", "info", "warn", "error"], "default": "info" },
+        "file": { "type": "string", "default": ".james/logs/discovery.log" },
+        "console": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["version", "scan", "adapters", "capability_detection", "snapshot", "output", "security", "logging"],
+  "additionalProperties": false
+}

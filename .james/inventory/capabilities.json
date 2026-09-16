@@ -1,0 +1,57 @@
+﻿{
+    "Automation":  {
+                       "Browser":  true,
+                       "PowerShell":  true,
+                       "Desktop":  true,
+                       "Python":  true
+                   },
+    "Hardware":  {
+                     "NPU_Present":  false,
+                     "RAM_GB":  32,
+                     "CPU_Inference":  true,
+                     "Storage_HDD_GB":  3726,
+                     "GPU_VRAM_GB":  4,
+                     "GPU_Inference":  true,
+                     "Storage_SSD_GB":  931
+                 },
+    "Software":  {
+                     "NodeJS":  true,
+                     "Podman":  false,
+                     "WindowsTerminal":  false,
+                     "Rust":  true,
+                     "Cargo":  true,
+                     "WSL":  true,
+                     "Python":  true,
+                     "Git":  true,
+                     "Docker":  false,
+                     "Ollama":  true,
+                     "VSCode":  true,
+                     "NPM":  true
+                 },
+    "AI":  {
+               "LocalLLM":  true,
+               "ROCm":  false,
+               "OllamaRunning":  false,
+               "OllamaInstalled":  true,
+               "CUDA":  "Unknown - need nvidia-smi",
+               "DirectML":  "Available on Windows"
+           },
+    "Network":  {
+                    "ActiveInterface":  "WLAN",
+                    "LinkSpeed":  "130 Mbps",
+                    "DNSServer":  "10.179.103.150",
+                    "IPAddress":  "10.179.103.109",
+                    "Gateway":  "10.179.103.150"
+                },
+    "Containerization":  {
+                             "Podman":  false,
+                             "WSL2":  true,
+                             "Docker":  false
+                         },
+    "Voice":  {
+                  "Microphone":  "Not detected via WMI",
+                  "Speakers":  "Realtek + NVIDIA HD Audio",
+                  "STT":  "Possible via local models",
+                  "TTS":  "Possible via local models"
+              }
+}

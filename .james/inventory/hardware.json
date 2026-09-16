@@ -1,0 +1,38 @@
+﻿{
+    "CPU":  {
+                "LogicalProcessors":  8,
+                "Architecture":  9,
+                "Name":  "Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz",
+                "Cores":  8,
+                "MaxClockSpeed_MHz":  3600
+            },
+    "GPUs":  {
+                 "AdapterRAM_GB":  4,
+                 "Name":  "NVIDIA GeForce RTX 2080 Ti",
+                 "DriverVersion":  "32.0.16.1047",
+                 "VideoProcessor":  "NVIDIA GeForce RTX 2080 Ti"
+             },
+    "Disks":  [
+                  {
+                      "FreeSpace_GB":  32.06,
+                      "VolumeName":  "",
+                      "Size_GB":  232.28,
+                      "DeviceID":  "C:",
+                      "FileSystem":  "NTFS"
+                  },
+                  {
+                      "FreeSpace_GB":  1829.79,
+                      "VolumeName":  "HDDs",
+                      "Size_GB":  3725.9,
+                      "DeviceID":  "H:",
+                      "FileSystem":  "NTFS"
+                  },
+                  {
+                      "FreeSpace_GB":  310.05,
+                      "VolumeName":  "SSDs",
+                      "Size_GB":  931.39,
+                      "DeviceID":  "S:",
+                      "FileSystem":  "NTFS"
+                  }
+              ]
+}

@@ -1,0 +1,50 @@
+﻿{
+    "LaterRequired":  [
+                          "JAMES Core services",
+                          "Model Router",
+                          "Device Registry",
+                          "Permission Engine",
+                          "Event Bus",
+                          "Agent Runtime"
+                      ],
+    "Missing_Recommended":  [
+                                "Podman (alternative to Docker)",
+                                "LM Studio (GUI for local LLMs)",
+                                "text-generation-webui (Oobabooga)",
+                                "NVIDIA Container Toolkit (for GPU containers)"
+                            ],
+    "Actions":  [
+                    "Install Docker Desktop with WSL 2 backend",
+                    "Install Windows Terminal from Microsoft Store",
+                    "Enable WSL 2 and install Ubuntu",
+                    "Start Ollama service: ollama serve",
+                    "Pull base models: ollama pull llama3.2, ollama pull nomic-embed-text",
+                    "Verify GPU access: nvidia-smi",
+                    "Create JAMES directory structure per BOOTSTRAP.md"
+                ],
+    "Optional":  [
+                     "Podman",
+                     "Additional AI runtimes (llama.cpp, vLLM, etc.)",
+                     "Home Assistant (for device integration)",
+                     "MQTT Broker (Mosquitto)"
+                 ],
+    "Missing_Critical":  [
+                             "Docker Desktop or Docker Engine",
+                             "Windows Terminal",
+                             "WSL 2 (for Linux containers)"
+                         ],
+    "AlreadyPresent":  [
+                           "Git 2.55.0",
+                           "Python 3.14.4",
+                           "Node.js 25.9.0 / npm 11.12.1",
+                           "Rust 1.98.0 / Cargo 1.98.0",
+                           "VS Code 1.135.0",
+                           "Ollama 0.32.8 (installed, not running)",
+                           "NVIDIA RTX 2080 Ti (4GB VRAM)",
+                           "Intel i7-9700K (8C/8T, 3.6 GHz)",
+                           "32 GB RAM",
+                           "SSD (S:) 931 GB free 311 GB",
+                           "HDD (H:) 3726 GB free 1830 GB",
+                           "Windows 10 Pro 2009 (19045)"
+                       ]
+}
