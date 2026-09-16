@@ -192,7 +192,9 @@ fn extract_task_marker(content: &str) -> Option<(String, String)> {
     let desc = if let Some(close) = rest.find("</task>") {
         rest[..close].trim().to_string()
     } else {
-        String::new()
+        // Truncated marker at end of stream: keep the remaining content as
+        // the description rather than discarding an in-flight reply.
+        rest.trim().to_string()
     };
     Some((name, desc))
 }
@@ -247,5 +249,37 @@ mod tests {
         let m = manifest();
         assert_eq!(m.id, "james.void");
         assert!(ModuleManifestValidator::validate(&m).is_ok());
+    }
+
+    #[test]
+    fn extract_marker_happy_path() {
+        let (name, desc) = extract_task_marker(
+            "Done. <task:Summarize meeting>Condense the Q3 notes into 5 bullets</task> -- James"
+        ).expect("marker must be found");
+        assert_eq!(name, "Summarize meeting");
+        assert_eq!(desc, "Condense the Q3 notes into 5 bullets");
+    }
+
+    #[test]
+    fn extract_marker_optional_description() {
+        let (name, desc) = extract_task_marker(
+            "<task:Notify team>Please ping the channel</task>"
+        ).expect("marker with description");
+        assert_eq!(name, "Notify team");
+        assert_eq!(desc, "Please ping the channel");
+    }
+
+    #[test]
+    fn extract_marker_absent() {
+        assert!(extract_task_marker("That sounds good, James.").is_none());
+    }
+
+    #[test]
+    fn extract_marker_unclosed() {
+        let (name, desc) = extract_task_marker(
+            "<task:Rename file>The name should become `draft.md`"
+        ).expect("markers may be unclosed at the end of a stream");
+        assert_eq!(name, "Rename file");
+        assert_eq!(desc.trim(), "The name should become `draft.md`");
     }
 }
