@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
 
 use james_events::{EventEnvelope, builtin_events, create_system_event, EventBus};
+use james_capabilities::{CapabilityRegistry, CapabilityDefinition, CapabilityCategory, RiskLevel, ExecutionTarget};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum RegistryEntryType {
@@ -81,6 +82,7 @@ pub struct Registry {
     by_name: DashMap<String, Uuid>,
     by_type: DashMap<RegistryEntryType, Vec<Uuid>>,
     event_bus: Option<Arc<EventBus>>,
+    capability_registry: Option<Arc<CapabilityRegistry>>,
     running: Arc<RwLock<bool>>,
 }
 
@@ -91,12 +93,18 @@ impl Registry {
             by_name: DashMap::new(),
             by_type: DashMap::new(),
             event_bus: None,
+            capability_registry: None,
             running: Arc::new(RwLock::new(false)),
         }
     }
 
     pub fn with_event_bus(mut self, event_bus: Arc<EventBus>) -> Self {
         self.event_bus = Some(event_bus);
+        self
+    }
+
+    pub fn with_capability_registry(mut self, capability_registry: Arc<CapabilityRegistry>) -> Self {
+        self.capability_registry = Some(capability_registry);
         self
     }
 
@@ -136,6 +144,36 @@ impl Registry {
         self.by_name.insert(entry.name.clone(), entry.id);
         self.by_type.entry(entry.entry_type.clone()).or_default().push(entry.id);
         self.entries.insert(entry.id, entry.clone());
+
+        // Auto-register capabilities for modules
+        if entry.entry_type == RegistryEntryType::Module {
+            if let Some(cap_reg) = &self.capability_registry {
+                for cap_id in &entry.capabilities {
+                    // Check if capability already exists
+                    if cap_reg.get(cap_id).is_none() {
+                        use james_capabilities::{CapabilityDefinition, CapabilityCategory, RiskLevel, ExecutionTarget};
+                        let definition = CapabilityDefinition {
+                            id: cap_id.clone(),
+                            name: cap_id.clone(),
+                            category: CapabilityCategory::Custom("module".to_string()),
+                            version: "1.0.0".to_string(),
+                            provider: entry.provider.clone(),
+                            description: format!("Capability provided by module {}", entry.name),
+                            risk_level: RiskLevel::Low,
+                            required_permissions: vec![],
+                            dependencies: vec![],
+                            input_schema: None,
+                            output_schema: None,
+                            execution_target: ExecutionTarget::Local,
+                            tags: vec![],
+                            deprecated: false,
+                            experimental: false,
+                        };
+                        let _ = cap_reg.register(definition, entry.provider.clone()).await;
+                    }
+                }
+            }
+        }
 
         if let Some(bus) = &self.event_bus {
             let event = create_system_event(builtin_events::REGISTRY_CHANGED, "registry")

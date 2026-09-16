@@ -1,0 +1,28 @@
+[package]
+name = "james-webresearch"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "James-WebResearch - Web search and research capabilities for JAMES"
+
+[dependencies]
+james-core = { path = "../../core/crates/james-core" }
+james-events = { path = "../../core/crates/james-events" }
+james-registry = { path = "../../core/crates/james-registry" }
+james-capabilities = { path = "../../core/crates/james-capabilities" }
+james-module-host = { path = "../../core/crates/james-module-host" }
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+uuid = { version = "1.7", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+schemars = "0.8"
+reqwest = { version = "0.12", features = ["json"] }
+html-escape = "0.2"
+urlencoding = "2.1"
+
+[lib]
+name = "james_webresearch"
+path = "src/lib.rs"

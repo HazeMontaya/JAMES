@@ -1,0 +1,20 @@
+[package]
+name = "james-app"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "JAMES Application - wires Core + localhost API (transport lives here, never in james-core)"
+
+[[bin]]
+name = "james-app"
+path = "src/main.rs"
+
+[dependencies]
+james-core = { workspace = true }
+james-app-api = { workspace = true }
+james-events = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }

@@ -1,0 +1,192 @@
+//! James-Void - Cosmic executive interface for JAMES
+
+use std::sync::Arc;
+use anyhow::Result;
+use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
+use james_events::{Event, EventBus};
+use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_chat::ChatModule;
+use james_ai::AiModule;
+use james_memory::{MemoryEntry, MemoryModule, MemoryType};
+use james_tasks::TasksModule;
+use james_webresearch::WebResearchModule;
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+use tracing::info;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoidConfig {
+    pub title: String,
+    pub theme: String,
+    pub show_events: bool,
+}
+
+impl Default for VoidConfig {
+    fn default() -> Self {
+        Self { title: "The Void".to_string(), theme: "dark".to_string(), show_events: true }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VoidMessage {
+    pub id: String,
+    pub role: String,
+    pub content: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+pub struct VoidModule {
+    config: VoidConfig,
+    event_bus: Arc<EventBus>,
+    capability_registry: Arc<CapabilityRegistry>,
+    running: Arc<RwLock<bool>>,
+    chat: Arc<ChatModule>,
+    ai: Arc<AiModule>,
+    memory: Arc<MemoryModule>,
+    tasks: Arc<TasksModule>,
+    web_research: Arc<WebResearchModule>,
+    messages: Arc<RwLock<Vec<VoidMessage>>>,
+}
+
+impl VoidModule {
+    pub fn new(config: VoidConfig, event_bus: Arc<EventBus>, capability_registry: Arc<CapabilityRegistry>,
+               chat: Arc<ChatModule>, ai: Arc<AiModule>, memory: Arc<MemoryModule>,
+               tasks: Arc<TasksModule>, web_research: Arc<WebResearchModule>) -> Self {
+        Self { config, event_bus, capability_registry, running: Arc::new(RwLock::new(false)),
+               chat, ai, memory, tasks, web_research, messages: Arc::new(RwLock::new(Vec::new())) }
+    }
+
+    pub async fn start(&self) -> Result<()> {
+        *self.running.write().await = true;
+        info!("James-Void started (theme={})", self.config.theme);
+        self.event_bus.publish(Event::new("module.void.started", "james-void")).await?;
+        Ok(())
+    }
+
+    pub async fn stop(&self) -> Result<()> {
+        *self.running.write().await = false;
+        info!("James-Void stopped");
+        self.event_bus.publish(Event::new("module.void.stopped", "james-void")).await?;
+        Ok(())
+    }
+
+    pub async fn send_message(&self, content: &str) -> Result<VoidMessage> {
+        let user_msg = VoidMessage {
+            id: uuid::Uuid::now_v7().to_string(), role: "user".to_string(),
+            content: content.to_string(), timestamp: chrono::Utc::now(), metadata: None,
+        };
+        self.messages.write().await.push(user_msg);
+
+        // Store in memory
+        let memory_entry = MemoryEntry {
+            id: String::new(),
+            memory_type: MemoryType::Episodic,
+            content: content.to_string(),
+            embedding: None,
+            metadata: serde_json::json!({"source": "james-void"}),
+            importance: 1.0,
+            access_count: 0,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            expires_at: None,
+            tags: vec!["chat".to_string()],
+            session_id: None,
+            agent_id: None,
+        };
+        if let Err(e) = self.memory.store(memory_entry).await {
+            info!("Failed to store in memory: {}", e);
+        }
+
+        // Get AI response
+        let request = james_ai::InferenceRequest {
+            model_id: None,
+            messages: vec![james_ai::ChatMessage {
+                role: james_ai::MessageRole::User,
+                content: content.to_string(),
+                name: None,
+                tool_calls: None,
+                tool_call_id: None,
+            }],
+            temperature: Some(0.7),
+            max_tokens: None,
+            stream: false,
+            response_format: None,
+            tools: None,
+        };
+        let response = self.ai.infer(request).await?;
+        let response_text = response.choices.first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_else(|| "I'm processing your request.".to_string());
+
+        let assistant_msg = VoidMessage {
+            id: uuid::Uuid::now_v7().to_string(), role: "assistant".to_string(),
+            content: response_text, timestamp: chrono::Utc::now(), metadata: None,
+        };
+        self.messages.write().await.push(assistant_msg.clone());
+
+        self.event_bus.publish(Event::new("void.message", "james-void")
+            .with_payload(serde_json::json!({"role": "assistant", "content": assistant_msg.content}))).await?;
+
+        Ok(assistant_msg)
+    }
+
+    pub async fn get_messages(&self) -> Vec<VoidMessage> {
+        self.messages.read().await.clone()
+    }
+
+    pub async fn is_running(&self) -> bool { *self.running.read().await }
+}
+
+pub fn manifest() -> ModuleManifest {
+    ModuleManifest {
+        id: "james.void".to_string(), name: "James-Void".to_string(), version: "0.1.0".to_string(),
+        description: "Cosmic executive interface for JAMES".to_string(), module_type: ModuleType::Interface,
+        entry_point: "james_void".to_string(),
+        capabilities: vec!["void.chat".to_string(), "void.events".to_string(), "void.control".to_string()],
+        dependencies: vec![
+            james_module_host::ModuleDependency { name: "james.chat".to_string(), version: "0.1.0".to_string(), optional: false, reason: Some("Chat interface".to_string()) },
+            james_module_host::ModuleDependency { name: "james.ai".to_string(), version: "0.1.0".to_string(), optional: false, reason: Some("AI inference".to_string()) },
+            james_module_host::ModuleDependency { name: "james.memory".to_string(), version: "0.1.0".to_string(), optional: false, reason: Some("Memory system".to_string()) },
+            james_module_host::ModuleDependency { name: "james.tasks".to_string(), version: "0.1.0".to_string(), optional: false, reason: Some("Task management".to_string()) },
+            james_module_host::ModuleDependency { name: "james.webresearch".to_string(), version: "0.1.0".to_string(), optional: true, reason: Some("Web research".to_string()) },
+        ],
+        permissions: vec![],
+        configuration_schema: None, default_config: None,
+        author: Some("JAMES Project".to_string()), homepage: None, repository: None,
+        license: "MIT".to_string(), tags: vec!["ui".to_string(), "chat".to_string(), "interface".to_string()],
+        min_core_version: "0.1.0".to_string(),
+        platforms: vec!["windows".to_string(), "linux".to_string(), "macos".to_string()],
+    }
+}
+
+pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> {
+    for (id, name, desc) in [
+        ("void.chat", "Void Chat", "Chat interface"),
+        ("void.events", "Void Events", "Live event stream"),
+        ("void.control", "Void Control", "System control"),
+    ] {
+        registry.register(CapabilityDefinition {
+            id: id.to_string(), name: name.to_string(),
+            category: james_capabilities::CapabilityCategory::Custom("ui".to_string()),
+            version: "1.0.0".to_string(), provider: "james.void".to_string(),
+            description: desc.to_string(), risk_level: RiskLevel::Low,
+            required_permissions: vec![], dependencies: vec![],
+            input_schema: None, output_schema: None,
+            execution_target: ExecutionTarget::Local,
+            tags: vec!["ui".to_string()], deprecated: false, experimental: false,
+        }, "james.void".to_string()).await?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn test_void_manifest() {
+        let m = manifest();
+        assert_eq!(m.id, "james.void");
+        assert!(ModuleManifestValidator::validate(&m).is_ok());
+    }
+}

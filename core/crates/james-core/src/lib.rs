@@ -60,9 +60,11 @@ impl JamesCore {
         let health_status = Arc::new(RwLock::new(CoreStatus::Starting));
 
         let event_bus = Arc::new(EventBus::new(config.event_bus_buffer_size));
-        let registry = Arc::new(Registry::new());
         let capability_registry = Arc::new(CapabilityRegistry::new());
-        let service_registry = Arc::new(ServiceRegistry::new());
+        let registry = Arc::new(Registry::new().with_capability_registry(capability_registry.clone()));
+        let service_registry = Arc::new(ServiceRegistry::new()
+            .with_registry(registry.clone())
+            .with_event_bus(event_bus.clone()));
         let task_manager = Arc::new(TaskManager::new(Some(event_bus.clone())));
         let scheduler = Arc::new(Scheduler::new(task_manager.clone()));
         let health_monitor = Arc::new(HealthMonitor::new(

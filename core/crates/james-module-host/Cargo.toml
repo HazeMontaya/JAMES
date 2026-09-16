@@ -1,21 +1,25 @@
 [package]
-name = "james-registry"
+name = "james-module-host"
 version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
-description = "JAMES Registry - Central registration for services, modules, plugins, devices, capabilities, workflows, agents, models"
+description = "JAMES Module Host - Module lifecycle management"
 
 [dependencies]
+james-core = { workspace = true }
 james-events = { workspace = true }
+james-registry = { workspace = true }
 james-capabilities = { workspace = true }
+james-errors = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+toml = { workspace = true }
+schemars = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
-parking_lot = { workspace = true }
-dashmap = { workspace = true }
-async-trait = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+semver = "1.0"
+async-trait = { workspace = true }

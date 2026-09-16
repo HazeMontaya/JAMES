@@ -1,0 +1,26 @@
+[package]
+name = "james-scheduler-module"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "James-Scheduler - Scheduled task execution for JAMES"
+
+[dependencies]
+james-core = { path = "../../core/crates/james-core" }
+james-events = { path = "../../core/crates/james-events" }
+james-registry = { path = "../../core/crates/james-registry" }
+james-capabilities = { path = "../../core/crates/james-capabilities" }
+james-module-host = { path = "../../core/crates/james-module-host" }
+james-tasks = { package = "james-tasks-module", path = "../james-tasks" }
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+uuid = { version = "1.7", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+cron = "0.12"
+
+[lib]
+name = "james_scheduler"
+path = "src/lib.rs"

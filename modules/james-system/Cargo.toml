@@ -1,0 +1,19 @@
+[package]
+name = "james-system"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "James-System - Runnable JAMES system: core + all first-party modules"
+
+[[bin]]
+name = "james-system"
+path = "src/main.rs"
+
+[dependencies]
+james-core = { path = "../../core/crates/james-core" }
+james-assembly = { path = "../james-assembly" }
+tokio = { version = "1.38", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

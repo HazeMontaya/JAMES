@@ -1,0 +1,23 @@
+[package]
+name = "james-app-api"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "JAMES Application API - localhost REST + WebSocket (v1 seed, preview)"
+
+[dependencies]
+james-events = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+tower = { version = "0.5", features = ["util"] }

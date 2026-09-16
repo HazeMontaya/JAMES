@@ -1,0 +1,72 @@
+[workspace]
+resolver = "2"
+members = [
+    "james-textinput",
+    "james-textoutput",
+    "james-chat",
+    "james-models",
+    "james-modelrouter",
+    "james-ai",
+    "james-ai-local",
+    "james-memory",
+    "james-tasks",
+    "james-scheduler",
+    "james-webresearch",
+    "james-browser",
+    "james-voice",
+    "james-stt",
+    "james-tts",
+    "james-void",
+    "james-dashboard",
+    "james-assembly",
+    "james-system",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["JAMES Project"]
+repository = "https://github.com/james-project/james"
+description = "JAMES Modules - First-party capabilities"
+
+[workspace.dependencies]
+# Core dependencies (from core workspace)
+james-core = { path = "../core/crates/james-core" }
+james-events = { path = "../core/crates/james-events" }
+james-registry = { path = "../core/crates/james-registry" }
+james-capabilities = { path = "../core/crates/james-capabilities" }
+james-module-host = { path = "../core/crates/james-module-host" }
+james-errors = { path = "../core/crates/james-errors" }
+
+# Module dependencies (intra-workspace)
+james-ai = { path = "james-ai" }
+james-memory = { path = "james-memory" }
+james-tasks = { package = "james-tasks-module", path = "james-tasks" }
+james-scheduler = { package = "james-scheduler-module", path = "james-scheduler" }
+james-chat = { path = "james-chat" }
+james-webresearch = { path = "james-webresearch" }
+james-browser = { path = "james-browser" }
+james-stt = { path = "james-stt" }
+james-tts = { path = "james-tts" }
+james-voice = { path = "james-voice" }
+
+# External dependencies
+tokio = { version = "1.38", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+async-trait = "0.1"
+uuid = { version = "1.7", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+schemars = "0.8"
+thiserror = "1.0"
+toml = "0.8"
+cron = "0.12"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+html-escape = "0.2"
+urlencoding = "2.1"
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+futures-util = "0.3"

@@ -93,7 +93,12 @@ impl Scheduler {
             task.created_at = Utc::now();
         }
         task.updated_at = Utc::now();
-        task.next_run = self.calculate_next_run(&task.schedule, None);
+        
+        // For interval tasks, run immediately on first tick, then at interval
+        task.next_run = match &task.schedule {
+            ScheduleType::Interval { .. } => Some(Utc::now()),
+            _ => self.calculate_next_run(&task.schedule, None),
+        };
         
         self.scheduled_tasks.insert(task.id, task.clone());
         Ok(task.id)

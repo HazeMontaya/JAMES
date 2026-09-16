@@ -1,0 +1,37 @@
+[package]
+name = "james-assembly"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "James-Assembly - Wire all first-party modules into a running JAMES system"
+
+[dependencies]
+james-core = { path = "../../core/crates/james-core" }
+james-events = { path = "../../core/crates/james-events" }
+james-capabilities = { path = "../../core/crates/james-capabilities" }
+james-module-host = { path = "../../core/crates/james-module-host" }
+james-textinput = { path = "../james-textinput" }
+james-textoutput = { path = "../james-textoutput" }
+james-chat = { path = "../james-chat" }
+james-models = { path = "../james-models" }
+james-modelrouter = { path = "../james-modelrouter" }
+james-ai = { path = "../james-ai" }
+james-ai-local = { path = "../james-ai-local" }
+james-memory = { path = "../james-memory" }
+james-tasks.workspace = true
+james-scheduler.workspace = true
+james-stt = { path = "../james-stt" }
+james-tts = { path = "../james-tts" }
+james-voice = { path = "../james-voice" }
+james-browser = { path = "../james-browser" }
+james-webresearch = { path = "../james-webresearch" }
+james-void = { path = "../james-void" }
+james-dashboard = { path = "../james-dashboard" }
+tokio = { version = "1.38", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"
+serde_json = "1.0"
+
+[lib]
+name = "james_assembly"
+path = "src/lib.rs"

@@ -10,6 +10,9 @@ members = [
     "crates/james-tasks",
     "crates/james-scheduler",
     "crates/james-health",
+    "crates/james-app-api",
+    "crates/james-app",
+    "crates/james-module-host",
 ]
 
 [workspace.package]
@@ -31,7 +34,9 @@ james-services = { path = "crates/james-services" }
 james-tasks = { path = "crates/james-tasks" }
 james-scheduler = { path = "crates/james-scheduler" }
 james-health = { path = "crates/james-health" }
-james-diagnostics = { path = "crates/james-diagnostics" }
+james-app-api = { path = "crates/james-app-api" }
+james-app = { path = "crates/james-app" }
+james-module-host = { path = "crates/james-module-host" }
 
 # Core dependencies
 tokio = { version = "1.38", features = ["full"] }
@@ -50,10 +55,15 @@ once_cell = "1.19"
 toml = "0.8"
 config = { version = "0.14", features = ["toml"] }
 clap = { version = "4.5", features = ["derive", "env"] }
+schemars = "0.8"
 
 # Serialization
 bincode = "1.3"
 rmp-serde = "1.1"
+
+# Localhost API (L3 only — never a core dependency)
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
 
 # Testing
 tempfile = { version = "3.9" }
