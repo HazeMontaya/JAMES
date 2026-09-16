@@ -36,6 +36,10 @@ pub struct VoidMessage {
     pub metadata: Option<serde_json::Value>,
 }
 
+/// Extract a task marker of the form `<task:Name>Description</task>` from assistant output.
+/// Returns `(name, description)` when present - the deterministic bridge between
+/// chat replies and the task system.
+
 pub struct VoidModule {
     config: VoidConfig,
     event_bus: Arc<EventBus>,
@@ -71,7 +75,13 @@ impl VoidModule {
         Ok(())
     }
 
-    pub async fn send_message(&self, content: &str) -> Result<VoidMessage> {
+    /// Parse a task marker `<task:Name>description</task>` from an AI reply.
+///
+/// This is the deterministic interface between chat output and the task
+/// system: when the model signals a distinct task, James-Void derives a
+/// Task from it. Returns `(name, description)` or `None` when no marker.
+
+pub async fn send_message(&self, content: &str) -> Result<VoidMessage> {
         let user_msg = VoidMessage {
             id: uuid::Uuid::now_v7().to_string(), role: "user".to_string(),
             content: content.to_string(), timestamp: chrono::Utc::now(), metadata: None,
@@ -121,9 +131,38 @@ impl VoidModule {
 
         let assistant_msg = VoidMessage {
             id: uuid::Uuid::now_v7().to_string(), role: "assistant".to_string(),
-            content: response_text, timestamp: chrono::Utc::now(), metadata: None,
+            content: response_text.clone(), timestamp: chrono::Utc::now(), metadata: None,
         };
         self.messages.write().await.push(assistant_msg.clone());
+
+        // Derive task from assistant reply when the model signals one via <task:...>
+        if let Some((task_name, task_desc)) = extract_task_marker(&assistant_msg.content) {
+            let task = james_tasks::Task {
+                id: String::new(),
+                name: task_name,
+                description: task_desc,
+                capability: "void.task".to_string(),
+                payload: serde_json::json!({"source": "james-void", "content": content}),
+                priority: james_tasks::TaskPriority::Normal,
+                status: james_tasks::TaskStatus::Created,
+                dependencies: vec![],
+                scheduled_at: None,
+                started_at: None,
+                completed_at: None,
+                result: None,
+                error: None,
+                retries: 0,
+                max_retries: 3,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                assigned_agent: None,
+            };
+            if let Ok(task_id) = self.tasks.create_task(task).await {
+                self.event_bus.publish(Event::new("void.task.delegated", "james-void")
+                    .with_payload(serde_json::json!({"task_id": task_id, "name": assistant_msg.content})))
+                    .await.ok();
+            }
+        }
 
         self.event_bus.publish(Event::new("void.message", "james-void")
             .with_payload(serde_json::json!({"role": "assistant", "content": assistant_msg.content}))).await?;
@@ -136,6 +175,26 @@ impl VoidModule {
     }
 
     pub async fn is_running(&self) -> bool { *self.running.read().await }
+}
+
+/// Extract an explicit task marker `<task:Name>Description</task>` from model output.
+/// Returns (name, description) when the reply signals a distinct task the user asked
+/// James to run â€” the deterministic bridge from chat to the task system.
+fn extract_task_marker(content: &str) -> Option<(String, String)> {
+    let open = content.find("<task:")?;
+    let after = &content[open + "<task:".len()..];
+    let name_end = after.find('>')?;
+    let name = after[..name_end].trim().to_string();
+    if name.is_empty() {
+        return None;
+    }
+    let rest = &after[name_end + 1..];
+    let desc = if let Some(close) = rest.find("</task>") {
+        rest[..close].trim().to_string()
+    } else {
+        String::new()
+    };
+    Some((name, desc))
 }
 
 pub fn manifest() -> ModuleManifest {

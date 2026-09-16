@@ -191,15 +191,31 @@ impl AiModule {
             }
         }
 
-        let model_id = request.model_id.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("No model specified and no router available"))?;
+        let model_id = request.model_id.clone();
 
-        // Find provider
         let providers = self.providers.read().await;
-        let provider = providers.iter()
-            .find(|p| p.provider_name() == "local" || p.provider_name().contains(model_id))
-            .ok_or_else(|| anyhow::anyhow!("No provider for model: {}", model_id))?;
 
+        // Resolve provider: a single provider without an explicit model gets
+        // deferred to its own inference defaults; otherwise select by model hint
+        let (provider, resolved_model): (Arc<dyn AiProvider>, Option<String>) =
+            if model_id.is_none() && providers.len() == 1 {
+                let p = providers[0].clone();
+                (p, None)
+            } else {
+                let mid = model_id.as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("No model specified and no router available"))?;
+                let p = providers.iter()
+                    .find(|p| p.provider_name() == "local"
+                        || p.provider_name() == "ollama"
+                        || p.provider_name().contains(mid))
+                    .ok_or_else(|| anyhow::anyhow!("No provider for model: {}", mid))?;
+                (p.clone(), Some(mid.clone()))
+            };
+
+        // Defer to the provider's default model unless one was explicitly set
+        if request.model_id.is_none() {
+            request.model_id = resolved_model;
+        }
         provider.infer(request).await
     }
 
