@@ -27,7 +27,7 @@ import * as crypto from 'crypto';
  * Windows are regularly UTF-8-with-BOM (PowerShell/legacy writers), and
  * JSON.parse rejects the BOM character.
  */
-function readJsonText(filePath: string): string {
+export function readJsonText(filePath: string): string {
   const content = fs.readFileSync(filePath, 'utf-8');
   return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
 }
@@ -509,10 +509,15 @@ export class DiscoveryEngine {
 
   listSnapshots(): Snapshot[] {
     const files = fs.readdirSync(this.snapshotsDir).filter(f => f.endsWith('.json'));
-    return files.map(f => {
-      const content = readJsonText(path.join(this.snapshotsDir, f));
-      return JSON.parse(content);
-    }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const out: Snapshot[] = [];
+    for (const f of files) {
+      try {
+        out.push(JSON.parse(readJsonText(path.join(this.snapshotsDir, f))) as Snapshot);
+      } catch (e) {
+        // Skip corrupt snapshot files (same policy as loadSnapshot).
+      }
+    }
+    return out.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   getLatestSnapshot(): Snapshot | null {

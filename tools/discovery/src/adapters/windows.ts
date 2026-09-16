@@ -69,7 +69,7 @@ const exec = (cmd: string) =>
  * single-element results to a bare object, silently dropping data
  * in Array.isArray-guarded callers).
  */
-function psJson(stdout: string): any[] {
+export function psJson(stdout: string): any[] {
   const start = stdout.search(/[{[]/);
   const text = start > 0 ? stdout.slice(start) : stdout;
   const parsed = JSON.parse(text);
@@ -78,7 +78,7 @@ function psJson(stdout: string): any[] {
 }
 
 /** Quote-aware CSV line splitter (wmic /format:csv fields contain commas). */
-function splitCsvLine(line: string): string[] {
+export function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = '';
   let quoted = false;
@@ -103,7 +103,7 @@ function splitCsvLine(line: string): string[] {
 }
 
 /** Parse wmic /format:csv output into header-keyed rows. */
-function parseCsv(stdout: string): Array<Record<string, string>> {
+export function parseCsv(stdout: string): Array<Record<string, string>> {
   const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
   if (lines.length < 2) return [];
   const headers = splitCsvLine(lines[0]);
@@ -118,7 +118,7 @@ function parseCsv(stdout: string): Array<Record<string, string>> {
 }
 
 /** SMBIOS memory-device type -> human name (common values only). */
-function smbiosMemoryTypeName(t: number): string | undefined {
+export function smbiosMemoryTypeName(t: number): string | undefined {
   switch (t) {
     case 18:
       return 'DDR2';
