@@ -151,7 +151,7 @@ impl TaskManager {
         self.capability_registry = Some(registry);
     }
 
-    pub fn create_task(&self, mut task: Task) -> Result<Uuid> {
+    pub async fn create_task(&self, mut task: Task) -> Result<Uuid> {
         if task.id == Uuid::nil() {
             task.id = Uuid::now_v7();
         }
@@ -166,7 +166,7 @@ impl TaskManager {
         self.by_source.entry(task.source.clone()).or_default().push(task.id);
         self.tasks.insert(task.id, task.clone());
 
-        self.emit_task_event(builtin_events::TASK_CREATED, &task);
+        self.emit_task_event(builtin_events::TASK_CREATED, &task).await;
 
         Ok(task.id)
     }
@@ -175,7 +175,7 @@ impl TaskManager {
         self.tasks.get(&id).map(|t| t.clone())
     }
 
-    pub fn update_status(&self, id: Uuid, status: TaskStatus) -> Result<bool> {
+    pub async fn update_status(&self, id: Uuid, status: TaskStatus) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&id) {
             let old_status = task.status.clone();
             task.status = status.clone();
@@ -185,9 +185,15 @@ impl TaskManager {
                 self.active_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
 
-            if matches!(status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled | TaskStatus::Timeout) {
+            // Only decrement when actually leaving the Running state;
+            // transitions from Queued (never counted) must not underflow.
+            if old_status == TaskStatus::Running
+                && matches!(status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled | TaskStatus::Timeout)
+            {
                 task.completed_at = Some(Utc::now());
                 self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            } else if matches!(status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled | TaskStatus::Timeout) {
+                task.completed_at = Some(Utc::now());
             }
 
             self.by_status.entry(old_status).or_default().retain(|&x| x != id);
@@ -202,7 +208,7 @@ impl TaskManager {
                     _ => builtin_events::TASK_CREATED,
                 },
                 &task,
-            );
+            ).await;
 
             Ok(true)
         } else {
@@ -210,34 +216,40 @@ impl TaskManager {
         }
     }
 
-    pub fn set_result(&self, id: Uuid, result: serde_json::Value) -> Result<bool> {
+    pub async fn set_result(&self, id: Uuid, result: serde_json::Value) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&id) {
+            let was_running = task.status == TaskStatus::Running;
             task.result = Some(result);
             task.status = TaskStatus::Completed;
             task.completed_at = Some(Utc::now());
-            self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            if was_running {
+                self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            }
             
             self.by_status.entry(TaskStatus::Running).or_default().retain(|&x| x != id);
             self.by_status.entry(TaskStatus::Completed).or_default().push(id);
 
-            self.emit_task_event(builtin_events::TASK_COMPLETED, &task);
+            self.emit_task_event(builtin_events::TASK_COMPLETED, &task).await;
             Ok(true)
         } else {
             Ok(false)
         }
     }
 
-    pub fn set_error(&self, id: Uuid, error: String) -> Result<bool> {
+    pub async fn set_error(&self, id: Uuid, error: String) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&id) {
+            let was_running = task.status == TaskStatus::Running;
             task.error = Some(error);
             task.status = TaskStatus::Failed;
             task.completed_at = Some(Utc::now());
-            self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            if was_running {
+                self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            }
             
             self.by_status.entry(TaskStatus::Running).or_default().retain(|&x| x != id);
             self.by_status.entry(TaskStatus::Failed).or_default().push(id);
 
-            self.emit_task_event(builtin_events::TASK_FAILED, &task);
+            self.emit_task_event(builtin_events::TASK_FAILED, &task).await;
             Ok(true)
         } else {
             Ok(false)
@@ -299,14 +311,19 @@ impl TaskManager {
     pub async fn cancel_task(&self, id: Uuid) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&id) {
             if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
+                let old_status = task.status.clone();
                 task.status = TaskStatus::Cancelled;
                 task.completed_at = Some(Utc::now());
-                self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                // Only decrement when cancelling a Running task; Queued
+                // tasks were never counted (underflow guard).
+                if old_status == TaskStatus::Running {
+                    self.active_count.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                }
                 
-                self.by_status.entry(task.status.clone()).or_default().retain(|&x| x != id);
+                self.by_status.entry(old_status).or_default().retain(|&x| x != id);
                 self.by_status.entry(TaskStatus::Cancelled).or_default().push(id);
 
-                self.emit_task_event(builtin_events::TASK_CANCELLED, &task);
+                self.emit_task_event(builtin_events::TASK_CANCELLED, &task).await;
                 Ok(true)
             } else {
                 Ok(false)
@@ -317,29 +334,39 @@ impl TaskManager {
     }
 
     pub async fn retry_task(&self, id: Uuid) -> Result<bool> {
-        if let Some(mut task) = self.tasks.get_mut(&id) {
-            if task.status == TaskStatus::Failed && task.current_retry < task.retry_policy.max_retries {
-                task.current_retry += 1;
-                task.status = TaskStatus::Queued;
-                task.error = None;
-                task.result = None;
-                task.started_at = None;
-                task.completed_at = None;
-                
-                self.by_status.entry(TaskStatus::Failed).or_default().retain(|&x| x != id);
-                self.by_status.entry(TaskStatus::Queued).or_default().push(id);
-
-                let delay = self.calculate_retry_delay(&task);
-                tokio::time::sleep(Duration::from_secs(delay)).await;
-
-self.emit_task_event(builtin_events::TASK_CREATED, &task);
-                Ok(true)
-            } else {
-                Ok(false)
+        // Mutate under a short-lived lock, then drop the guard BEFORE
+        // sleeping: holding a DashMap shard across .await risks deadlock.
+        let delay = {
+            let mut task = match self.tasks.get_mut(&id) {
+                Some(t) => t,
+                None => return Ok(false),
+            };
+            if !(task.status == TaskStatus::Failed
+                && task.current_retry < task.retry_policy.max_retries)
+            {
+                return Ok(false);
             }
-        } else {
-            Ok(false)
+            task.current_retry += 1;
+            task.status = TaskStatus::Queued;
+            task.error = None;
+            task.result = None;
+            task.started_at = None;
+            task.completed_at = None;
+
+            self.by_status.entry(TaskStatus::Failed).or_default().retain(|&x| x != id);
+            self.by_status.entry(TaskStatus::Queued).or_default().push(id);
+
+            self.calculate_retry_delay(&task)
+        };
+
+        if delay > 0 {
+            tokio::time::sleep(Duration::from_secs(delay)).await;
         }
+
+        if let Some(task) = self.tasks.get(&id) {
+            self.emit_task_event(builtin_events::TASK_CREATED, &task).await;
+        }
+        Ok(true)
     }
 
     fn calculate_retry_delay(&self, task: &Task) -> u64 {
@@ -423,7 +450,7 @@ mod tests {
             progress: None,
         };
 
-        let id = manager.create_task(task).unwrap();
+        let id = manager.create_task(task).await.unwrap();
         assert_ne!(id, Uuid::nil());
 
         let retrieved = manager.get_task(id).unwrap();
@@ -457,14 +484,14 @@ mod tests {
             progress: None,
         };
 
-        let id = manager.create_task(task).unwrap();
+        let id = manager.create_task(task).await.unwrap();
         
-        manager.update_status(id, TaskStatus::Running).unwrap();
+        manager.update_status(id, TaskStatus::Running).await.unwrap();
         let running = manager.get_task(id).unwrap();
         assert_eq!(running.status, TaskStatus::Running);
         assert!(running.started_at.is_some());
 
-        manager.set_result(id, serde_json::json!({"output": "success"})).unwrap();
+        manager.set_result(id, serde_json::json!({"output": "success"})).await.unwrap();
         let completed = manager.get_task(id).unwrap();
         assert_eq!(completed.status, TaskStatus::Completed);
         assert!(completed.completed_at.is_some());
@@ -497,10 +524,10 @@ mod tests {
             progress: None,
         };
 
-        let id = manager.create_task(task).unwrap();
-        manager.update_status(id, TaskStatus::Running).unwrap();
+        let id = manager.create_task(task).await.unwrap();
+        manager.update_status(id, TaskStatus::Running).await.unwrap();
         
-        manager.set_error(id, "Something went wrong".to_string()).unwrap();
+        manager.set_error(id, "Something went wrong".to_string()).await.unwrap();
         let failed = manager.get_task(id).unwrap();
         assert_eq!(failed.status, TaskStatus::Failed);
         assert_eq!(failed.error.unwrap(), "Something went wrong");
@@ -532,7 +559,7 @@ mod tests {
             progress: None,
         };
 
-        let id = manager.create_task(task).unwrap();
+        let id = manager.create_task(task).await.unwrap();
         manager.cancel_task(id).await.unwrap();
         
         let cancelled = manager.get_task(id).unwrap();
@@ -572,10 +599,97 @@ mod tests {
                 assigned_worker: None,
                 progress: None,
             };
-            manager.create_task(task).unwrap();
+            manager.create_task(task).await.unwrap();
         }
 
         let queued = manager.list_by_status(TaskStatus::Queued);
         assert_eq!(queued.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn test_task_events_published() {
+        let bus = Arc::new(EventBus::new(100));
+        bus.start().await.unwrap();
+        let manager = TaskManager::new(Some(bus.clone()));
+        manager.start().await.unwrap();
+
+        let mut rx_created = bus.subscribe(builtin_events::TASK_CREATED);
+        let mut rx_started = bus.subscribe(builtin_events::TASK_STARTED);
+
+        let task = Task {
+            id: Uuid::nil(),
+            task_type: "test".to_string(),
+            name: "Event Task".to_string(),
+            priority: TaskPriority::Normal,
+            status: TaskStatus::Queued,
+            created_at: DateTime::UNIX_EPOCH,
+            started_at: None,
+            completed_at: None,
+            source: "test".to_string(),
+            dependencies: vec![],
+            timeout_secs: 60,
+            retry_policy: RetryPolicy::default(),
+            current_retry: 0,
+            payload: serde_json::json!({}),
+            result: None,
+            error: None,
+            assigned_worker: None,
+            progress: None,
+        };
+
+        let id = manager.create_task(task).await.unwrap();
+        let created = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            rx_created.recv(),
+        )
+        .await
+        .expect("TASK_CREATED event timeout")
+        .expect("event channel closed");
+        assert_eq!(created.event.payload["task_id"], id.to_string());
+
+        manager.update_status(id, TaskStatus::Running).await.unwrap();
+        let started = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            rx_started.recv(),
+        )
+        .await
+        .expect("TASK_STARTED event timeout")
+        .expect("event channel closed");
+        assert_eq!(started.event.event_type, builtin_events::TASK_STARTED);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_from_queued_keeps_counter_and_index() {
+        let manager = TaskManager::new(None);
+        manager.start().await.unwrap();
+
+        let task = Task {
+            id: Uuid::nil(),
+            task_type: "test".to_string(),
+            name: "Cancel Task".to_string(),
+            priority: TaskPriority::Normal,
+            status: TaskStatus::Queued,
+            created_at: DateTime::UNIX_EPOCH,
+            started_at: None,
+            completed_at: None,
+            source: "test".to_string(),
+            dependencies: vec![],
+            timeout_secs: 60,
+            retry_policy: RetryPolicy::default(),
+            current_retry: 0,
+            payload: serde_json::json!({}),
+            result: None,
+            error: None,
+            assigned_worker: None,
+            progress: None,
+        };
+
+        let id = manager.create_task(task).await.unwrap();
+        assert!(manager.cancel_task(id).await.unwrap());
+        // Never Running: counter must stay 0 (no underflow to usize::MAX),
+        // and the stale Queued index entry must be gone.
+        assert_eq!(manager.active_count(), 0);
+        assert_eq!(manager.count_by_status(TaskStatus::Queued), 0);
+        assert_eq!(manager.count_by_status(TaskStatus::Cancelled), 1);
     }
 }

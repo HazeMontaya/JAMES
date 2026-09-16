@@ -175,7 +175,7 @@ impl Scheduler {
         let mut task = scheduled.task_template.to_task();
         task.name = format!("{} (scheduled)", scheduled.name);
         
-        let task_id = self.task_manager.create_task(task)?;
+        let task_id = self.task_manager.create_task(task).await?;
         
         if let Some(mut scheduled) = self.scheduled_tasks.get_mut(&scheduled.id) {
             scheduled.last_run = Some(Utc::now());

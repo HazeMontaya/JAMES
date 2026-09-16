@@ -176,14 +176,14 @@ impl ServiceRegistry {
         };
 
         self.services.insert(id.to_string(), instance.clone());
-        self.emit_service_event(builtin_events::SERVICE_STARTED, id, &instance);
+        self.emit_service_event(builtin_events::SERVICE_STARTED, id, &instance).await;
 
         instance.status = ServiceStatus::Running;
         instance.started_at = Some(Utc::now());
         instance.health_status = Some(ServiceHealth::Healthy);
         
         self.services.insert(id.to_string(), instance.clone());
-        self.emit_service_event(builtin_events::SERVICE_HEALTH_CHANGED, id, &instance);
+        self.emit_service_event(builtin_events::SERVICE_HEALTH_CHANGED, id, &instance).await;
 
         if let Some(reg) = &self.registry {
             let entry = RegistryEntry {
@@ -200,7 +200,7 @@ impl ServiceRegistry {
                 last_seen: DateTime::UNIX_EPOCH,
                 heartbeat_interval_secs: Some(30),
             };
-            let _ = reg.register(entry);
+            let _ = reg.register(entry).await;
         }
 
         info!("Service '{}' started", id);
@@ -210,16 +210,21 @@ impl ServiceRegistry {
     pub async fn stop_service(&self, id: &str) -> Result<bool> {
         if let Some((_, mut instance)) = self.services.remove(id) {
             instance.status = ServiceStatus::Stopping;
-            self.emit_service_event(builtin_events::SERVICE_STOPPED, id, &instance);
+            self.emit_service_event(builtin_events::SERVICE_STOPPED, id, &instance).await;
 
             instance.status = ServiceStatus::Stopped;
             instance.stopped_at = Some(Utc::now());
             instance.health_status = Some(ServiceHealth::Unknown);
 
-            self.emit_service_event(builtin_events::SERVICE_STOPPED, id, &instance);
+            self.emit_service_event(builtin_events::SERVICE_STOPPED, id, &instance).await;
 
             if let Some(reg) = &self.registry {
-                let _ = reg.unregister(Uuid::nil());
+                // Services register under their string id as entry name
+                // (names are globally unique), so resolve the real entry id
+                // instead of unregistering a nil UUID.
+                if let Some(entry) = reg.get_by_name(id) {
+                    let _ = reg.unregister(entry.id).await;
+                }
             }
 
             info!("Service '{}' stopped", id);
@@ -251,7 +256,7 @@ impl ServiceRegistry {
             .collect()
     }
 
-    pub fn update_health(&self, id: &str, health: ServiceHealth) -> Result<bool> {
+    pub async fn update_health(&self, id: &str, health: ServiceHealth) -> Result<bool> {
         if let Some(mut instance) = self.services.get_mut(id) {
             instance.health_status = Some(health.clone());
             instance.last_health_check = Some(Utc::now());
@@ -271,7 +276,7 @@ impl ServiceRegistry {
                 _ => {}
             }
 
-self.emit_service_event(builtin_events::SERVICE_HEALTH_CHANGED, id, &instance);
+            self.emit_service_event(builtin_events::SERVICE_HEALTH_CHANGED, id, &instance).await;
             Ok(true)
         } else {
             Ok(false)
@@ -420,12 +425,12 @@ mod tests {
         registry.register_definition(def).unwrap();
         registry.start_service("test-service", None).await.unwrap();
 
-        registry.update_health("test-service", ServiceHealth::Degraded).unwrap();
+        registry.update_health("test-service", ServiceHealth::Degraded).await.unwrap();
         let instance = registry.get_service("test-service").unwrap();
         assert_eq!(instance.status, ServiceStatus::Degraded);
         assert_eq!(instance.health_status, Some(ServiceHealth::Degraded));
 
-        registry.update_health("test-service", ServiceHealth::Unhealthy).unwrap();
+        registry.update_health("test-service", ServiceHealth::Unhealthy).await.unwrap();
         let instance = registry.get_service("test-service").unwrap();
         assert_eq!(instance.status, ServiceStatus::Failed);
     }
@@ -472,5 +477,42 @@ mod tests {
         registry.start_service("dependency", None).await.unwrap();
         let instance = registry.start_service("dependent", None).await.unwrap();
         assert_eq!(instance.status, ServiceStatus::Running);
+    }
+
+    #[tokio::test]
+    async fn test_service_events_published() {
+        let bus = Arc::new(EventBus::new(100));
+        bus.start().await.unwrap();
+        let registry = ServiceRegistry::new().with_event_bus(bus.clone());
+        registry.start().await.unwrap();
+
+        let mut rx = bus.subscribe(builtin_events::SERVICE_STARTED);
+
+        let def = ServiceDefinition {
+            id: "event-service".to_string(),
+            name: "Event Service".to_string(),
+            version: "1.0.0".to_string(),
+            provider: "test".to_string(),
+            description: "Emits events".to_string(),
+            capabilities: vec![],
+            dependencies: vec![],
+            config_schema: None,
+            default_config: None,
+            health_check_endpoint: None,
+            restart_policy: RestartPolicy::Never,
+        };
+
+        registry.register_definition(def).unwrap();
+        registry.start_service("event-service", None).await.unwrap();
+
+        let envelope = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            rx.recv(),
+        )
+        .await
+        .expect("SERVICE_STARTED event timeout")
+        .expect("event channel closed");
+        assert_eq!(envelope.event.event_type, builtin_events::SERVICE_STARTED);
+        assert_eq!(envelope.event.payload["service_id"], "event-service");
     }
 }
