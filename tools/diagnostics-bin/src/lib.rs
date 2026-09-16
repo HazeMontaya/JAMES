@@ -9,7 +9,7 @@ use serde_json::Value;
 use clap::{Parser, Subcommand};
 use tabled::{Table, Tabled};
 
-use james_core::CoreState;
+use james_core::{CoreState, CoreStatus};
 use james_events::{Event, EventEnvelope, builtin_events, EventBus};
 use james_registry::{Registry, RegistryEntry, RegistryEntryType, RegistryStatus};
 use james_capabilities::{CapabilityRegistry, RegisteredCapability, CapabilityDefinition};
@@ -78,18 +78,21 @@ impl Diagnostics {
         let running_tasks = self.task_manager.as_ref().map(|m| m.count_by_status(TaskStatus::Running)).unwrap_or(0);
         let scheduled_count = self.scheduler.as_ref().map(|s| s.list_enabled().len()).unwrap_or(0);
         
-        let health = self.health_monitor.as_ref().map(|h| h.check_all()).transpose()?.unwrap_or_else(|| SystemHealth {
-            overall: HealthStatus::Unknown,
-            components: HashMap::new(),
-            checked_at: Utc::now(),
-            uptime_secs: 0,
-        });
+        let health = match &self.health_monitor {
+            Some(h) => h.check_all().await?,
+            None => SystemHealth {
+                overall: HealthStatus::Unknown,
+                components: HashMap::new(),
+                checked_at: Utc::now(),
+                uptime_secs: 0,
+            },
+        };
 
         Ok(StatusReport {
             instance_id: state.instance_id,
             version: state.version.clone(),
             started_at: state.started_at,
-            status: state.status.clone(),
+            status: format!("{:?}", state.status),
             uptime_secs: health.uptime_secs,
             registry_entries: registry_count,
             capabilities: capability_count,
@@ -128,8 +131,10 @@ impl Diagnostics {
         }
     }
 
-    pub async fn events_list(&self, limit: usize) -> Result<Vec<Event>> {
-        Ok(vec![])
+    pub async fn events_list(&self, _limit: usize) -> Result<Vec<Event>> {
+        Err(anyhow::anyhow!(
+            "event history is not yet available (UNIMPLEMENTED: no event store wired)"
+        ))
     }
 
     pub async fn export(&self, format: ExportFormat) -> Result<String> {
@@ -413,7 +418,9 @@ impl Default for Diagnostics {
                 instance_id: Uuid::nil(),
                 version: "0.1.0".to_string(),
                 started_at: Utc::now(),
-                status: "Unknown".to_string(),
+                // CoreStatus has no Unknown variant (see F1-02 unification);
+                // Stopped here means "no core attached".
+                status: CoreStatus::Stopped,
             })),
             None,
             None,
@@ -436,7 +443,7 @@ mod tests {
             instance_id: Uuid::now_v7(),
             version: "0.1.0".to_string(),
             started_at: Utc::now(),
-            status: "Running".to_string(),
+            status: CoreStatus::Running,
         }));
 
         let diagnostics = Diagnostics::new(state, None, None, None, None, None, None, None);

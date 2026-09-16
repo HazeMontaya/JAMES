@@ -25,6 +25,24 @@ pub enum RegistryEntryType {
     Model,
 }
 
+impl std::str::FromStr for RegistryEntryType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "service" => Ok(Self::Service),
+            "module" => Ok(Self::Module),
+            "plugin" => Ok(Self::Plugin),
+            "device" => Ok(Self::Device),
+            "capability" => Ok(Self::Capability),
+            "workflow" => Ok(Self::Workflow),
+            "agent" => Ok(Self::Agent),
+            "model" => Ok(Self::Model),
+            other => Err(format!("unknown registry entry type: {other}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryEntry {
     pub id: Uuid,

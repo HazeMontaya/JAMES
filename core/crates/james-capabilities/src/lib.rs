@@ -28,6 +28,32 @@ pub enum CapabilityCategory {
     Custom(String),
 }
 
+impl std::str::FromStr for CapabilityCategory {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lower = s.to_ascii_lowercase();
+        match lower.as_str() {
+            "system" => Ok(Self::System),
+            "file" => Ok(Self::File),
+            "process" => Ok(Self::Process),
+            "network" => Ok(Self::Network),
+            "browser" => Ok(Self::Browser),
+            "voice" => Ok(Self::Voice),
+            "ai" => Ok(Self::Ai),
+            "device" => Ok(Self::Device),
+            "smarthome" | "smart_home" | "smart-home" => Ok(Self::SmartHome),
+            "automation" => Ok(Self::Automation),
+            "database" => Ok(Self::Database),
+            "security" => Ok(Self::Security),
+            _ if lower.starts_with("custom:") => {
+                Ok(Self::Custom(s["custom:".len()..].to_string()))
+            }
+            other => Err(format!("unknown capability category: {other}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub enum RiskLevel {
     Low,

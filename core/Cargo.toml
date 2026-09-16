@@ -9,7 +9,6 @@ members = [
     "crates/james-tasks",
     "crates/james-scheduler",
     "crates/james-health",
-    "crates/james-diagnostics",
 ]
 
 [workspace.package]
