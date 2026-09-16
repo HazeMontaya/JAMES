@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tokio::time::interval;
@@ -65,6 +66,14 @@ pub struct HealthMonitor {
     results: DashMap<String, ComponentHealth>,
     start_time: Instant,
     running: Arc<RwLock<bool>>,
+    state_dir: PathBuf,
+}
+
+fn default_state_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("james")
+        .join("state")
 }
 
 impl HealthMonitor {
@@ -87,7 +96,16 @@ impl HealthMonitor {
             results: DashMap::new(),
             start_time: Instant::now(),
             running: Arc::new(RwLock::new(false)),
+            state_dir: default_state_dir(),
         }
+    }
+
+    /// Override where `health.json` is persisted. Production keeps the
+    /// default; tests isolate each monitor in a temp dir so parallel runs
+    /// never share one state file (previously a flaky cross-test race).
+    pub fn with_state_dir(mut self, dir: PathBuf) -> Self {
+        self.state_dir = dir;
+        self
     }
 
     pub async fn start(&self) -> Result<()> {
@@ -487,17 +505,12 @@ impl HealthMonitor {
     }
 
     async fn save_health_state(&self, health: &SystemHealth) -> Result<()> {
-        let state_dir = dirs::data_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("james")
-            .join("state");
-        
-        std::fs::create_dir_all(&state_dir)?;
-        let path = state_dir.join("health.json");
+        std::fs::create_dir_all(&self.state_dir)?;
+        let path = self.state_dir.join("health.json");
         
         let json = serde_json::to_string_pretty(health)?;
         // Atomic write: temp file + rename, so readers never see a torn file.
-        let tmp = state_dir.join("health.json.tmp");
+        let tmp = self.state_dir.join("health.json.tmp");
         std::fs::write(&tmp, json)?;
         std::fs::rename(&tmp, path)?;
         
@@ -550,10 +563,23 @@ impl HealthEventBus {
 mod tests {
     use super::*;
 
+    /// Isolated monitor per test: unique temp state dir, so parallel test
+    /// threads never share one health.json (previously flaky cross-talk).
+    /// Also keeps tests out of the real user profile data dir.
+    fn test_monitor(name: &str) -> HealthMonitor {
+        let state = Arc::new(RwLock::new("Running".to_string()));
+        let dir = std::env::temp_dir().join(format!("james-health-test-{name}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        HealthMonitor::new(state, None, None, None, None, None).with_state_dir(dir)
+    }
+
+    fn test_state_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("james-health-test-{name}"))
+    }
+
     #[tokio::test]
     async fn test_health_monitor_check_core() {
-        let state = Arc::new(RwLock::new("Running".to_string()));
-        let monitor = HealthMonitor::new(state, None, None, None, None, None);
+        let monitor = test_monitor("core");
         monitor.start().await.unwrap();
 
         let health = monitor.check_all().await.unwrap();
@@ -564,8 +590,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_monitor_disk_space() {
-        let state = Arc::new(RwLock::new("Running".to_string()));
-        let monitor = HealthMonitor::new(state, None, None, None, None, None);
+        let monitor = test_monitor("disk");
         monitor.start().await.unwrap();
 
         let health = monitor.check_all().await.unwrap();
@@ -575,8 +600,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_monitor_memory() {
-        let state = Arc::new(RwLock::new("Running".to_string()));
-        let monitor = HealthMonitor::new(state, None, None, None, None, None);
+        let monitor = test_monitor("memory");
         monitor.start().await.unwrap();
 
         let health = monitor.check_all().await.unwrap();
@@ -585,17 +609,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_state_persistence() {
-        let state = Arc::new(RwLock::new("Running".to_string()));
-        let monitor = HealthMonitor::new(state, None, None, None, None, None);
+        let monitor = test_monitor("persistence");
         monitor.start().await.unwrap();
 
         let _ = monitor.check_all().await.unwrap();
         
-        let state_dir = dirs::data_dir()
-            .unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join("james")
-            .join("state");
-        let path = state_dir.join("health.json");
+        let path = test_state_dir("persistence").join("health.json");
         
         assert!(path.exists());
         let content = std::fs::read_to_string(path).unwrap();
