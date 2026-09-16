@@ -1,5 +1,4 @@
-use james_core::{JamesCore, CoreConfig};
-use tracing_subscriber::EnvFilter;
+use james_core::{JamesCore, CoreConfig, LogFields, init_tracing};
 use anyhow::Result;
 use tokio::signal;
 use tracing::{info, error};
@@ -8,7 +7,8 @@ use tracing::{info, error};
 async fn main() -> Result<()> {
     init_tracing()?;
 
-    info!("Starting JAMES Core v{}", env!("CARGO_PKG_VERSION"));
+    let log = LogFields::new("james-core");
+    info!("{} Starting JAMES Core v{}", log.prefix(), env!("CARGO_PKG_VERSION"));
 
     let mut config = CoreConfig::load().unwrap_or_else(|e| {
         error!("Failed to load config: {}, using defaults", e);
@@ -39,21 +39,6 @@ async fn main() -> Result<()> {
     info!("Shutdown signal received");
     core.stop().await?;
 
-    info!("JAMES Core stopped");
-    Ok(())
-}
-
-fn init_tracing() -> Result<()> {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,james_core=debug,james_events=debug"));
-
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true)
-        .init();
-
+    info!("{} JAMES Core stopped", log.prefix());
     Ok(())
 }

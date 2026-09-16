@@ -248,6 +248,164 @@ pub fn scrub_payload(value: &mut serde_json::Value) {
     }
 }
 
+/// Redact secrets from free text (log lines, error strings).
+/// Handles `sk-...` tokens, `bearer <token>`, and
+/// `password|secret|token|... = value` / `: value` assignments
+/// (optional quoting). Dependency-free on purpose.
+pub fn redact_message(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let chars: Vec<char> = input.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        // sk-... token run.
+        if starts_with(&chars, i, "sk-") {
+            out.push_str(REDACTED);
+            i += 3;
+            while i < chars.len() && is_token_char(chars[i]) {
+                i += 1;
+            }
+            continue;
+        }
+        // bearer <token> (case-insensitive).
+        if matches_word_ci(&chars, i, "bearer") {
+            out.push_str("bearer ");
+            out.push_str(REDACTED);
+            i += 6;
+            i = skip_ws(&chars, i);
+            while i < chars.len() && !chars[i].is_whitespace() {
+                i += 1;
+            }
+            continue;
+        }
+        // sensitive-key assignment.
+        if let Some(key_len) = sensitive_key_at(&chars, i) {
+            let key: String = chars[i..i + key_len].iter().collect();
+            out.push_str(&key);
+            i += key_len;
+            i = skip_ws(&chars, i);
+            if i < chars.len() && (chars[i] == '=' || chars[i] == ':') {
+                out.push(chars[i]);
+                i += 1;
+                // Preserve original spacing (minimal log transformation).
+                let ws_start = i;
+                i = skip_ws(&chars, i);
+                for c in &chars[ws_start..i] {
+                    out.push(*c);
+                }
+                // Optional quoted value.
+                let quote = if i < chars.len() && (chars[i] == '"' || chars[i] == '\'') {
+                    let q = chars[i];
+                    out.push(q);
+                    i += 1;
+                    Some(q)
+                } else {
+                    None
+                };
+                out.push_str(REDACTED);
+                if let Some(q) = quote {
+                    while i < chars.len() && chars[i] != q {
+                        i += 1;
+                    }
+                    if i < chars.len() {
+                        out.push(q);
+                        i += 1;
+                    }
+                } else {
+                    while i < chars.len() && !chars[i].is_whitespace() && chars[i] != ',' && chars[i] != ';' {
+                        i += 1;
+                    }
+                }
+                continue;
+            }
+            continue;
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+fn starts_with(chars: &[char], at: usize, pat: &str) -> bool {
+    let p: Vec<char> = pat.chars().collect();
+    chars.len() >= at + p.len() && chars[at..at + p.len()] == p[..]
+}
+
+fn matches_word_ci(chars: &[char], at: usize, word: &str) -> bool {
+    let w: Vec<char> = word.chars().collect();
+    if chars.len() < at + w.len() {
+        return false;
+    }
+    // Left boundary: start or non-identifier char.
+    if at > 0 && (chars[at - 1].is_alphanumeric() || chars[at - 1] == '_') {
+        return false;
+    }
+    for (j, c) in w.iter().enumerate() {
+        if chars[at + j].to_ascii_lowercase() != *c {
+            return false;
+        }
+    }
+    // Right boundary: whitespace (bearer is always followed by the token).
+    at + w.len() < chars.len() && chars[at + w.len()].is_whitespace()
+}
+
+fn is_token_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '-' || c == '_' || c == '.'
+}
+
+fn skip_ws(chars: &[char], mut i: usize) -> usize {
+    while i < chars.len() && chars[i].is_whitespace() {
+        i += 1;
+    }
+    i
+}
+
+/// A sensitive key starting exactly at `at` (identifier boundaries
+/// respected); returns its length. Mirrors `SENSITIVE_KEY_PARTS`.
+fn sensitive_key_at(chars: &[char], at: usize) -> Option<usize> {
+    if at > 0 && (chars[at - 1].is_alphanumeric() || chars[at - 1] == '_') {
+        return None;
+    }
+    // Longest-first so `api_key` wins over `key`-like suffixes; each
+    // candidate must end at an identifier boundary.
+    const KEYS: &[&str] = &[
+        "private_key",
+        "client_secret",
+        "session_key",
+        "api_key",
+        "apikey",
+        "password",
+        "passwd",
+        "secret",
+        "credential",
+        "bearer",
+        "authorization",
+        "token",
+    ];
+    for key in KEYS {
+        let k: Vec<char> = key.chars().collect();
+        if chars.len() < at + k.len() {
+            continue;
+        }
+        let mut ok = true;
+        for (j, c) in k.iter().enumerate() {
+            if chars[at + j].to_ascii_lowercase() != *c {
+                ok = false;
+                break;
+            }
+        }
+        if !ok {
+            continue;
+        }
+        let end = at + k.len();
+        if end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            continue;
+        }
+        return Some(k.len());
+    }
+    None
+}
+
 use tokio::sync::mpsc;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -515,6 +673,32 @@ mod tests {
         assert_eq!(p["nested"]["ok"], 1);
         assert_eq!(p["list"][0]["bearer"], "[REDACTED]");
         assert!(p["list"][1]["fine"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn test_redact_message_covers_free_text() {
+        assert_eq!(
+            redact_message("connecting with apiKey=sk-xt-abc123 done"),
+            "connecting with apiKey=[REDACTED] done"
+        );
+        assert_eq!(
+            redact_message("Auth: Bearer eyJhbGciOiJIUzI1NiJ9 ok"),
+            "Auth: bearer [REDACTED] ok"
+        );
+        assert_eq!(
+            redact_message("password: hunter2, user: alice"),
+            "password: [REDACTED], user: alice"
+        );
+        assert_eq!(
+            redact_message("token=\"abc;def\"; next=1"),
+            "token=\"[REDACTED]\"; next=1"
+        );
+        // Innocent text is untouched (identifier boundaries respected).
+        assert_eq!(
+            redact_message("tokenizer running, my_secretary noted"),
+            "tokenizer running, my_secretary noted"
+        );
+        assert_eq!(redact_message("all clear"), "all clear");
     }
 
     #[tokio::test]

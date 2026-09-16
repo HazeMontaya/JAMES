@@ -22,6 +22,8 @@ use james_health::HealthMonitor;
 
 mod config;
 pub use config::CoreConfig;
+mod logging;
+pub use logging::{init_tracing, LogFields};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoreState {
