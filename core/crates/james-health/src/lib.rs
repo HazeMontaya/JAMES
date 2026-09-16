@@ -400,10 +400,17 @@ impl HealthMonitor {
 
         #[cfg(not(windows))]
         {
-            use std::fs;
-            let stat = fs::statvfs(".")?;
-            let free = stat.bavail() as u64 * stat.bsize() as u64;
-            let total = stat.blocks() as u64 * stat.bsize() as u64;
+            // Portable fallback via sysinfo (verified against sysinfo 0.30.13:
+            // Disks::new_with_refreshed_list + Disk::{total_space, available_space}).
+            // NOTE: this branch is not compiled on Windows; validated by source
+            // inspection, full check happens on non-Windows CI (see H9-04).
+            let disks = sysinfo::Disks::new_with_refreshed_list();
+            let mut free: u64 = 0;
+            let mut total: u64 = 0;
+            for disk in disks.list() {
+                free = free.saturating_add(disk.available_space());
+                total = total.saturating_add(disk.total_space());
+            }
             let used = total.saturating_sub(free);
             let usage = if total > 0 { (used as f64 / total as f64) * 100.0 } else { 0.0 };
 
@@ -489,7 +496,10 @@ impl HealthMonitor {
         let path = state_dir.join("health.json");
         
         let json = serde_json::to_string_pretty(health)?;
-        std::fs::write(path, json)?;
+        // Atomic write: temp file + rename, so readers never see a torn file.
+        let tmp = state_dir.join("health.json.tmp");
+        std::fs::write(&tmp, json)?;
+        std::fs::rename(&tmp, path)?;
         
         Ok(())
     }
@@ -542,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_monitor_check_core() {
-        let state = Arc::new(RwLock::new(CoreState { status: "Running".to_string() }));
+        let state = Arc::new(RwLock::new("Running".to_string()));
         let monitor = HealthMonitor::new(state, None, None, None, None, None);
         monitor.start().await.unwrap();
 
@@ -554,7 +564,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_monitor_disk_space() {
-        let state = Arc::new(RwLock::new(CoreState { status: "Running".to_string() }));
+        let state = Arc::new(RwLock::new("Running".to_string()));
         let monitor = HealthMonitor::new(state, None, None, None, None, None);
         monitor.start().await.unwrap();
 
@@ -565,7 +575,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_monitor_memory() {
-        let state = Arc::new(RwLock::new(CoreState { status: "Running".to_string() }));
+        let state = Arc::new(RwLock::new("Running".to_string()));
         let monitor = HealthMonitor::new(state, None, None, None, None, None);
         monitor.start().await.unwrap();
 
@@ -575,7 +585,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_state_persistence() {
-        let state = Arc::new(RwLock::new(CoreState { status: "Running".to_string() }));
+        let state = Arc::new(RwLock::new("Running".to_string()));
         let monitor = HealthMonitor::new(state, None, None, None, None, None);
         monitor.start().await.unwrap();
 
