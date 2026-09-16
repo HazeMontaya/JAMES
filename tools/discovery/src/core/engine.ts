@@ -22,6 +22,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+/**
+ * Read a JSON text file, tolerating a leading BOM. Inventory files on
+ * Windows are regularly UTF-8-with-BOM (PowerShell/legacy writers), and
+ * JSON.parse rejects the BOM character.
+ */
+function readJsonText(filePath: string): string {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+}
+
 export class DiscoveryEngine {
   private config: DiscoveryConfig;
   private adapter: PlatformAdapter;
@@ -337,13 +347,23 @@ export class DiscoveryEngine {
       throw new Error('Snapshot not found');
     }
 
+    // Legacy snapshots may store sections/capabilities in older shapes
+    // (e.g. capabilities as object instead of array). Coerce defensively:
+    // a diff tool must report differences, never crash on old data.
+    const asSection = (v: unknown): Record<string, DiscoveryResult<unknown>> =>
+      typeof v === 'object' && v !== null && !Array.isArray(v)
+        ? (v as Record<string, DiscoveryResult<unknown>>)
+        : {};
+    const asCapabilities = (v: unknown): Capability[] =>
+      Array.isArray(v) ? (v as Capability[]) : [];
+
     const changes: Change[] = [];
-    
-    changes.push(...this.compareObjects('hardware', previous.hardware as unknown as Record<string, DiscoveryResult<unknown>>, current.hardware as unknown as Record<string, DiscoveryResult<unknown>>));
-    changes.push(...this.compareObjects('software', previous.software as unknown as Record<string, DiscoveryResult<unknown>>, current.software as unknown as Record<string, DiscoveryResult<unknown>>));
-    changes.push(...this.compareObjects('network', previous.network as unknown as Record<string, DiscoveryResult<unknown>>, current.network as unknown as Record<string, DiscoveryResult<unknown>>));
-    changes.push(...this.compareObjects('james', previous.james as unknown as Record<string, DiscoveryResult<unknown>>, current.james as unknown as Record<string, DiscoveryResult<unknown>>));
-    changes.push(...this.compareCapabilities(previous.capabilities, current.capabilities));
+
+    changes.push(...this.compareObjects('hardware', asSection(previous.hardware), asSection(current.hardware)));
+    changes.push(...this.compareObjects('software', asSection(previous.software), asSection(current.software)));
+    changes.push(...this.compareObjects('network', asSection(previous.network), asSection(current.network)));
+    changes.push(...this.compareObjects('james', asSection(previous.james), asSection(current.james)));
+    changes.push(...this.compareCapabilities(asCapabilities(previous.capabilities), asCapabilities(current.capabilities)));
 
     const summary: ChangeSummary = {
       total_changes: changes.length,
@@ -375,10 +395,27 @@ export class DiscoveryEngine {
   }
 
   private loadSnapshot(id: string): Snapshot | null {
-    const files = fs.readdirSync(this.snapshotsDir).filter(f => f.includes(id));
-    if (files.length === 0) return null;
-    const content = fs.readFileSync(path.join(this.snapshotsDir, files[0]), 'utf-8');
-    return JSON.parse(content);
+    // Filenames do not reliably contain the snapshot id, so resolve by
+    // parsing: exact match first, then unambiguous id-prefix match.
+    // (Previous bug: filename substring match never hit real files.)
+    const files = fs.readdirSync(this.snapshotsDir).filter(f => f.endsWith('.json'));
+    const exact: string[] = [];
+    const prefix: string[] = [];
+    for (const f of files) {
+      try {
+        const snapshot = JSON.parse(readJsonText(path.join(this.snapshotsDir, f))) as Snapshot;
+        if (snapshot.id === id) {
+          exact.push(f);
+        } else if (typeof snapshot.id === 'string' && snapshot.id.startsWith(id)) {
+          prefix.push(f);
+        }
+      } catch (e) {
+        // Skip corrupt snapshot files instead of failing the lookup.
+      }
+    }
+    const match = exact.length === 1 ? exact[0] : prefix.length === 1 ? prefix[0] : null;
+    if (match === null) return null;
+    return JSON.parse(readJsonText(path.join(this.snapshotsDir, match))) as Snapshot;
   }
 
   private compareObjects(category: string, prev: Record<string, DiscoveryResult<unknown>>, curr: Record<string, DiscoveryResult<unknown>>): Change[] {
@@ -473,7 +510,7 @@ export class DiscoveryEngine {
   listSnapshots(): Snapshot[] {
     const files = fs.readdirSync(this.snapshotsDir).filter(f => f.endsWith('.json'));
     return files.map(f => {
-      const content = fs.readFileSync(path.join(this.snapshotsDir, f), 'utf-8');
+      const content = readJsonText(path.join(this.snapshotsDir, f));
       return JSON.parse(content);
     }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }

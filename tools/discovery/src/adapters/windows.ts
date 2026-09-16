@@ -358,7 +358,7 @@ export class WindowsAdapter extends BaseAdapter {
               name: data.Name,
               screen_width: data.ScreenWidth ? parseInt(data.ScreenWidth) : undefined,
               screen_height: data.ScreenHeight ? parseInt(data.ScreenHeight) : undefined,
-              monitor_manufacturer: data.MonitorManufacturer || undefined,
+              manufacturer: data.MonitorManufacturer || undefined,
               monitor_type: data.MonitorType || undefined,
             });
           }
@@ -443,8 +443,8 @@ export class WindowsAdapter extends BaseAdapter {
   private async detectBluetooth(): Promise<ReturnType<typeof this.createResult<BluetoothInfo>>> {
     try {
       const { stdout } = await exec('powershell "Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName,InstanceId,Status | ConvertTo-Json"');
-      const devices = JSON.parse(stdout);
-      const adapters: BluetoothAdapterInfo[] = Array.isArray(devices) ? devices
+      const rawDevices = JSON.parse(stdout);
+      const adapters: BluetoothAdapterInfo[] = Array.isArray(rawDevices) ? rawDevices
         .filter((d: any) => d.FriendlyName?.toLowerCase().includes('adapter') || d.FriendlyName?.toLowerCase().includes('radio'))
         .map((d: any) => ({
           name: d.FriendlyName || 'Bluetooth Adapter',
@@ -796,7 +796,7 @@ export class WindowsAdapter extends BaseAdapter {
 
   private async detectLocalIPs(): Promise<ReturnType<typeof this.createResult<LocalIPInfo[]>>> {
     try {
-      const { stdout } = await exec('powershell "Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notmatch \'^127\\.|^169\\.254\.'} | Select-Object IPAddress,InterfaceAlias,PrefixLength | ConvertTo-Json"');
+      const { stdout } = await exec('powershell "Get-NetIPAddress -AddressFamily IPv4 | Where-Object {$_.IPAddress -notmatch \'^127\\.|^169\\.254\\.\'} | Select-Object IPAddress,InterfaceAlias,PrefixLength | ConvertTo-Json"');
       const ips = JSON.parse(stdout);
       const localIPs: LocalIPInfo[] = Array.isArray(ips) ? ips.map((i: any) => ({
         ip_address: i.IPAddress,

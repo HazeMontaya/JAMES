@@ -3,10 +3,56 @@ import { DiscoveryConfig } from '../core/interfaces';
 import * as fs from 'fs';
 import * as path from 'path';
 
+/**
+ * Read a JSON file, tolerating a leading BOM. Inventory files on Windows
+ * are regularly UTF-8-with-BOM, which JSON.parse rejects.
+ */
+function readJsonFile<T>(filePath: string): T {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content;
+  return JSON.parse(text) as T;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+function deepMerge(base: unknown, override: unknown): unknown {
+  if (Array.isArray(override)) {
+    return override;
+  }
+  if (isPlainObject(base) && isPlainObject(override)) {
+    const out: Record<string, unknown> = { ...base };
+    for (const key of Object.keys(override)) {
+      out[key] = key in out ? deepMerge(out[key], override[key]) : override[key];
+    }
+    return out;
+  }
+  return override === undefined ? base : override;
+}
+
+function findPackageFile(name: string): string | null {
+  // Works from src/ (ts-node) and dist/src/ (compiled output), independent
+  // of the caller's working directory: walk upward until found.
+  let dir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    const candidate = path.join(dir, name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return null;
+}
+
 function loadConfig(): DiscoveryConfig {
-  const configPath = path.resolve('tools/discovery/config.schema.json');
-  const schema = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  
+  // NOTE: config.schema.json is a JSON *schema*, not a config file.
+  // It must never be parsed as configuration (previous bug: content was
+  // read and silently discarded while paths stayed CWD-dependent).
   const defaultConfig: DiscoveryConfig = {
     version: '1.0',
     scan: {
@@ -61,6 +107,21 @@ function loadConfig(): DiscoveryConfig {
     },
   };
 
+  // Optional user overrides: explicit path via env, else a
+  // james.discovery.json next to the package files. Schema file is ignored.
+  const overridePath =
+    process.env.DISCOVERY_CONFIG ?? findPackageFile('james.discovery.json');
+  if (overridePath && fs.existsSync(overridePath)) {
+    const raw: unknown = readJsonFile<unknown>(overridePath);
+    const merged = deepMerge(defaultConfig, raw) as DiscoveryConfig;
+    if (merged.scan?.mode !== 'fast' && merged.scan?.mode !== 'full') {
+      throw new Error(
+        `Invalid scan.mode in ${overridePath}: expected "fast" or "full"`
+      );
+    }
+    return merged;
+  }
+
   return defaultConfig;
 }
 
@@ -82,7 +143,7 @@ async function main() {
     case 'inventory': {
       const currentPath = path.resolve(config.output.inventory_dir, 'current.json');
       if (fs.existsSync(currentPath)) {
-        const current = JSON.parse(fs.readFileSync(currentPath, 'utf-8'));
+        const current = readJsonFile<unknown>(currentPath);
         console.log(JSON.stringify(current, null, 2));
       } else {
         console.log('No inventory found. Run "scan" first.');
@@ -92,7 +153,7 @@ async function main() {
     case 'capabilities': {
       const capsPath = path.resolve(config.output.inventory_dir, 'capabilities.json');
       if (fs.existsSync(capsPath)) {
-        const caps = JSON.parse(fs.readFileSync(capsPath, 'utf-8'));
+        const caps = readJsonFile<unknown>(capsPath);
         console.log(JSON.stringify(caps, null, 2));
       } else {
         console.log('No capabilities found. Run "scan" first.');
@@ -102,7 +163,7 @@ async function main() {
     case 'changes': {
       const changesPath = path.resolve(config.output.inventory_dir, 'changes.json');
       if (fs.existsSync(changesPath)) {
-        const changes = JSON.parse(fs.readFileSync(changesPath, 'utf-8'));
+        const changes = readJsonFile<unknown>(changesPath);
         console.log(JSON.stringify(changes, null, 2));
       } else {
         console.log('No changes found. Run "scan" at least twice.');
@@ -168,9 +229,9 @@ async function main() {
         process.exit(1);
       }
       
-      const current = JSON.parse(fs.readFileSync(currentPath, 'utf-8'));
+      const current = readJsonFile<Record<string, unknown>>(currentPath);
       const capsPath = path.resolve(config.output.inventory_dir, 'capabilities.json');
-      const capabilities = fs.existsSync(capsPath) ? JSON.parse(fs.readFileSync(capsPath, 'utf-8')) : [];
+      const capabilities = fs.existsSync(capsPath) ? readJsonFile<unknown>(capsPath) : [];
       
       const exportData = {
         ...current,

@@ -2,10 +2,10 @@
   "name": "james-discovery",
   "version": "0.1.0",
   "description": "JAMES Environment Manager - Discovery & Inventory",
-  "main": "dist/cli/index.js",
+  "main": "dist/src/cli/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cli/index.js",
+    "start": "node dist/src/cli/index.js",
     "dev": "ts-node src/cli/index.ts",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
