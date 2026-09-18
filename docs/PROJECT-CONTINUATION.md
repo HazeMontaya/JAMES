@@ -6,9 +6,9 @@ Dieses Dokument ist der Einstieg fuer eine spaetere Sitzung. Es beschreibt, was 
 
 JAMES ist ein Rust-Projekt mit getrennten Workspaces:
 
-- `core/`: Core-Crates
-- `modules/`: First-Party-Module und Assembly
-- `tools/discovery/`: TypeScript-Discovery, Windows konkret, andere Plattformen als Stubs
+- `runtime/core/`: Core-Crates
+- `runtime/modules/`: First-Party-Module und Assembly
+- `runtime/tools/discovery/`: Discovery-Tooling, Windows konkret, andere Plattformen als Stubs
 - `docs/`: Architektur und Projektvertrag
 
 Wichtige vorhandene Bausteine:
@@ -69,10 +69,10 @@ Ziel: Core kann portable Plattformdienste verwenden, ohne Windows APIs zu import
 
 Betroffene Zielbereiche:
 
-- `core/crates/james-platform/`
-- `core/crates/james-platform-windows/`
-- `core/crates/james-core/`
-- `tools/discovery/`
+- `runtime/core/crates/james-platform/`
+- `runtime/core/crates/james-platform-windows/`
+- `runtime/core/crates/james-core/`
+- `runtime/tools/discovery/
 
 Ergebnis:
 
@@ -174,17 +174,17 @@ Geplante Kommandos, sobald die Toolchain funktioniert:
 
 ```powershell
 $env:CARGO_INCREMENTAL = "0"
-Push-Location core
+Push-Location runtime/core
 cargo check
 cargo test
 Pop-Location
 
-Push-Location modules
+Push-Location runtime/modules
 cargo check
 cargo test
 Pop-Location
 
-Push-Location tools/discovery
+Push-Location runtime/tools/discovery
 npm test
 Pop-Location
 ```
