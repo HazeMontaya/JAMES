@@ -23,7 +23,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chrono::Utc;
 use dashmap::DashMap;
-use james_capabilities::{CapabilityRegistry, CapabilityStatus};
+use james_capabilities::{CapabilityRegistry, CapabilityStatus, RiskLevel};
 use james_events::{Event, EventBus};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
@@ -704,7 +704,24 @@ impl CapabilityBroker {
         if request.deadline_at.map(|d| d <= Utc::now()).unwrap_or(false) {
             return Ok(PolicyDecision::Deny("request deadline expired".to_string()));
         }
-        self.decide(&request.legacy()).await
+
+        // Risk is an enforcement boundary, not descriptive metadata. Explicit
+        // policies remain authoritative; otherwise dangerous capabilities
+        // cannot become executable merely because an agent is broadly allowed.
+        if let Some(rule) = self.policies.get(&request.capability_id) {
+            return Ok(rule.decision.clone());
+        }
+
+        let registered = self.registry.get(&request.capability_id).ok_or_else(|| {
+            BrokerError::CapabilityUnavailable(request.capability_id.clone())
+        })?;
+        match registered.definition.risk_level {
+            RiskLevel::Critical => Ok(PolicyDecision::Deny(
+                "critical-risk capability requires an explicit policy and cannot execute by default".to_string(),
+            )),
+            RiskLevel::High => Ok(PolicyDecision::Ask),
+            RiskLevel::Medium | RiskLevel::Low => self.decide(&request.legacy()).await,
+        }
     }
 
     /// Check-only decision (no execution) — used by UIs to preview permission.
