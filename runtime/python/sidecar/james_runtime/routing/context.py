@@ -1,7 +1,8 @@
 """JAMES Runtime Context Management"""
 import logging
+import time
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
@@ -27,86 +28,76 @@ class ContextConfig:
 
 
 class ContextManager:
-    """Manages KV cache and context for inference"""
-    
+    """Manages bounded KV cache and context windows for inference."""
+
     def __init__(self, config: Optional[ContextConfig] = None):
         self.config = config or ContextConfig()
         self.kv_caches: OrderedDict[str, KVCacheEntry] = OrderedDict()
         self.total_cache_bytes = 0
-    
+
     def get_cache(self, model_id: str) -> Optional[Dict[str, Any]]:
-        """Get KV cache for a model"""
-        if model_id in self.kv_caches:
-            entry = self.kv_caches.pop(model_id)
-            entry.access_count += 1
-            self.kv_caches[model_id] = entry
-            return {
-                "tokens": entry.tokens,
-                "embeddings": entry.embeddings,
-            }
-        return None
-    
+        entry = self.kv_caches.get(model_id)
+        if entry is None:
+            return None
+        self.kv_caches.move_to_end(model_id)
+        entry.access_count += 1
+        return {"tokens": entry.tokens, "embeddings": entry.embeddings}
+
     def set_cache(self, model_id: str, tokens: List[int], embeddings: Optional[List[float]] = None) -> None:
-        """Set KV cache for a model"""
-        # Calculate size
-        size_bytes = len(tokens) * 4  # rough estimate
-        
-        # Evict if needed
-        while self.total_cache_bytes + len(tokens) * 4 > self.config.max_kv_cache_mb * 1024 * 1024:
+        size_bytes = len(tokens) * 4
+        max_bytes = self.config.max_kv_cache_mb * 1024 * 1024
+
+        old = self.kv_caches.pop(model_id, None)
+        if old is not None:
+            self.total_cache_bytes -= old.size_bytes
+
+        # Never retain one entry that exceeds the complete cache budget.
+        if size_bytes > max_bytes:
+            logger.debug("Skipping KV cache for %s: %d > %d bytes", model_id, size_bytes, max_bytes)
+            return
+
+        while self.total_cache_bytes + size_bytes > max_bytes and self.kv_caches:
             self._evict_lru()
-        
+
         entry = KVCacheEntry(
             model_id=model_id,
             tokens=tokens,
             embeddings=embeddings,
             timestamp=time.time(),
-            size_bytes=len(tokens) * 4,
+            size_bytes=size_bytes,
         )
-        
-        if model_id in self.kv_caches:
-            old_entry = self.kv_caches.pop(model_id)
-            self.total_cache_bytes -= old_entry.size_bytes
-        
         self.kv_caches[model_id] = entry
-        self.total_cache_bytes += entry.size_bytes
-    
+        self.total_cache_bytes += size_bytes
+
     def _evict_lru(self) -> None:
-        """Evict least recently used cache entry"""
         if not self.kv_caches:
             return
         model_id, entry = self.kv_caches.popitem(last=False)
         self.total_cache_bytes -= entry.size_bytes
-        logger.debug(f"Evicted KV cache for {model_id}")
-    
+        logger.debug("Evicted KV cache for %s", model_id)
+
     def get_context_window(self, model_max_context: int, tokens: List[int]) -> List[int]:
-        """Apply sliding window to fit context"""
+        if model_max_context <= 0:
+            return []
         if len(tokens) <= model_max_context:
             return tokens
-        
-        if self.config.sliding_window:
-            # Keep recent tokens
-            return tokens[-model_max_context:]
-        else:
-            # Truncate from start
-            return tokens[:model_max_context]
-    
+        return tokens[-model_max_context:] if self.config.sliding_window else tokens[:model_max_context]
+
     def compress_context(self, tokens: List[int], target_length: int) -> List[int]:
-        """Compress context (placeholder for future implementation)"""
-        if len(tokens) <= target_length:
-            return tokens
-        # Future: implement semantic compression
-        return tokens[-target_length:]
-    
+        """Lossy fallback used only when semantic compression is unavailable."""
+        if target_length <= 0:
+            return []
+        return tokens if len(tokens) <= target_length else tokens[-target_length:]
+
     def clear_cache(self, model_id: Optional[str] = None) -> None:
-        """Clear cache for specific model or all"""
         if model_id:
-            if model_id in self.kv_caches:
-                entry = self.kv_caches.pop(model_id)
+            entry = self.kv_caches.pop(model_id, None)
+            if entry is not None:
                 self.total_cache_bytes -= entry.size_bytes
         else:
             self.kv_caches.clear()
             self.total_cache_bytes = 0
-    
+
     def get_stats(self) -> dict:
         return {
             "num_cached_models": len(self.kv_caches),
@@ -115,6 +106,17 @@ class ContextManager:
             "models": list(self.kv_caches.keys()),
         }
 
+    @staticmethod
+    def estimate_tokens(text: str) -> int:
+        """Conservative pre-tokenizer estimate used for routing decisions."""
+        if not text:
+            return 0
+        return max(1, (len(text) + 3) // 4)
 
-# Import time at module level
-import time
+    @classmethod
+    def estimate_message_tokens(cls, messages: List[Dict[str, Any]]) -> int:
+        total = 0
+        for message in messages:
+            total += 4
+            total += cls.estimate_tokens(str(message.get("content", "")))
+        return total
