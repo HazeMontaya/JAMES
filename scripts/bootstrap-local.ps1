@@ -1,7 +1,7 @@
 # JAMES local inference bootstrap
 # Windows PowerShell. Idempotent: safe to rerun.
 $ErrorActionPreference = "Stop"
-$Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$Root = Split-Path -Parent $PSScriptRoot
 $Sidecar = Join-Path $Root "runtime\python\sidecar"
 $Models = Join-Path $Root ".james\models"
 $Model = Join-Path $Models "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
