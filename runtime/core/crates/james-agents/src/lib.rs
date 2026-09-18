@@ -194,8 +194,12 @@ impl Agent {
         *self.current_plan.write().await = Some(plan.clone());
         self.step_results.write().await.clear();
 
+        // One stable causal id ties the entire plan lifecycle to the UI/runtime trace.
+        let plan_correlation_id = Uuid::now_v7();
+
         // Emit plan started event
         self.emit_event(create_system_event(builtin_events::TASK_STARTED, "james-agents")
+            .with_correlation_id(plan_correlation_id)
             .with_payload(serde_json::json!({
                 "agent_id": self.config.id,
                 "plan_id": plan.id,
@@ -217,6 +221,14 @@ impl Agent {
             *self.state.write().await = AgentState::Running;
 
             let step_start = std::time::Instant::now();
+            self.emit_event(create_system_event("agent.step.started", "james-agents")
+                .with_correlation_id(plan_correlation_id)
+                .with_payload(serde_json::json!({
+                    "agent_id": self.config.id,
+                    "plan_id": plan.id,
+                    "step_id": step.id,
+                    "capability_id": step.capability_id,
+                }))).await?;
             let result = self.execute_step(&plan, step).await;
             let step_duration = step_start.elapsed().as_millis() as u64;
 
@@ -231,6 +243,17 @@ impl Agent {
                         duration_ms: step_duration,
                     });
                     
+                    self.emit_event(create_system_event("agent.step.completed", "james-agents")
+                        .with_correlation_id(plan_correlation_id)
+                        .with_payload(serde_json::json!({
+                            "agent_id": self.config.id,
+                            "plan_id": plan.id,
+                            "step_id": step.id,
+                            "capability_id": step.capability_id,
+                            "duration_ms": step_duration,
+                            "success": true,
+                        }))).await?;
+
                     // Update metrics
                     let mut metrics = self.metrics.write().await;
                     metrics.steps_completed += 1;
@@ -254,6 +277,7 @@ impl Agent {
 
                     // Emit step failed event
                     self.emit_event(create_system_event("agent.step.failed", "james-agents")
+                        .with_correlation_id(plan_correlation_id)
                         .with_payload(serde_json::json!({
                             "agent_id": self.config.id,
                             "plan_id": plan.id,
@@ -282,6 +306,7 @@ impl Agent {
 
         // Emit plan completed event
         self.emit_event(create_system_event(if all_success { builtin_events::TASK_COMPLETED } else { builtin_events::TASK_FAILED }, "james-agents")
+            .with_correlation_id(plan_correlation_id)
             .with_payload(serde_json::json!({
                 "agent_id": self.config.id,
                 "plan_id": plan.id,
