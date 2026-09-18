@@ -98,6 +98,31 @@ pub struct ResolutionOutcome {
     pub filtered_out: Vec<(String, String)>,
 }
 
+/// Runtime health state for a provider. Health is maintained separately from
+/// candidate registration so providers can change state without being
+/// re-registered and long-lived agents can observe failover and recovery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderHealth {
+    Available,
+    Degraded,
+    Unavailable,
+}
+
+impl ProviderHealth {
+    fn rank(self) -> u8 {
+        match self {
+            Self::Available => 0,
+            Self::Degraded => 1,
+            Self::Unavailable => 2,
+        }
+    }
+
+    fn is_routable(self) -> bool {
+        !matches!(self, Self::Unavailable)
+    }
+}
+
 /// Default resolver: chooses the best candidate for a capability id.
 ///
 /// Selection order (stable, deterministic):
@@ -107,6 +132,7 @@ pub struct ResolutionOutcome {
 /// 4. registration order (earlier wins)
 pub struct CapabilityResolver {
     candidates: DashMap<String, Vec<ExecutorCandidate>>,
+    provider_health: DashMap<String, ProviderHealth>,
 }
 
 impl Default for CapabilityResolver {
@@ -119,6 +145,7 @@ impl CapabilityResolver {
     pub fn new() -> Self {
         Self {
             candidates: DashMap::new(),
+            provider_health: DashMap::new(),
         }
     }
 
@@ -138,6 +165,30 @@ impl CapabilityResolver {
         let mut entry = self.candidates.entry(candidate.capability_id.clone()).or_default();
         entry.retain(|c| c.provider != candidate.provider);
         entry.push(candidate);
+    }
+
+    /// Set runtime health for every capability supplied by a provider.
+    /// Unavailable removes the provider from normal resolution; Degraded
+    /// remains routable but ranks behind healthy providers.
+    pub fn set_provider_health(&self, provider: &str, health: ProviderHealth) -> usize {
+        self.provider_health.insert(provider.to_string(), health);
+        self.candidates
+            .iter()
+            .map(|entry| entry.value().iter().filter(|c| c.provider == provider).count())
+            .sum()
+    }
+
+    /// Read effective provider health. Unknown providers are healthy by default.
+    pub fn provider_health(&self, provider: &str) -> ProviderHealth {
+        self.provider_health
+            .get(provider)
+            .map(|v| *v)
+            .unwrap_or(ProviderHealth::Available)
+    }
+
+    /// Remove runtime health state and return to the default healthy state.
+    pub fn clear_provider_health(&self, provider: &str) -> bool {
+        self.provider_health.remove(provider).is_some()
     }
 
     /// Remove all candidates for a provider.
@@ -222,8 +273,12 @@ impl CapabilityResolver {
         let mut filtered: Vec<(String, String)> = Vec::new();
 
         for candidate in &all {
+            let health = self.provider_health(&candidate.provider);
             if !candidate.available && !context.include_unavailable {
                 filtered.push((candidate.provider.clone(), "unavailable".to_string()));
+            }
+            if !health.is_routable() && !context.include_unavailable {
+                filtered.push((candidate.provider.clone(), "provider unavailable".to_string()));
             }
             if let Some(min) = context.min_priority {
                 if candidate.priority < min {
@@ -236,7 +291,9 @@ impl CapabilityResolver {
         }
 
         considered.retain(|c| {
+            let health = self.provider_health(&c.provider);
             (c.available || context.include_unavailable)
+                && (health.is_routable() || context.include_unavailable)
                 && context.min_priority.map_or(true, |min| c.priority >= min)
         });
 
@@ -249,6 +306,7 @@ impl CapabilityResolver {
             let pa = preference_rank(&context.preferred_providers, &ca.provider);
             let pb = preference_rank(&context.preferred_providers, &cb.provider);
             pa.cmp(&pb)
+                .then_with(|| self.provider_health(&ca.provider).rank().cmp(&self.provider_health(&cb.provider).rank()))
                 .then_with(|| cb.available.cmp(&ca.available))
                 .then_with(|| cb.priority.cmp(&ca.priority))
         });
@@ -383,6 +441,36 @@ mod tests {
             },
         );
         assert_eq!(outcome.selected.unwrap().provider, "up");
+    }
+
+    #[test]
+    #[test]
+    fn test_provider_health_failover_and_recovery() {
+        let resolver = CapabilityResolver::new();
+        resolver.register(candidate("a.b", "primary", 100));
+        resolver.register(candidate("a.b", "backup", 1));
+
+        assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "primary");
+
+        assert_eq!(resolver.set_provider_health("primary", ProviderHealth::Unavailable), 1);
+        assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "backup");
+
+        assert_eq!(resolver.set_provider_health("primary", ProviderHealth::Degraded), 1);
+        assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "primary");
+
+        assert_eq!(resolver.set_provider_health("primary", ProviderHealth::Available), 1);
+        assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "primary");
+    }
+
+    #[test]
+    fn test_provider_health_defaults_and_clear() {
+        let resolver = CapabilityResolver::new();
+        assert_eq!(resolver.provider_health("unknown"), ProviderHealth::Available);
+        resolver.set_provider_health("p1", ProviderHealth::Unavailable);
+        assert_eq!(resolver.provider_health("p1"), ProviderHealth::Unavailable);
+        assert!(resolver.clear_provider_health("p1"));
+        assert_eq!(resolver.provider_health("p1"), ProviderHealth::Available);
+        assert!(!resolver.clear_provider_health("p1"));
     }
 
     #[test]
