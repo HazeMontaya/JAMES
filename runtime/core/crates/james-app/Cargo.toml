@@ -17,6 +17,7 @@ james-platform-services = { workspace = true }
 james-ui = { workspace = true }
 james-agents = { workspace = true }
 james-capability-broker = { workspace = true }
+james-python-bridge = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
