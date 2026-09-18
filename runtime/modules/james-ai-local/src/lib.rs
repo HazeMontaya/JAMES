@@ -90,7 +90,10 @@ impl LocalAiProvider {
 
     async fn fetch_models(&self) -> Result<Vec<ModelInfo>> {
         let url = format!("{}/api/tags", self.endpoint);
-        let resp = self.client.get(&url).send().await?;
+        let resp = self.client.get(&url)
+            .send()
+            .await?
+            .error_for_status()?;
         let json: serde_json::Value = resp.json().await?;
 
         let mut models = Vec::new();
