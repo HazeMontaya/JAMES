@@ -119,6 +119,7 @@ struct Projection {
     last_task_at: Option<DateTime<Utc>>,
     last_task_action: Option<String>,
     last_event_at: Option<DateTime<Utc>>,
+    last_event_id: Option<Uuid>,
     last_error_at: Option<DateTime<Utc>>,
     last_error_type: Option<String>,
     last_warning_at: Option<DateTime<Utc>>,
@@ -144,6 +145,7 @@ impl Projection {
         let ev = &envelope.event;
         let now = ev.timestamp;
         self.last_event_at = Some(now);
+        self.last_event_id = Some(ev.event_id);
         self.events_seen += 1;
 
         match ev.severity {
@@ -223,6 +225,12 @@ impl Projection {
             self.cpu_usage = cpu.as_f64();
         }
     }
+}
+
+/// Correlate a derived UI intent with the latest causal event.
+/// This keeps the renderer traceable to a real event instead of inventing an id.
+fn last_correlation_id(p: &Projection, _brain: &str) -> Option<Uuid> {
+    p.last_event_id
 }
 
 /// Extract an ALLOW/DENY/ASK decision from a security/approval payload.
@@ -326,6 +334,7 @@ fn project(p: &Projection, now: DateTime<Utc>) -> UiIntent {
     let focus = focus_for(&brain_state, p);
     let mode = mode_for(&brain_state, p);
     let reason = reason_for(&brain_state, p, now);
+    let correlation_id = if brain_state == "idle" { None } else { last_correlation_id(p, &brain_state) };
     let show = sections_for(&brain_state);
     let open = open_for(&brain_state, p);
     let actions = actions_for(&brain_state);
@@ -341,7 +350,7 @@ fn project(p: &Projection, now: DateTime<Utc>) -> UiIntent {
         priority,
         reason,
         at: now,
-        correlation_id: None,
+        correlation_id,
     }
 }
 
