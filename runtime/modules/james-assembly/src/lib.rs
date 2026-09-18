@@ -558,7 +558,17 @@ impl JamesAssembly {
                 Arc::new(AssemblyAiPlannerProvider { ai: self.ai.clone() }),
             );
             match llm_planner.create_plan(intent.clone()).await {
-                Ok(plan) => plan,
+                Ok(plan) if plan.steps.iter().all(|step| {
+                    self.resolver
+                        .resolve_executor(&step.capability_id, &ResolutionContext::default())
+                        .is_some()
+                }) => plan,
+                Ok(plan) => {
+                    tracing::warn!(
+                        "LLM plan contains capability steps without registered executors; falling back to heuristic planner"
+                    );
+                    heuristic_plan().await?
+                }
                 Err(error) => {
                     tracing::warn!(%error, "LLM planning failed; falling back to heuristic planner");
                     heuristic_plan().await?
