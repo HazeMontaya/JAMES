@@ -174,7 +174,10 @@ async fn ws_events(ws: WebSocketUpgrade, Query(query): Query<WsAuthQuery>, State
 }
 
 async fn auth_ws_token(store:&Arc<dyn TokenStore>, token:Option<String>)->Result<(),StatusCode>{
-    if std::env::var("JAMES_AUTH_ENABLED").ok().and_then(|v|v.parse().ok()).unwrap_or(true) {
+    let auth_enabled=std::env::var("JAMES_AUTH_ENABLED").ok().and_then(|v|v.parse().ok()).unwrap_or(true);
+    let dev_mode=std::env::var("JAMES_AUTH_DEV_MODE").ok().and_then(|v|v.parse().ok()).unwrap_or(false);
+    if !auth_enabled || dev_mode { return Ok(()); }
+    if auth_enabled {
         let token=token.ok_or(StatusCode::UNAUTHORIZED)?;
         let info=store.validate(&token).await.ok_or(StatusCode::UNAUTHORIZED)?;
         if info.expires_at.map(|t|chrono::Utc::now()>t).unwrap_or(false){return Err(StatusCode::UNAUTHORIZED);}
