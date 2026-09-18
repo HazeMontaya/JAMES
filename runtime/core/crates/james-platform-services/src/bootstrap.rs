@@ -63,9 +63,17 @@ pub async fn bootstrap(event_bus: Option<Arc<EventBus>>) -> Result<PlatformConte
         Arc::new(broker)
     };
 
-    // Default grants: the system itself and the user can call platform.*.
+    // Default grants are intentionally read-only. Write/process-control
+    // capabilities must be granted explicitly by policy/confirmation.
+    const SAFE_DEFAULTS: &[&str] = &[
+        ids::DESCRIPTOR, ids::FEATURES, ids::SYSTEM_INFO, ids::SYSTEM_UPTIME,
+        ids::POWER_STATUS, ids::PROCESS_LIST, ids::PROCESS_GET, ids::PROCESS_WAIT,
+        ids::FS_READ, ids::FS_READ_TEXT, ids::FS_EXISTS, ids::FS_IS_DIR, ids::FS_STAT,
+        ids::FS_LIST, ids::NET_INTERFACES, ids::NET_ONLINE, ids::NET_REACHABLE,
+        ids::DATA_ROOT, ids::DATA_AREA,
+    ];
     for caller in ["system", "user", "void"] {
-        for id in ids::ALL {
+        for id in SAFE_DEFAULTS {
             broker.grant_capability_permissions(caller, id);
         }
     }
