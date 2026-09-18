@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use james_agents::UserIntent;
 use james_assembly::{AssemblyOptions, JamesAssembly};
-use james_app_api::{serve, AppState, AgentHandler, ChatHandler, DashboardProvider, DashboardSnapshot, EnvTokenStore, TokenStore};
+use james_app_api::{serve, AppState, AgentHandler, ChatHandler, DashboardProvider, DashboardSnapshot, EnvTokenStore, IntentProvider, TokenStore};
 use james_core::{CoreConfig, init_tracing, LogFields};
 use std::sync::Arc;
 use std::path::Path;
@@ -27,6 +27,62 @@ struct AssemblyAgentHandler {
 
 struct AssemblyData {
     assembly: Arc<Mutex<JamesAssembly>>,
+}
+
+struct AssemblyIntent {
+    assembly: Arc<Mutex<JamesAssembly>>,
+}
+
+#[async_trait]
+impl IntentProvider for AssemblyIntent {
+    async fn latest(&self) -> anyhow::Result<serde_json::Value> {
+        let assembly = self.assembly.lock().await;
+        let events = assembly.data_snapshot("events").await?;
+        let latest = events.get("events")
+            .and_then(|v| v.as_array())
+            .and_then(|items| items.first());
+
+        let (state, detail, zone, focus) = if let Some(event) = latest {
+            let kind = event.get("event_type").and_then(|v| v.as_str()).unwrap_or("").to_ascii_lowercase();
+            let payload = event.get("payload").cloned().unwrap_or_else(|| serde_json::json!({}));
+            let text = format!("{} {}", kind, payload).to_ascii_lowercase();
+            if kind.contains("error") || kind.contains("failed") || text.contains("denied") {
+                ("ERROR", "A runtime event requires attention.", "RECOVERY", "TIGHT")
+            } else if kind.contains("search") || kind.contains("research") {
+                ("SEARCHING", "External context is being retrieved.", "WORLD", "BROAD")
+            } else if kind.contains("plan") {
+                ("PLANNING", "An execution plan is active.", "PLANNING", "TIGHT")
+            } else if kind.contains("verify") {
+                ("VERIFYING", "An execution result is being verified.", "VERIFY", "TIGHT")
+            } else if kind.contains("task") || kind.contains("capability") || kind.contains("tool") {
+                ("EXECUTING", "A runtime capability is active.", "ACTION", "TIGHT")
+            } else if kind.contains("memory") {
+                ("LEARNING", "Memory state is being read or consolidated.", "MEMORY", "BROAD")
+            } else {
+                ("IDLE", "Runtime ready.", "CORE", "BROAD")
+            }
+        } else {
+            ("IDLE", "Runtime ready.", "CORE", "BROAD")
+        };
+
+        Ok(serde_json::json!({
+            "brain_state": state,
+            "active_goal": serde_json::Value::Null,
+            "active_task": serde_json::Value::Null,
+            "active_agents": assembly.agent_registry().list().len(),
+            "current_context": latest.cloned().unwrap_or_else(|| serde_json::json!({})),
+            "active_panel": "void",
+            "system_state": "RUNNING",
+            "resource_state": "UNSAMPLED",
+            "voice_state": "LOCAL",
+            "security_state": "LOOPBACK_AUTH",
+            "progress": 0,
+            "zone": zone,
+            "focus": focus,
+            "detail": detail,
+            "events": events.get("events").cloned().unwrap_or_else(|| serde_json::json!([]))
+        }))
+    }
 }
 
 #[async_trait]
@@ -181,7 +237,9 @@ async fn main() -> Result<()> {
         agent_handler: Some(Arc::new(AssemblyAgentHandler {
             assembly: assembly.clone(),
         })),
-        intent: None,
+        intent: Some(Arc::new(AssemblyIntent {
+            assembly: assembly.clone(),
+        })),
         token_store,
     };
     let api_listener = tokio::net::TcpListener::bind(("127.0.0.1", 38241)).await?;
