@@ -565,7 +565,7 @@ impl AgentFactory {
         self.shared_resolver = Some(resolver);
     }
 
-    fn finish_agent(&self, agent: Agent) -> Agent {
+    fn finish_agent(&self, mut agent: Agent) -> Agent {
         if let Some(resolver) = &self.shared_resolver {
             agent.attach_resolver(resolver.clone());
         }
