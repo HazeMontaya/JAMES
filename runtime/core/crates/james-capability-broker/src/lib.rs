@@ -27,6 +27,7 @@ use james_capabilities::{CapabilityRegistry, CapabilityStatus, RiskLevel};
 use james_events::{Event, EventBus};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 /// Outcome of the policy evaluation step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +95,28 @@ pub struct ConfirmationContext {
     pub capability_id: Option<String>,
     pub target: Option<String>,
     pub scope: Option<String>,
+}
+
+/// A pending human-approval request bound to the original capability request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmationRequest {
+    pub confirmation_id: String,
+    pub request_id: String,
+    pub caller_identity: String,
+    pub capability_id: String,
+    pub target: Option<String>,
+    pub scope: Option<String>,
+    pub reason: String,
+    pub created_at: chrono::DateTime<Utc>,
+    pub expires_at: chrono::DateTime<Utc>,
+}
+
+/// Result returned when a pending confirmation is approved.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmationResult {
+    pub confirmation_id: String,
+    pub approved: bool,
+    pub expires_at: chrono::DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -274,6 +297,8 @@ pub struct CapabilityBroker {
     audit_enabled: bool,
     /// outputs that passed verification but the caller may still read
     verified_cache: DashMap<String, serde_json::Value>,
+    /// Pending interactive approvals, keyed by opaque confirmation id.
+    confirmations: DashMap<String, ConfirmationRequest>,
     resource_admission: Option<Arc<dyn ResourceAdmission>>,
     semantic_verifier: Option<Arc<dyn SemanticVerifier>>,
 }
@@ -287,6 +312,7 @@ impl CapabilityBroker {
             policies: DashMap::new(),
             audit_enabled: true,
             verified_cache: DashMap::new(),
+            confirmations: DashMap::new(),
             resource_admission: None,
             semantic_verifier: None,
         }
@@ -668,6 +694,98 @@ impl CapabilityBroker {
         })
     }
 
+    /// Create a short-lived approval request for a capability requiring confirmation.
+    pub async fn request_confirmation(
+        &self,
+        request: &CapabilityRequestV2,
+    ) -> Result<ConfirmationRequest> {
+        let registered = self.registry.get(&request.capability_id).ok_or_else(|| {
+            BrokerError::CapabilityUnavailable(request.capability_id.clone())
+        })?;
+        if registered.status != CapabilityStatus::Available {
+            return Err(BrokerError::CapabilityUnavailable(request.capability_id.clone()).into());
+        }
+        let now = Utc::now();
+        let expires_at = now + chrono::Duration::minutes(5);
+        let confirmation_id = Uuid::new_v4().to_string();
+        let pending = ConfirmationRequest {
+            confirmation_id: confirmation_id.clone(),
+            request_id: request.request_id.clone(),
+            caller_identity: request.caller_identity.clone(),
+            capability_id: request.capability_id.clone(),
+            target: request.target.clone(),
+            scope: request.scope.clone(),
+            reason: format!("interactive approval required for {}", request.capability_id),
+            created_at: now,
+            expires_at,
+        };
+        self.confirmations.insert(confirmation_id, pending.clone());
+        self.audit_v2("audit.capability.confirmation_requested", request, None).await;
+        Ok(pending)
+    }
+
+    /// Approve a pending request. Approval is single-use and expires automatically.
+    pub async fn approve_confirmation(
+        &self,
+        confirmation_id: &str,
+        caller_identity: &str,
+    ) -> Result<ConfirmationResult> {
+        let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
+            BrokerError::ConfirmationBindingFailed {
+                capability: "unknown".to_string(),
+                detail: "confirmation not found or already consumed".into(),
+            }
+        })?;
+        if pending.caller_identity != caller_identity {
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: pending.capability_id.clone(),
+                detail: "approval caller mismatch".into(),
+            }.into());
+        }
+        if pending.expires_at <= Utc::now() {
+            drop(pending);
+            self.confirmations.remove(confirmation_id);
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: "expired".to_string(),
+                detail: "confirmation expired".into(),
+            }.into());
+        }
+        let expires_at = pending.expires_at;
+        drop(pending);
+        if let Some(mut entry) = self.confirmations.get_mut(confirmation_id) {
+            entry.reason = "approved".to_string();
+        }
+        Ok(ConfirmationResult {
+            confirmation_id: confirmation_id.to_string(),
+            approved: true,
+            expires_at,
+        })
+    }
+
+    /// Reject and remove a pending confirmation.
+    pub async fn reject_confirmation(
+        &self,
+        confirmation_id: &str,
+        caller_identity: &str,
+    ) -> Result<()> {
+        let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
+            BrokerError::ConfirmationBindingFailed {
+                capability: "unknown".to_string(),
+                detail: "confirmation not found or already consumed".into(),
+            }
+        })?;
+        if pending.caller_identity != caller_identity {
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: pending.capability_id.clone(),
+                detail: "rejection caller mismatch".into(),
+            }.into());
+        }
+        drop(pending);
+        self.confirmations.remove(confirmation_id);
+        Ok(())
+    }
+
+    /// Validate and consume an approved confirmation.
     async fn validate_confirmation(&self, request: &CapabilityRequestV2) -> Result<()> {
         let c = &request.confirmation_context;
         if !c.required { return Ok(()); }
@@ -697,6 +815,37 @@ impl CapabilityBroker {
         if c.scope.is_some() && c.scope != request.scope {
             return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "scope mismatch".into() }.into());
         }
+
+        let confirmation_id = c.confirmation_id.as_deref().unwrap();
+        let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
+            BrokerError::ConfirmationBindingFailed {
+                capability: request.capability_id.clone(),
+                detail: "confirmation not found, rejected, or already consumed".into(),
+            }
+        })?;
+        if pending.request_id != request.request_id
+            || pending.caller_identity != request.caller_identity
+            || pending.capability_id != request.capability_id
+            || pending.target != request.target
+            || pending.scope != request.scope
+            || pending.reason != "approved"
+        {
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: request.capability_id.clone(),
+                detail: "confirmation binding mismatch or approval missing".into(),
+            }.into());
+        }
+        if pending.expires_at <= Utc::now() {
+            drop(pending);
+            self.confirmations.remove(confirmation_id);
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: request.capability_id.clone(),
+                detail: "confirmation expired".into(),
+            }.into());
+        }
+        drop(pending);
+        self.confirmations.remove(confirmation_id);
+        self.audit_v2("audit.capability.confirmation_consumed", request, None).await;
         Ok(())
     }
 
@@ -719,7 +868,13 @@ impl CapabilityBroker {
             RiskLevel::Critical => Ok(PolicyDecision::Deny(
                 "critical-risk capability requires an explicit policy and cannot execute by default".to_string(),
             )),
-            RiskLevel::High => Ok(PolicyDecision::Ask),
+            RiskLevel::High => {
+                if request.confirmation_context.required {
+                    Ok(PolicyDecision::Allow)
+                } else {
+                    Ok(PolicyDecision::Ask)
+                }
+            }
             RiskLevel::Medium | RiskLevel::Low => self.decide(&request.legacy()).await,
         }
     }
