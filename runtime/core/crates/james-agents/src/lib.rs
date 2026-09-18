@@ -204,6 +204,7 @@ impl Agent {
         // substrate used by scheduling/recovery instead of maintaining a second
         // private execution state.
         *self.state.write().await = AgentState::Running;
+        let plan_correlation_id = Uuid::now_v7();
         *self.current_plan.write().await = Some(plan.clone());
         self.step_results.write().await.clear();
 
