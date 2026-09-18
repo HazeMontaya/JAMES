@@ -357,6 +357,7 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!("Invalid Python capability response: {}", e))?;
 
         Ok(response)
+    }
 
     /// Get list of registered Python capabilities
     pub async fn list_python_capabilities(&self) -> Vec<PythonCapabilityInfo> {
