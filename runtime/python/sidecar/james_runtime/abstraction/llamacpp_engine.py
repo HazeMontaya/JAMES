@@ -1,78 +1,106 @@
 """JAMES Runtime llama.cpp Engine Implementation"""
 import asyncio
 import logging
+import platform
 import subprocess
 import time
+from pathlib import Path
+from typing import Optional, AsyncGenerator
+
 import httpx
-from typing import Optional, AsyncGenerator, List, Dict, Any
-from james_runtime.abstraction.base import InferenceEngine, EngineCapabilities, VRAMRequirements, HealthStatus, EngineConfig
-from james_runtime.core.requests import CompletionRequest, StreamingRequest, Chunk, CompletionResponse
-from james_runtime.core.errors import EngineInitializationError, EngineNotReadyError, InferenceTimeoutError
+
+from james_runtime.abstraction.base import (
+    InferenceEngine,
+    EngineCapabilities,
+    VRAMRequirements,
+    HealthStatus,
+    EngineConfig,
+)
+from james_runtime.core.requests import StreamingRequest, Chunk, CompletionResponse
+from james_runtime.core.errors import EngineInitializationError, EngineNotReadyError
 from james_runtime.models.registry import ModelSpec
 
 logger = logging.getLogger(__name__)
 
 
 class LlamaCppEngine(InferenceEngine):
-    """llama.cpp Universal Local Inference Engine"""
-    
+    """llama.cpp local OpenAI-compatible inference engine."""
+
     engine_type = "llamacpp"
-    
+
     def __init__(self, config):
         self.config = config
         self.server_process: Optional[subprocess.Popen] = None
         self.client: Optional[httpx.AsyncClient] = None
-        self._model_spec = None
+        self._model_spec: Optional[ModelSpec] = None
         self._initialized = False
         self._server_ready = False
-        host = getattr(config, 'host', '127.0.0.1') if config else '127.0.0.1'
-        port = getattr(config, 'port', 8080) if config else 8080
+
+        host = getattr(config, "host", "127.0.0.1") if config else "127.0.0.1"
+        port = getattr(config, "port", 8080) if config else 8080
         self._base_url = f"http://{host}:{port}"
 
     @property
     def capabilities(self) -> EngineCapabilities:
-        max_context = getattr(self.config, 'max_context', 8192)
+        max_context = getattr(self.config, "max_context", 4096)
         return EngineCapabilities(
             max_context=max_context,
             streaming=True,
             tools=True,
             batching=True,
             structured_output=True,
-            speculative_decode=True,  # llama.cpp supports draft models
+            speculative_decode=True,
             quantization_support=["fp16", "q8_0", "q5_k_m", "q4_k_m", "q3_k_m", "q2_k", "gguf"],
             hardware_targets=["cuda", "rocm", "metal", "vulkan", "cpu"],
         )
-    
+
     async def initialize(self, config: EngineConfig) -> None:
         self._model_spec = config.model_spec
-        llamacpp_config = config.llamacpp
-        
-        # Build llama-server command. The executable and working directory are
-        # configuration-driven so JAMES never depends on a hard-coded install path.
+        llamacpp_config = config.llamacpp or self.config
+
         executable = getattr(llamacpp_config, "executable", "llama-server")
         working_directory = getattr(llamacpp_config, "working_directory", None)
         auto_start = getattr(llamacpp_config, "auto_start", True)
+
+        cwd = Path(working_directory).expanduser().resolve() if working_directory else Path.cwd()
+        model_path = Path(llamacpp_config.model_path).expanduser()
+        if not model_path.is_absolute():
+            model_path = cwd / model_path
+        model_path = model_path.resolve()
+
+        if not model_path.exists():
+            raise EngineInitializationError(
+                "llamacpp",
+                f"Model file not found: {model_path}. Run the local model bootstrap first.",
+            )
+
+        if not auto_start:
+            logger.info("llama.cpp auto_start disabled; expecting an externally managed server")
+            self.client = httpx.AsyncClient(base_url=self._base_url, timeout=300.0)
+            await self._wait_for_server_ready()
+            self._initialized = True
+            return
+
         args = [
             executable,
-            "-m", llamacpp_config.model_path,
+            "-m", str(model_path),
             "-ngl", str(llamacpp_config.n_gpu_layers),
             "-c", str(llamacpp_config.max_context),
             "--port", str(llamacpp_config.port),
             "--host", llamacpp_config.host,
             "--parallel", str(llamacpp_config.parallel),
+            "--batch-size", str(llamacpp_config.n_batch),
+            "--ubatch-size", str(llamacpp_config.n_ubatch),
         ]
-        
+
         if llamacpp_config.flash_attn:
             args.extend(["--flash-attn", "auto"])
-        if llamacpp_config.mlock:
-            # --mlock is not supported on Windows
-            import platform
-            if platform.system() != "Windows":
-                args.append("--mlock")
+        if llamacpp_config.mlock and platform.system() != "Windows":
+            args.append("--mlock")
         if llamacpp_config.n_threads > 0:
             args.extend(["-t", str(llamacpp_config.n_threads)])
 
-        logger.info(f"Starting llama.cpp server: {' '.join(args)}")
+        logger.info("Starting llama.cpp server: %s", " ".join(args))
 
         try:
             self.server_process = subprocess.Popen(
@@ -81,127 +109,105 @@ class LlamaCppEngine(InferenceEngine):
                 stderr=subprocess.DEVNULL,
                 cwd=str(cwd),
             )
-        except FileNotFoundError:
-            raise EngineInitializationError("llamacpp", "llama-server not found in PATH. Install llama.cpp")
+        except FileNotFoundError as exc:
+            raise EngineInitializationError(
+                "llamacpp", "llama-server not found in PATH. Install llama.cpp first."
+            ) from exc
 
-        # Wait for server to be ready
-        await self._wait_for_server_ready()
+        self.client = httpx.AsyncClient(base_url=self._base_url, timeout=300.0)
+        try:
+            await self._wait_for_server_ready()
+        except Exception:
+            await self.shutdown()
+            raise
+
         self._initialized = True
         logger.info("llama.cpp engine initialized successfully")
-    
+
     async def _wait_for_server_ready(self, timeout: float = 90.0) -> None:
-        """Wait for llama-server to be ready"""
+        """Wait for llama-server health endpoint."""
+        if self.client is None:
+            self.client = httpx.AsyncClient(base_url=self._base_url, timeout=300.0)
+
         start = time.time()
         while time.time() - start < timeout:
-        from pathlib import Path
-        cwd = Path(working_directory).expanduser().resolve() if working_directory else Path.cwd()
-        model_path = Path(llamacpp_config.model_path).expanduser()
-        if not model_path.is_absolute():
-            model_path = cwd / model_path
-        if not model_path.exists():
-            raise EngineInitializationError(
-                "llamacpp",
-                f"Model file not found: {model_path}. Run the local model bootstrap first.",
-            )
-        args[2] = str(model_path.resolve())
-
-        if not auto_start:
-            logger.info("llama.cpp auto_start disabled; engine remains offline")
-            return
-
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(f"{self._base_url}/health", timeout=2.0)
-                    if resp.status_code == 200:
-                        self._server_ready = True
-                        self.client = httpx.AsyncClient(base_url=self._base_url, timeout=300.0)
-                        return
+                response = await self.client.get("/health", timeout=2.0)
+                if response.status_code == 200:
+                    self._server_ready = True
+                    return
             except Exception:
                 pass
             await asyncio.sleep(0.5)
-        
-        raise EngineInitializationError("llamacpp", f"llama-server did not start within {timeout}s")
-    
+
+        raise EngineInitializationError(
+            "llamacpp",
+            f"llama-server did not become healthy within {timeout:.0f}s",
+        )
+
     def estimate_vram(self, model_spec) -> VRAMRequirements:
-        """Estimate VRAM requirements for llama.cpp"""
-        # llama.cpp uses GGUF files; size depends on quantization
-        gguf_size = getattr(model_spec, 'gguf_size_bytes', None) or 4_500_000_000
-        n_layers = getattr(model_spec, 'n_layers', 32)
-        
-        # GPU layers
-        n_gpu_layers = getattr(self.config, 'n_gpu_layers', -1) if self.config else -1
+        """Estimate VRAM requirements for a GGUF model."""
+        gguf_size = getattr(model_spec, "gguf_size_bytes", None) or 2_000_000_000
+        n_layers = max(getattr(model_spec, "n_layers", 32), 1)
+        n_gpu_layers = getattr(self.config, "n_gpu_layers", -1)
         gpu_layers = min(n_layers, n_gpu_layers if n_gpu_layers > 0 else n_layers)
-        
-        # VRAM per layer estimate
-        vram_per_layer = gguf_size / n_layers if n_layers > 0 else 0
+
+        vram_per_layer = gguf_size / n_layers
         gpu_vram = vram_per_layer * gpu_layers
-        
-        # KV cache
-        max_context = getattr(model_spec, 'max_context', 8192)
-        kv_cache = 2 * getattr(model_spec, 'n_layers', 32) * getattr(model_spec, 'hidden_size', 4096) * 2 * max_context
-        
+        max_context = getattr(self.config, "max_context", 4096)
+        kv_cache = (
+            2
+            * n_layers
+            * getattr(model_spec, "hidden_size", 3072)
+            * 2
+            * max_context
+        )
+
         return VRAMRequirements(
             model_bytes=int(gpu_vram),
-            kv_cache_bytes=kv_cache,
-            overhead_bytes=1_000_000_000,
-            total_bytes=int(gpu_vram + kv_cache + 1_000_000_000),
-            quantization=getattr(self._model_spec, 'quantization', 'gguf'),
+            kv_cache_bytes=int(kv_cache),
+            overhead_bytes=512 * 1024 * 1024,
+            total_bytes=int(gpu_vram + kv_cache + 512 * 1024 * 1024),
+            quantization=getattr(model_spec, "quantization", "gguf"),
         )
-    
+
     def supports_model(self, model_spec) -> bool:
-        # llama.cpp supports GGUF format primarily
-        return True  # Very broad compatibility
-    
+        return getattr(model_spec, "format", "").lower() in {"gguf", "ggml", ""}
+
     async def complete(self, request) -> CompletionResponse:
         if not self._initialized or not self.client:
             raise EngineNotReadyError(self.engine_type)
-        
-        # Convert to OpenAI format
-        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        
+
         payload = {
             "model": request.model,
-            "messages": messages,
+            "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
             "temperature": request.temperature,
             "max_tokens": request.max_tokens or 4096,
             "stream": False,
             "top_p": request.top_p,
             "stop": request.stop,
         }
-        
+
         if request.tools:
             payload["tools"] = [t.model_dump() for t in request.tools]
-        
-        try:
-            response = await self.client.post(
-                "/v1/chat/completions",
-                json=payload,
-                timeout=300.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            
-            return CompletionResponse(
-                id=data.get("id", ""),
-                model=data.get("model", request.model),
-                created=data.get("created", int(time.time())),
-                choices=data.get("choices", []),
-                usage=data.get("usage"),
-                runtime=self.engine_type,
-            )
-        except httpx.HTTPStatusError as e:
-            logger.error(f"llama.cpp error: {e.response.text}")
-            raise
-        except Exception as e:
-            logger.error(f"llama.cpp completion failed: {e}")
-            raise
-    
+
+        response = await self.client.post("/v1/chat/completions", json=payload, timeout=300.0)
+        response.raise_for_status()
+        data = response.json()
+
+        return CompletionResponse(
+            id=data.get("id", ""),
+            model=data.get("model", request.model),
+            created=data.get("created", int(time.time())),
+            choices=data.get("choices", []),
+            usage=data.get("usage"),
+            runtime=self.engine_type,
+        )
+
     async def stream(self, request: StreamingRequest) -> AsyncGenerator[Chunk, None]:
         if not self._initialized or not self.client:
             raise EngineNotReadyError(self.engine_type)
-        
-        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
-        
+
         payload = {
             "model": request.model,
             "messages": [{"role": msg.role, "content": msg.content} for msg in request.messages],
@@ -210,35 +216,31 @@ class LlamaCppEngine(InferenceEngine):
             "stream": True,
             "top_p": request.top_p,
         }
-        
-        try:
-            async with self.client.stream(
-                "POST", "/v1/chat/completions", json=payload, timeout=300.0
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str.strip() == "[DONE]":
-                            break
-                        try:
-                            import json
-                            data = json.loads(data_str)
-                            chunk = Chunk(
-                                id=data.get("id", ""),
-                                model=data.get("model", request.model),
-                                created=data.get("created", int(time.time())),
-                                choices=data.get("choices", []),
-                            )
-                            yield chunk
-                        except json.JSONDecodeError:
-                            continue
-        except Exception as e:
-            logger.error(f"llama.cpp streaming failed: {e}")
-            raise
-    
+
+        async with self.client.stream(
+            "POST", "/v1/chat/completions", json=payload, timeout=300.0
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    import json
+                    data = json.loads(data_str)
+                except ValueError:
+                    continue
+                yield Chunk(
+                    id=data.get("id", ""),
+                    model=data.get("model", request.model),
+                    created=data.get("created", int(time.time())),
+                    choices=data.get("choices", []),
+                )
+
     async def health(self) -> HealthStatus:
-        if not self._initialized:
+        if not self._initialized or not self.client:
             return HealthStatus(
                 healthy=False,
                 model_loaded=False,
@@ -248,14 +250,13 @@ class LlamaCppEngine(InferenceEngine):
                 latency_p99_ms=0.0,
                 error_rate=1.0,
             )
-        
-        # Check server health
+
         try:
-            resp = await self.client.get("/health", timeout=2.0)
-            healthy = resp.status_code == 200
+            response = await self.client.get("/health", timeout=2.0)
+            healthy = response.status_code == 200
         except Exception:
             healthy = False
-        
+
         vram_used = 0.0
         vram_total = 0.0
         try:
@@ -267,17 +268,17 @@ class LlamaCppEngine(InferenceEngine):
                 vram_total = gpu.memoryTotal / 1024
         except Exception:
             pass
-        
+
         return HealthStatus(
             healthy=healthy,
-            model_loaded=True,
+            model_loaded=healthy,
             vram_used_gb=vram_used,
             vram_total_gb=vram_total,
             latency_p50_ms=0.0,
             latency_p99_ms=0.0,
-            error_rate=0.0,
+            error_rate=0.0 if healthy else 1.0,
         )
-    
+
     async def shutdown(self) -> None:
         if self.server_process:
             self.server_process.terminate()
@@ -286,10 +287,11 @@ class LlamaCppEngine(InferenceEngine):
             except subprocess.TimeoutExpired:
                 self.server_process.kill()
             self.server_process = None
-        
+
         if self.client:
             await self.client.aclose()
             self.client = None
-        
+
         self._initialized = False
+        self._server_ready = False
         logger.info("llama.cpp engine shut down")
