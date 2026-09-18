@@ -31,6 +31,7 @@ from james_runtime.routing.model_router import ModelRouter
 from james_runtime.routing.runtime_router import RuntimeRouter
 from james_runtime.routing.hardware import HardwareDetector
 from james_runtime.routing.vram_manager import VRAMManager
+from james_runtime.routing.context import ContextManager
 from james_runtime.policies.cost import CostTracker, BudgetEnforcer
 from james_runtime.models.registry import ModelRegistry
 from james_runtime.models.pricing import PricingRegistry
@@ -60,6 +61,7 @@ class JamesRuntime:
         # Routers
         self.model_router = None
         self.runtime_router = None
+        self.context_manager = ContextManager()
         
         # Policies
         self.cost_tracker = None
@@ -180,8 +182,24 @@ class JamesRuntime:
         if not budget_check.allowed:
             raise BudgetExceededError(budget_check.reason, 0, 0)
         
-        # 2. Model routing
+        # 2. Model routing. The router filters out models whose advertised
+        # context window cannot hold the complete prompt + requested output.
         routing_decision = await self.model_router.route(routing_req)
+
+        selected_spec = self.model_registry.get_model_spec(routing_decision.model_id)
+        if selected_spec is not None:
+            prompt_tokens = ContextManager.estimate_message_tokens([
+                {"role": m.role, "content": m.content} for m in request.messages
+            ])
+            requested_output = request.max_tokens or 512
+            required_context = prompt_tokens + requested_output
+            model_context = getattr(selected_spec, "max_context", None)
+            if model_context and required_context > model_context:
+                raise ModelUnavailableError(
+                    f"Request needs about {required_context} tokens, "
+                    f"but {routing_decision.model_id} supports {model_context}. "
+                    "Reduce history/output or use a larger-context model."
+                )
         
         # Emit model selected event
         self._emit_event("MODEL_SELECTED", {
@@ -226,6 +244,19 @@ class JamesRuntime:
         # 5. Execute with budget tracking
         request_copy = request.model_copy()
         request_copy.model = routing_decision.model_id
+        # Normalize oversized histories before handing them to an engine.
+        model_context = getattr(model_spec, "max_context", None)
+        if model_context:
+            input_budget = max(1, model_context - (request.max_tokens or 512))
+            # The engine remains responsible for exact tokenization; this only
+            # bounds pathological prompt sizes when no tokenizer is available.
+            messages = [m.model_dump() for m in request.messages]
+            estimated = ContextManager.estimate_message_tokens(messages)
+            if estimated > input_budget:
+                raise ModelUnavailableError(
+                    f"Prompt is approximately {estimated} tokens but only "
+                    f"{input_budget} input tokens remain for {routing_decision.model_id}."
+                )
         request_copy.runtime_hint = runtime_selection.engine_type.value
         
         start_time = asyncio.get_event_loop().time()
@@ -278,12 +309,20 @@ class JamesRuntime:
         last_msg = request.messages[-1].content if request.messages else ""
         task = self._classify_task(last_msg)
         
+        prompt_tokens = ContextManager.estimate_message_tokens([
+            {"role": m.role, "content": m.content} for m in request.messages
+        ])
+        requested_output = request.max_tokens or 512
+        # Route on total required context, not only output length. This prevents
+        # large prompts from reaching models whose context window cannot hold them.
+        context_needed = prompt_tokens + requested_output
+
         return RoutingRequest(
             task=task,
             required_capabilities=self._extract_capabilities(last_msg),
-            quality_tier="best" if request.max_tokens and request.max_tokens > 2000 else "balanced",
+            quality_tier="best" if requested_output > 2000 else "balanced",
             privacy="prefer_local",
-            context_length_needed=request.max_tokens,
+            context_length_needed=context_needed,
             preferred_model=request.model if request.model else None,
         )
     
