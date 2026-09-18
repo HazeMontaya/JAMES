@@ -62,12 +62,14 @@ class OpenAICompatibleBackend(ModelBackend):
         else:
             raise RuntimeError(f"Unexpected response from {self.config.provider.value}: {data}")
 
+        latency_ms = (time.monotonic() - start) * 1000
+        self.latency_ms = latency_ms
         return ModelResponse(
             content=content,
             model=self.config.model_name,
             provider=self.config.provider,
             tokens_used=tokens,
-            latency_ms=(time.monotonic() - start) * 1000,
+            latency_ms=latency_ms,
         )
 
     async def health_check(self) -> bool:
