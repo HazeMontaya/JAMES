@@ -11,6 +11,9 @@ mod nats_bridge;
 
 pub use bridge::PythonBridge;
 pub use config::BridgeConfig;
+pub use capability_sync::CapabilitySync;
+pub use executor::PythonExecutor;
+pub use nats_bridge::NatsBridge;
 
 #[cfg(test)]
 mod tests {
