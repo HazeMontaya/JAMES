@@ -65,8 +65,7 @@ impl PolicyRule {
     }
 }
 
-
- trait — a module or tool that actually performs a capability.
+/// A module or tool that actually performs a capability.
 #[async_trait]
 pub trait CapabilityExecutor: Send + Sync {
     /// Execute a capability. Must return a JSON value matching the capability's
