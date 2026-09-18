@@ -126,7 +126,7 @@ async fn serve_index(State(state): State<AppState>) -> impl IntoResponse {
         Ok(html) => Html(html).into_response(),
         Err(_) => (
             StatusCode::NOT_FOUND,
-            format!("Void shell not found at {path} (build interfaces/void first)"),
+            format!("Void shell not found at {path} (build ui/void first)"),
         )
             .into_response(),
     }

@@ -1465,7 +1465,7 @@ source = { editable = "." }
 [[package]]
 name = "james-bootstrap"
 version = "0.1.0"
-source = { editable = "packages/james-bootstrap" }
+source = { editable = "james-bootstrap" }
 dependencies = [
     { name = "james-core" },
     { name = "james-face" },
@@ -1491,12 +1491,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "james-core", editable = "packages/james-core" },
-    { name = "james-face", editable = "packages/james-face" },
-    { name = "james-memory", editable = "packages/james-memory" },
-    { name = "james-skills", editable = "packages/james-skills" },
-    { name = "james-voice", editable = "packages/james-voice" },
-    { name = "james-world", editable = "packages/james-world" },
+    { name = "james-core", editable = "james-core" },
+    { name = "james-face", editable = "james-face" },
+    { name = "james-memory", editable = "james-memory" },
+    { name = "james-skills", editable = "james-skills" },
+    { name = "james-voice", editable = "james-voice" },
+    { name = "james-world", editable = "james-world" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
     { name = "pydantic-settings", specifier = ">=2.3.0" },
@@ -1513,7 +1513,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-cli"
 version = "0.1.0"
-source = { editable = "packages/james-cli" }
+source = { editable = "james-cli" }
 dependencies = [
     { name = "james-bootstrap" },
     { name = "james-core" },
@@ -1537,11 +1537,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "james-bootstrap", editable = "packages/james-bootstrap" },
-    { name = "james-core", editable = "packages/james-core" },
-    { name = "james-memory", editable = "packages/james-memory" },
-    { name = "james-skills", editable = "packages/james-skills" },
-    { name = "james-world", editable = "packages/james-world" },
+    { name = "james-bootstrap", editable = "james-bootstrap" },
+    { name = "james-core", editable = "james-core" },
+    { name = "james-memory", editable = "james-memory" },
+    { name = "james-skills", editable = "james-skills" },
+    { name = "james-world", editable = "james-world" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
     { name = "pydantic-settings", specifier = ">=2.3.0" },
@@ -1557,7 +1557,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-core"
 version = "0.1.0"
-source = { editable = "packages/james-core" }
+source = { editable = "james-core" }
 dependencies = [
     { name = "anyio" },
     { name = "nats-py" },
@@ -1595,7 +1595,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-face"
 version = "0.1.0"
-source = { editable = "packages/james-face" }
+source = { editable = "james-face" }
 dependencies = [
     { name = "fastapi" },
     { name = "grpcio" },
@@ -1622,7 +1622,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "grpcio", specifier = ">=1.62.0" },
     { name = "grpcio-tools", specifier = ">=1.62.0" },
-    { name = "james-core", editable = "packages/james-core" },
+    { name = "james-core", editable = "james-core" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "playwright", marker = "extra == 'dev'", specifier = ">=1.44.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
@@ -1639,7 +1639,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-hands"
 version = "0.1.0"
-source = { editable = "packages/james-hands" }
+source = { editable = "james-hands" }
 dependencies = [
     { name = "grpcio" },
     { name = "grpcio-tools" },
@@ -1663,7 +1663,7 @@ dev = [
 requires-dist = [
     { name = "grpcio", specifier = ">=1.62.0" },
     { name = "grpcio-tools", specifier = ">=1.62.0" },
-    { name = "james-core", editable = "packages/james-core" },
+    { name = "james-core", editable = "james-core" },
     { name = "mediapipe", specifier = ">=0.10.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "opencv-python", specifier = ">=4.9.0" },
@@ -1679,7 +1679,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-memory"
 version = "0.1.0"
-source = { editable = "packages/james-memory" }
+source = { editable = "james-memory" }
 dependencies = [
     { name = "aiofiles" },
     { name = "pydantic" },
@@ -1719,7 +1719,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-skills"
 version = "0.1.0"
-source = { editable = "packages/james-skills" }
+source = { editable = "james-skills" }
 dependencies = [
     { name = "james-core" },
     { name = "james-memory" },
@@ -1741,9 +1741,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "james-core", editable = "packages/james-core" },
-    { name = "james-memory", editable = "packages/james-memory" },
-    { name = "james-world", editable = "packages/james-world" },
+    { name = "james-core", editable = "james-core" },
+    { name = "james-memory", editable = "james-memory" },
+    { name = "james-world", editable = "james-world" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
@@ -1759,7 +1759,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "james-voice"
 version = "0.1.0"
-source = { editable = "packages/james-voice" }
+source = { editable = "james-voice" }
 dependencies = [
     { name = "faster-whisper" },
     { name = "grpcio" },
@@ -1792,7 +1792,7 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.0.0" },
     { name = "grpcio", specifier = ">=1.62.0" },
     { name = "grpcio-tools", specifier = ">=1.62.0" },
-    { name = "james-core", editable = "packages/james-core" },
+    { name = "james-core", editable = "james-core" },
     { name = "kokoro-onnx", specifier = ">=0.3.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "numpy", specifier = ">=1.26.0" },
@@ -1810,7 +1810,7 @@ provides-extras = ["cloud", "dev"]
 [[package]]
 name = "james-world"
 version = "0.1.0"
-source = { editable = "packages/james-world" }
+source = { editable = "james-world" }
 dependencies = [
     { name = "cryptography" },
     { name = "feedparser" },
@@ -1837,7 +1837,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=42.0.0" },
     { name = "feedparser", specifier = ">=6.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "james-core", editable = "packages/james-core" },
+    { name = "james-core", editable = "james-core" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
     { name = "playwright", specifier = ">=1.44.0" },
     { name = "pydantic", specifier = ">=2.8.0" },
