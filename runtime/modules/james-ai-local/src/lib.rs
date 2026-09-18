@@ -182,7 +182,8 @@ impl AiProvider for LocalAiProvider {
         let resp = self.client.post(&url)
             .json(&ollama_req)
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
         let ollama_resp: OllamaChatResponse = resp.json().await?;
 
