@@ -749,6 +749,7 @@ impl CapabilityBroker {
             }.into());
         }
         if pending.expires_at <= Utc::now() {
+            self.audit_confirmation("audit.capability.confirmation_expired", &pending, approver_identity).await;
             drop(pending);
             self.confirmations.remove(confirmation_id);
             return Err(BrokerError::ConfirmationBindingFailed {
@@ -761,6 +762,7 @@ impl CapabilityBroker {
         if let Some(mut entry) = self.confirmations.get_mut(confirmation_id) {
             entry.approved = true;
         }
+        self.audit_confirmation("audit.capability.confirmation_approved", &pending, approver_identity).await;
         Ok(ConfirmationResult {
             confirmation_id: confirmation_id.to_string(),
             approved: true,
@@ -786,9 +788,34 @@ impl CapabilityBroker {
                 detail: "approver identity missing".into(),
             }.into());
         }
+        self.audit_confirmation("audit.capability.confirmation_rejected", &pending, approver_identity).await;
         drop(pending);
         self.confirmations.remove(confirmation_id);
         Ok(())
+    }
+
+    /// Remove expired confirmations and emit an explicit expiration event.
+    pub async fn cleanup_expired_confirmations(&self) -> usize {
+        let now = Utc::now();
+        let expired: Vec<(String, ConfirmationRequest)> = self
+            .confirmations
+            .iter()
+            .filter(|entry| entry.expires_at <= now)
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .collect();
+
+        let mut removed = 0usize;
+        for (id, pending) in expired {
+            if self.confirmations.remove(&id).is_some() {
+                self.audit_confirmation(
+                    "audit.capability.confirmation_expired",
+                    &pending,
+                    "system:expiry",
+                ).await;
+                removed += 1;
+            }
+        }
+        removed
     }
 
     /// Validate and consume an approved confirmation.
@@ -842,6 +869,7 @@ impl CapabilityBroker {
             }.into());
         }
         if pending.expires_at <= Utc::now() {
+            self.audit_confirmation("audit.capability.confirmation_expired", &pending, &request.caller_identity).await;
             drop(pending);
             self.confirmations.remove(confirmation_id);
             return Err(BrokerError::ConfirmationBindingFailed {
@@ -853,6 +881,39 @@ impl CapabilityBroker {
         self.confirmations.remove(confirmation_id);
         self.audit_v2("audit.capability.confirmation_consumed", request, None).await;
         Ok(())
+    }
+
+    async fn audit_confirmation(
+        &self,
+        event_type: &str,
+        confirmation: &ConfirmationRequest,
+        actor: &str,
+    ) {
+        if !self.audit_enabled {
+            return;
+        }
+        if let Some(bus) = &self.event_bus {
+            let payload = serde_json::json!({
+                "confirmation_id": confirmation.confirmation_id,
+                "request_id": confirmation.request_id,
+                "caller_identity": confirmation.caller_identity,
+                "capability": confirmation.capability_id,
+                "target": confirmation.target,
+                "scope": confirmation.scope,
+                "approved": confirmation.approved,
+                "actor": actor,
+                "created_at": confirmation.created_at.to_rfc3339(),
+                "expires_at": confirmation.expires_at.to_rfc3339(),
+                "at": Utc::now().to_rfc3339(),
+            });
+            if bus.publish(Event::new(event_type, "james-capability-broker").with_payload(payload)).await.is_err() {
+                warn!("broker confirmation audit: failed to publish {}", event_type);
+            }
+        }
+        info!(
+            "broker {} confirmation={} actor={} capability={}",
+            event_type, confirmation.confirmation_id, actor, confirmation.capability_id
+        );
     }
 
     pub async fn decide_v2(&self, request: &CapabilityRequestV2) -> Result<PolicyDecision> {
