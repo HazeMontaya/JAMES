@@ -23,6 +23,7 @@ members = [
     "james-adapter-kronos",
     "james-market-data",
     "james-financial-research",
+    "james-selfmade",
 ]
 
 [workspace.package]
