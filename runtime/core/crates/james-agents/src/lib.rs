@@ -333,11 +333,72 @@ impl Agent {
             ..CapabilityRequestV2::new(caller, step.capability_id.clone(), input)
         };
 
-        let outcome = self.broker.execute_v2(request, executor.as_ref()).await
-            .map_err(|e| AgentError::BrokerError(e.to_string()))?;
+        // Honor the step's retry policy at the real Agent execution boundary.
+        // Permission/policy failures are not retried; transient infrastructure
+        // failures use bounded exponential backoff.
+        let mut attempt = 0u32;
+        loop {
+            match self.broker.execute_v2(request.clone(), executor.as_ref()).await {
+                Ok(outcome) => return Ok(legacy_outcome(outcome)),
+                Err(error) => {
+                    let message = error.to_string();
+                    let should_retry = retry_condition_matches(&message, &step.retry_policy);
+                    if !should_retry || attempt >= step.retry_policy.max_retries {
+                        return Err(AgentError::BrokerError(message));
+                    }
 
-        Ok(legacy_outcome(outcome))
+                    attempt += 1;
+                    let delay = retry_backoff(&step.retry_policy, attempt);
+                    self.emit_event(create_system_event("agent.step.retrying", "james-agents")
+                        .with_payload(serde_json::json!({
+                            "agent_id": self.config.id,
+                            "plan_id": plan.id,
+                            "step_id": step.id,
+                            "attempt": attempt,
+                            "max_retries": step.retry_policy.max_retries,
+                            "delay_ms": delay.as_millis() as u64,
+                            "error": message,
+                        }))).await?;
+
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
     }
+
+fn retry_backoff(policy: &RetryPolicy, attempt: u32) -> std::time::Duration {
+    let base = policy.base_delay_ms.max(1) as f64;
+    let factor = policy.exponential_base.max(1.0).powi(attempt as i32);
+    let millis = (base * factor).min(policy.max_delay_ms.max(policy.base_delay_ms) as f64);
+    std::time::Duration::from_millis(millis as u64)
+}
+
+fn retry_condition_matches(error: &str, policy: &RetryPolicy) -> bool {
+    let message = error.to_ascii_lowercase();
+    policy.retry_on.iter().any(|condition| match condition {
+        RetryCondition::Any => true,
+        RetryCondition::Timeout => message.contains("timeout") || message.contains("timed out"),
+        RetryCondition::RateLimited => {
+            message.contains("rate limit") || message.contains("rate_limited") || message.contains("429")
+        }
+        RetryCondition::Unavailable => {
+            message.contains("unavailable")
+                || message.contains("temporarily")
+                || message.contains("connection")
+                || message.contains("service unavailable")
+        }
+        RetryCondition::TransientError => {
+            (message.contains("execution failed")
+                || message.contains("transport")
+                || message.contains("network")
+                || message.contains("io error")
+                || message.contains("temporary"))
+                && !message.contains("permission denied")
+                && !message.contains("policy denied")
+                && !message.contains("confirmation")
+        }
+    })
+}
 
 fn requested_effect_for(capability_id: &str) -> RequestedEffect {
     if capability_id.starts_with("memory.read")
@@ -755,6 +816,33 @@ mod tests {
         let agent = factory.create_researcher("test-researcher");
         assert_eq!(agent.config().role, AgentRole::Researcher);
         assert_eq!(agent.state().await, AgentState::Idle);
+    }
+
+    #[test]
+    fn test_retry_condition_does_not_retry_permission_denial() {
+        let policy = RetryPolicy::default();
+        assert!(!retry_condition_matches("permission denied: missing permission", &policy));
+        assert!(!retry_condition_matches("policy denied: unsafe operation", &policy));
+    }
+
+    #[test]
+    fn test_retry_condition_matches_timeout_and_unavailable() {
+        let policy = RetryPolicy::default();
+        assert!(retry_condition_matches("request timeout exceeded", &policy));
+        assert!(retry_condition_matches("service unavailable", &policy));
+    }
+
+    #[test]
+    fn test_retry_backoff_is_bounded() {
+        let policy = RetryPolicy {
+            max_retries: 5,
+            base_delay_ms: 10,
+            max_delay_ms: 25,
+            exponential_base: 2.0,
+            retry_on: vec![RetryCondition::TransientError],
+        };
+        assert_eq!(retry_backoff(&policy, 1).as_millis(), 20);
+        assert_eq!(retry_backoff(&policy, 5).as_millis(), 25);
     }
 
     #[tokio::test]
