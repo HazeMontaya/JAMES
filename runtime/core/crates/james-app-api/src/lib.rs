@@ -107,6 +107,21 @@ struct ChatResponse {
     timestamp: chrono::DateTime<chrono::Utc>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ConfirmationApprovalRequest {
+    approver_identity: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfirmationResponse {
+    confirmation: james_capability_broker::ConfirmationRequest,
+}
+
+#[derive(Debug, Serialize)]
+struct ConfirmationApprovalResponse {
+    result: james_capability_broker::ConfirmationResult,
+}
+
 async fn chat_submit(State(state): State<AppState>, Json(req): Json<ChatRequest>) -> Result<Json<ChatResponse>, (StatusCode,String)> {
     let content = req.message.trim();
     if content.is_empty() {
@@ -127,6 +142,44 @@ async fn chat_submit(State(state): State<AppState>, Json(req): Json<ChatRequest>
         .with_payload(serde_json::json!({"message_id":message_id,"content":content,"timestamp":now})))
         .await.map_err(|e|(StatusCode::INTERNAL_SERVER_ERROR,e.to_string()))?;
     Ok(Json(ChatResponse { message_id, role:"user".into(), content:content.into(), timestamp:now }))
+}
+
+async fn confirmation_request(
+    State(state): State<AppState>,
+    Json(mut request): Json<james_capability_broker::CapabilityRequestV2>,
+) -> Result<Json<ConfirmationResponse>, (StatusCode, String)> {
+    let broker = state.broker.ok_or((StatusCode::SERVICE_UNAVAILABLE, "capability broker unavailable".into()))?;
+    request.confirmation_context.required = false;
+    let decision = broker.decide_v2(&request).await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    if decision != james_capability_broker::PolicyDecision::Ask {
+        return Err((StatusCode::CONFLICT, format!("confirmation is not required for this request: {:?}", decision)));
+    }
+    let confirmation = broker.request_confirmation(&request).await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(Json(ConfirmationResponse { confirmation }))
+}
+
+async fn confirmation_approve(
+    Path(confirmation_id): Path<String>,
+    State(state): State<AppState>,
+    Json(req): Json<ConfirmationApprovalRequest>,
+) -> Result<Json<ConfirmationApprovalResponse>, (StatusCode, String)> {
+    let broker = state.broker.ok_or((StatusCode::SERVICE_UNAVAILABLE, "capability broker unavailable".into()))?;
+    let result = broker.approve_confirmation(&confirmation_id, &req.approver_identity).await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(Json(ConfirmationApprovalResponse { result }))
+}
+
+async fn confirmation_reject(
+    Path(confirmation_id): Path<String>,
+    State(state): State<AppState>,
+    Json(req): Json<ConfirmationApprovalRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let broker = state.broker.ok_or((StatusCode::SERVICE_UNAVAILABLE, "capability broker unavailable".into()))?;
+    broker.reject_confirmation(&confirmation_id, &req.approver_identity).await
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn dashboard_status(State(state): State<AppState>) -> Json<DashboardSnapshot> {
@@ -239,6 +292,9 @@ pub fn router(state:AppState)->Router{
         .route("/api/v1/data/:section",get(data_section))
         .route("/api/v1/ui/intent",get(ui_intent))
         .route("/api/v1/agent/intent",post(agent_execute_intent))
+        .route("/api/v1/confirmations/request",post(confirmation_request))
+        .route("/api/v1/confirmations/:confirmation_id/approve",post(confirmation_approve))
+        .route("/api/v1/confirmations/:confirmation_id/reject",post(confirmation_reject))
         .route("/ws/v1/events",get(ws_events))
         .route("/ws/v1/void",get(ws_void))
         .fallback_service(ServeDir::new(state.static_dir.clone()))
