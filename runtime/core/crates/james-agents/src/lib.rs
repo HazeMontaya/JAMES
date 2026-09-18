@@ -240,12 +240,15 @@ impl Agent {
             .map_err(|e| AgentError::Other(anyhow::anyhow!("failed to start agent task: {e}")))?;
 
         // Emit plan started event
-        self.emit_event(create_system_event(builtin_events::TASK_STARTED, "james-agents")
+        let mut plan_started = create_system_event(builtin_events::TASK_STARTED, "james-agents")
             .with_payload(serde_json::json!({
                 "agent_id": self.config.id,
                 "plan_id": plan.id,
                 "plan_name": plan.name,
-            }))).await?;
+                "correlation_id": plan_correlation_id,
+            }))
+            .with_correlation_id(plan_correlation_id);
+        self.emit_event(plan_started).await?;
 
         let start_time = std::time::Instant::now();
         let mut step_results = Vec::new();
@@ -262,12 +265,35 @@ impl Agent {
             *self.state.write().await = AgentState::Running;
 
             let step_start = std::time::Instant::now();
+            let mut step_started = create_system_event("agent.step.started", "james-agents")
+                .with_payload(serde_json::json!({
+                    "agent_id": self.config.id,
+                    "plan_id": plan.id,
+                    "step_id": step.id,
+                    "capability_id": step.capability_id,
+                    "correlation_id": plan_correlation_id,
+                }))
+                .with_correlation_id(plan_correlation_id);
+            self.emit_event(step_started).await?;
             let result = self.execute_step(&plan, step).await;
             let step_duration = step_start.elapsed().as_millis() as u64;
 
             match result {
                 Ok(outcome) => {
                     self.step_results.write().await.insert(step.id.clone(), outcome.clone());
+                    let mut step_completed = create_system_event("agent.step.completed", "james-agents")
+                        .with_payload(serde_json::json!({
+                            "agent_id": self.config.id,
+                            "plan_id": plan.id,
+                            "step_id": step.id,
+                            "capability_id": step.capability_id,
+                            "success": true,
+                            "duration_ms": step_duration,
+                            "correlation_id": plan_correlation_id,
+                        }))
+                        .with_correlation_id(plan_correlation_id);
+                    self.emit_event(step_completed).await?;
+
                     step_results.push(StepResult {
                         step_id: step.id.clone(),
                         success: true,
@@ -298,13 +324,17 @@ impl Agent {
                     metrics.last_activity = Some(Utc::now());
 
                     // Emit step failed event
-                    self.emit_event(create_system_event("agent.step.failed", "james-agents")
+                    let mut step_failed = create_system_event("agent.step.failed", "james-agents")
                         .with_payload(serde_json::json!({
                             "agent_id": self.config.id,
                             "plan_id": plan.id,
                             "step_id": step.id,
+                            "capability_id": step.capability_id,
                             "error": e.to_string(),
-                        }))).await?;
+                            "correlation_id": plan_correlation_id,
+                        }))
+                        .with_correlation_id(plan_correlation_id);
+                    self.emit_event(step_failed).await?;
 
                     // Keep the TaskManager state synchronized with the real
                     // execution. A failed step is terminal for the plan unless the
@@ -351,15 +381,21 @@ impl Agent {
         let _ = self.tasks.update_progress(task_id, 1.0);
 
         // Emit plan completed event
-        self.emit_event(create_system_event(if all_success { builtin_events::TASK_COMPLETED } else { builtin_events::TASK_FAILED }, "james-agents")
-            .with_payload(serde_json::json!({
-                "agent_id": self.config.id,
-                "plan_id": plan.id,
-                "success": all_success,
-                "duration_ms": total_duration,
-                "steps_completed": step_results.iter().filter(|r| r.success).count(),
-                "steps_failed": step_results.iter().filter(|r| !r.success).count(),
-            }))).await?;
+        let mut plan_finished = create_system_event(
+            if all_success { builtin_events::TASK_COMPLETED } else { builtin_events::TASK_FAILED },
+            "james-agents",
+        )
+        .with_payload(serde_json::json!({
+            "agent_id": self.config.id,
+            "plan_id": plan.id,
+            "success": all_success,
+            "duration_ms": total_duration,
+            "steps_completed": step_results.iter().filter(|r| r.success).count(),
+            "steps_failed": step_results.iter().filter(|r| !r.success).count(),
+            "correlation_id": plan_correlation_id,
+        }))
+        .with_correlation_id(plan_correlation_id);
+        self.emit_event(plan_finished).await?;
 
         Ok(PlanExecutionResult {
             plan_id: plan.id,
