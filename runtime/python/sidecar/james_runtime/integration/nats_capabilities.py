@@ -166,7 +166,7 @@ class NatsCapabilityBridge:
     async def _handle_list(self, msg: Any) -> None:
         if not msg.reply:
             return
-        payload = {"capabilities": [tool.name for tool in self.registry.list_tools()]}
+        payload = {"capabilities": [self._capability_info(tool) for tool in self.registry.list_tools()]}
         await self.client.publish(msg.reply, json.dumps(payload).encode("utf-8"))
 
     async def _handle_health(self, msg: Any) -> None:
