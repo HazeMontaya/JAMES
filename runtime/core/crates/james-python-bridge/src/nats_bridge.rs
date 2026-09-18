@@ -345,36 +345,18 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
 
         let subject = format!("{}.{}", subjects::capability_execute_prefix(&self.config), capability_id);
 
-        // Register a pending channel for the response subscriber.
-        let (tx, mut rx) = mpsc::channel(1);
-        {
-            let mut pending = self.pending_requests.write().await;
-            pending.insert(request_id.clone(), tx);
-        }
-
         let payload = serde_json::to_vec(&request)?;
-        if let Err(error) = client.publish(subject, payload.into()).await {
-            let mut pending = self.pending_requests.write().await;
-            pending.remove(&request_id);
-            return Err(error.into());
-        }
-
-        let response = tokio::time::timeout(
+        let response_message = tokio::time::timeout(
             Duration::from_secs(self.config.request_timeout_secs),
-            rx.recv(),
-        ).await;
+            client.request(subject, payload.into()),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Request timeout"))??;
 
-        {
-            let mut pending = self.pending_requests.write().await;
-            pending.remove(&request_id);
-        }
+        let response: CapabilityExecuteResponse = serde_json::from_slice(&response_message.payload)
+            .map_err(|e| anyhow::anyhow!("Invalid Python capability response: {}", e))?;
 
-        match response {
-            Ok(Some(resp)) => Ok(resp),
-            Ok(None) => Err(anyhow::anyhow!("Response channel closed")),
-            Err(_) => Err(anyhow::anyhow!("Request timeout")),
-        }
-    }
+        Ok(response)
 
     /// Get list of registered Python capabilities
     pub async fn list_python_capabilities(&self) -> Vec<PythonCapabilityInfo> {
