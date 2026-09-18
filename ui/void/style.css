@@ -35,3 +35,52 @@ button:focus-visible,input:focus-visible{outline:1px solid var(--gold);outline-o
 @media(max-height:650px){.context-layer-wrap{display:none}.conversation{height:64px;min-height:64px}.chat-history{display:none}.intent-layer{height:48px;min-height:48px}.brain-frame{inset:34px 2% 0}.metric-cluster{bottom:8px}.cognition-rail{top:42px}}
 @media(max-height:520px){.command-header{height:48px;min-height:48px}.conversation{height:58px;min-height:58px}.chat-form{height:42px}.execute-button{height:40px}.intent-layer{display:none}.status-footer{height:20px;min-height:20px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+
+
+/* --- Void Generation 2 live cognitive layer --- */
+:root{
+  --signal-cyan:#9bb7c7;
+  --cognitive-violet:#a99abd;
+  --verified:#a9c7a0;
+  --warning:#d1b878;
+}
+.brain-frame{isolation:isolate}
+#brain-canvas,#brain-overlay{position:absolute;inset:0;width:100%;height:100%}
+#brain-canvas{z-index:1}
+#brain-overlay{z-index:2;pointer-events:none}
+.brain-frame::before{
+  content:"";position:absolute;z-index:0;width:min(52vw,620px);height:min(52vw,620px);
+  border-radius:50%;border:1px solid rgba(200,169,107,.045);
+  box-shadow:0 0 80px rgba(200,169,107,.018),inset 0 0 80px rgba(155,183,199,.012);
+}
+.brain-frame::after{
+  content:"";position:absolute;z-index:0;width:min(38vw,440px);height:min(38vw,440px);
+  border-radius:50%;border:1px solid rgba(155,183,199,.035);
+  transform:rotate(17deg);
+}
+html[data-state="THINKING"] .brain-frame::before,
+html[data-state="PLANNING"] .brain-frame::before,
+html[data-state="SEARCHING"] .brain-frame::before{
+  border-color:rgba(200,169,107,.09);
+}
+html[data-state="EXECUTING"] .brain-frame::before{border-color:rgba(155,183,199,.11)}
+html[data-state="VERIFYING"] .brain-frame::before{border-color:rgba(169,199,160,.10)}
+html[data-state="ERROR"] .brain-frame::before,
+html[data-state="SECURITY_LOCK"] .brain-frame::before{border-color:rgba(201,130,130,.16)}
+html[data-state="RECOVERING"] .brain-frame::before{border-color:rgba(169,154,189,.12)}
+.core-label h1{transition:opacity .18s ease,transform .18s ease}
+html[data-state="ERROR"] .core-label h1,
+html[data-state="SECURITY_LOCK"] .core-label h1{color:var(--red)}
+html[data-state="VERIFYING"] .core-label h1,
+html[data-state="COMPLETED"] .core-label h1{color:var(--verified)}
+html[data-state="SEARCHING"] .core-label h1{color:var(--signal-cyan)}
+html[data-state="RECOVERING"] .core-label h1{color:var(--cognitive-violet)}
+html[data-state="IDLE"] .brain-aura{opacity:.55}
+html[data-state="THINKING"] .brain-aura,
+html[data-state="PLANNING"] .brain-aura{opacity:1}
+html[data-state="ERROR"] .brain-aura{opacity:.7}
+.context-item,.intent-actions button,.nav-chip,.tab,.data-card,.data-row{transition:border-color .16s ease,background-color .16s ease,transform .16s ease}
+.context-item:hover,.data-row:hover{transform:translateY(-1px)}
+@media(prefers-reduced-motion:reduce){
+  .context-item,.intent-actions button,.nav-chip,.tab,.data-card,.data-row{transition:none}
+}
