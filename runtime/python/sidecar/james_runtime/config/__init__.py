@@ -37,6 +37,9 @@ class VLLMConfig(BaseModel):
 
 class LlamaCppConfig(BaseModel):
     model_path: str = ".james/models/llama-3.1-8b-instruct-Q4_K_M.gguf"
+    executable: str = "llama-server"
+    working_directory: Optional[str] = None
+    auto_start: bool = True
     n_gpu_layers: int = -1
     max_context: int = 8192
     port: int = 8080
