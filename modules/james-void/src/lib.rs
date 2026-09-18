@@ -79,7 +79,7 @@ impl VoidModule {
 /// system: when the model signals a distinct task, James-Void derives a
 /// Task from it. Returns `(name, description)` or `None` when no marker.
 
-pub async fn send_message(&self, content: &str) -> Result<VoidMessage> {
+pub async fn execute_chat(&self, content: &str) -> Result<VoidMessage> {
         let user_msg = VoidMessage {
             id: uuid::Uuid::now_v7().to_string(), role: "user".to_string(),
             content: content.to_string(), timestamp: chrono::Utc::now(), metadata: None,
@@ -168,6 +168,10 @@ pub async fn send_message(&self, content: &str) -> Result<VoidMessage> {
         Ok(assistant_msg)
     }
 
+    pub async fn send_message(&self, content: &str) -> Result<VoidMessage> {
+        self.execute_chat(content).await
+    }
+
     pub async fn get_messages(&self) -> Vec<VoidMessage> {
         self.messages.read().await.clone()
     }
@@ -231,7 +235,8 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
             version: "1.0.0".to_string(), provider: "james.void".to_string(),
             description: desc.to_string(), risk_level: RiskLevel::Low,
             required_permissions: vec![], dependencies: vec![],
-            input_schema: None, output_schema: None,
+            input_schema: Some(serde_json::json!({"type":"object","properties":{"message":{"type":"string","minLength":1}},"required":["message"],"additionalProperties":false})),
+            output_schema: Some(serde_json::json!({"type":"object","properties":{"id":{"type":"string"},"role":{"type":"string"},"content":{"type":"string"},"timestamp":{"type":"string"}},"required":["id","role","content","timestamp"]})),
             execution_target: ExecutionTarget::Local,
             tags: vec!["ui".to_string()], deprecated: false, experimental: false,
         }, "james.void".to_string()).await?;
