@@ -669,18 +669,12 @@ impl JamesAssembly {
             "security" => self.section_security().await,
             "settings" => self.section_settings().await,
             "ai" => self.section_ai().await,
-            "agents" => Ok(json!({
-                "runtime": "agent planning is not implemented yet",
-                "agents": []
-            })),
+            "agents" => self.section_agents().await,
             "devices" => Ok(json!({
                 "port": "platform device port pending (F1-08)",
                 "devices": []
             })),
-            "automation" => Ok(json!({
-                "runtime": "workflow engine is not implemented yet",
-                "automations": []
-            })),
+            "automation" => self.section_automation().await,
             _ => Ok(json!({
                 "error": format!("unknown dashboard section: {section}")
             })),
@@ -829,6 +823,48 @@ impl JamesAssembly {
             ("james.void", "Void", self.void.is_running().await),
             ("james.dashboard", "Dashboard", self.dashboard.is_running().await),
         ]
+    }
+
+    async fn section_agents(&self) -> Result<serde_json::Value> {
+        let agents = self.agent_registry.list();
+        let mut items = Vec::with_capacity(agents.len());
+        for agent in agents {
+            let config = agent.config().clone();
+            let metrics = agent.metrics().await;
+            items.push(json!({
+                "id": config.id,
+                "name": config.name,
+                "role": format!("{:?}", config.role),
+                "goal": config.goal,
+                "state": format!("{:?}", agent.state().await),
+                "allowed_capabilities": config.allowed_capabilities,
+                "max_concurrent_tasks": config.max_concurrent_tasks,
+                "timeout_secs": config.timeout_secs,
+                "budget_usd": config.budget_usd,
+                "workspace_id": config.workspace_id,
+                "metrics": {
+                    "plans_executed": metrics.plans_executed,
+                    "steps_completed": metrics.steps_completed,
+                    "steps_failed": metrics.steps_failed,
+                    "total_execution_time_ms": metrics.total_execution_time_ms,
+                    "capabilities_used": metrics.capabilities_used,
+                    "last_activity": metrics.last_activity,
+                }
+            }));
+        }
+        Ok(json!({
+            "runtime": "typed agent registry",
+            "count": items.len(),
+            "agents": items
+        }))
+    }
+
+    async fn section_automation(&self) -> Result<serde_json::Value> {
+        Ok(json!({
+            "runtime": "scheduler module",
+            "running": self.scheduler.is_running().await,
+            "note": "automation state is exposed by the scheduler; durable workflow persistence remains a separate runtime milestone"
+        }))
     }
 
     async fn section_capabilities(&self) -> Result<serde_json::Value> {
