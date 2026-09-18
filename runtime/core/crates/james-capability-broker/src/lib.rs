@@ -76,6 +76,109 @@ pub trait CapabilityExecutor: Send + Sync {
     ) -> Result<serde_json::Value>;
 }
 
+/// Classification of the data carried by a capability request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DataClassification { Public, Internal, Confidential, Restricted }
+
+/// Requested side effect of an execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RequestedEffect { Read, Transform, Write, Execute, Communicate }
+
+/// Structured confirmation binding to caller/capability/target/scope.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfirmationContext {
+    pub required: bool,
+    pub confirmation_id: Option<String>,
+    pub expires_at: Option<chrono::DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PolicyContext {
+    pub values: serde_json::Map<String, serde_json::Value>,
+}
+
+/// Final structured capability request for the execution spine.
+/// The legacy CapabilityRequest remains as a compatibility boundary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapabilityRequestV2 {
+    pub request_id: String,
+    pub caller_identity: String,
+    pub capability_id: String,
+    pub capability_version: Option<String>,
+    pub target: Option<String>,
+    pub scope: Option<String>,
+    pub input: serde_json::Value,
+    pub data_classification: DataClassification,
+    pub correlation_id: String,
+    pub causation_id: Option<String>,
+    pub requested_effect: RequestedEffect,
+    pub risk_class: String,
+    pub deadline_at: Option<chrono::DateTime<Utc>>,
+    pub timeout_ms: Option<u64>,
+    pub policy_context: PolicyContext,
+    pub confirmation_context: ConfirmationContext,
+}
+
+impl CapabilityRequestV2 {
+    pub fn new(caller_identity: impl Into<String>, capability_id: impl Into<String>, input: serde_json::Value) -> Self {
+        let request_id = uuid::Uuid::new_v4().to_string();
+        Self {
+            request_id: request_id.clone(),
+            caller_identity: caller_identity.into(),
+            capability_id: capability_id.into(),
+            capability_version: None,
+            target: None,
+            scope: None,
+            input,
+            data_classification: DataClassification::Internal,
+            correlation_id: request_id,
+            causation_id: None,
+            requested_effect: RequestedEffect::Read,
+            risk_class: "unspecified".to_string(),
+            deadline_at: None,
+            timeout_ms: None,
+            policy_context: PolicyContext::default(),
+            confirmation_context: ConfirmationContext { required: false, confirmation_id: None, expires_at: None },
+        }
+    }
+
+    fn legacy(&self) -> CapabilityRequest {
+        CapabilityRequest { caller: self.caller_identity.clone(), capability_id: self.capability_id.clone(), input: self.input.clone() }
+    }
+
+    fn effective_timeout(&self) -> Option<std::time::Duration> {
+        let by_timeout = self.timeout_ms.map(std::time::Duration::from_millis);
+        let by_deadline = self.deadline_at.and_then(|deadline| {
+            let remaining = deadline.signed_duration_since(Utc::now());
+            if remaining.num_milliseconds() <= 0 { Some(std::time::Duration::ZERO) }
+            else { Some(std::time::Duration::from_millis(remaining.num_milliseconds() as u64)) }
+        });
+        match (by_timeout, by_deadline) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) | (None, Some(a)) => Some(a),
+            (None, None) => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapabilityOutcomeV2 {
+    pub request_id: String,
+    pub correlation_id: String,
+    pub causation_id: Option<String>,
+    pub caller_identity: String,
+    pub capability_id: String,
+    pub allowed: bool,
+    pub decision: PolicyDecision,
+    pub executed: bool,
+    pub output: Option<serde_json::Value>,
+    pub input_verified: bool,
+    pub output_verified: bool,
+    pub duration_ms: u64,
+    pub reason: Option<String>,
+    pub audited: bool,
+}
+
 /// A capability execution request.
 #[derive(Debug, Clone)]
 pub struct CapabilityRequest {
@@ -349,6 +452,77 @@ impl CapabilityBroker {
         })
     }
 
+    /// Preferred structured execution entry point for new runtime code.
+    pub async fn execute_v2(&self, request: CapabilityRequestV2, executor: &dyn CapabilityExecutor) -> Result<CapabilityOutcomeV2> {
+        let started = Instant::now();
+        if let Some(timeout) = request.effective_timeout() {
+            if timeout.is_zero() {
+                self.audit_v2("audit.capability.deadline_exceeded", &request, None).await;
+                return Err(BrokerError::ExecutionFailed { capability: request.capability_id.clone(), detail: "request deadline/timeout already expired".to_string() }.into());
+            }
+        }
+
+        let legacy = request.legacy();
+        let decision = self.decide(&legacy).await?;
+        match &decision {
+            PolicyDecision::Allow => {}
+            PolicyDecision::Deny(reason) => {
+                self.audit_v2("audit.capability.policy_denied", &request, None).await;
+                return Err(BrokerError::PolicyDenied(request.capability_id.clone(), reason.clone()).into());
+            }
+            PolicyDecision::Ask => {
+                self.audit_v2("audit.capability.confirmation_required", &request, None).await;
+                return Err(BrokerError::ConfirmationRequired(request.capability_id.clone()).into());
+            }
+            PolicyDecision::Conditional(condition) => {
+                self.audit_v2("audit.capability.conditional", &request, None).await;
+                return Err(BrokerError::PolicyDenied(request.capability_id.clone(), format!("condition not satisfied: {condition}")).into());
+            }
+        }
+
+        if request.confirmation_context.required {
+            let valid = request.confirmation_context.confirmation_id.is_some()
+                && request.confirmation_context.expires_at.map(|e| e > Utc::now()).unwrap_or(false);
+            if !valid {
+                self.audit_v2("audit.capability.confirmation_required", &request, None).await;
+                return Err(BrokerError::ConfirmationRequired(request.capability_id.clone()).into());
+            }
+        }
+
+        let execution = async { self.execute(legacy, executor).await };
+        let outcome = match request.effective_timeout() {
+            Some(timeout) => tokio::time::timeout(timeout, execution).await.map_err(|_| BrokerError::ExecutionFailed {
+                capability: request.capability_id.clone(), detail: "request timeout exceeded".to_string()
+            })??,
+            None => execution.await?,
+        };
+
+        self.audit_v2("audit.capability.executed.v2", &request, outcome.output.as_ref()).await;
+        Ok(CapabilityOutcomeV2 {
+            request_id: request.request_id,
+            correlation_id: request.correlation_id,
+            causation_id: request.causation_id,
+            caller_identity: request.caller_identity,
+            capability_id: request.capability_id,
+            allowed: outcome.allowed,
+            decision: outcome.decision,
+            executed: outcome.executed,
+            output: outcome.output,
+            input_verified: outcome.input_verified,
+            output_verified: outcome.output_verified,
+            duration_ms: started.elapsed().as_millis() as u64,
+            reason: outcome.reason,
+            audited: outcome.audited,
+        })
+    }
+
+    pub async fn decide_v2(&self, request: &CapabilityRequestV2) -> Result<PolicyDecision> {
+        if request.deadline_at.map(|d| d <= Utc::now()).unwrap_or(false) {
+            return Ok(PolicyDecision::Deny("request deadline expired".to_string()));
+        }
+        self.decide(&request.legacy()).await
+    }
+
     /// Check-only decision (no execution) — used by UIs to preview permission.
     pub async fn decide(&self, request: &CapabilityRequest) -> Result<PolicyDecision> {
         let registered = self
@@ -377,6 +551,32 @@ impl CapabilityBroker {
             .iter()
             .map(|e| (e.key().clone(), e.value().clone()))
             .collect()
+    }
+
+    async fn audit_v2(&self, event_type: &str, request: &CapabilityRequestV2, output: Option<&serde_json::Value>) {
+        if !self.audit_enabled { return; }
+        if let Some(bus) = &self.event_bus {
+            let mut payload = serde_json::json!({
+                "request_id": request.request_id,
+                "caller_identity": request.caller_identity,
+                "capability": request.capability_id,
+                "capability_version": request.capability_version,
+                "target": request.target,
+                "scope": request.scope,
+                "data_classification": request.data_classification,
+                "correlation_id": request.correlation_id,
+                "causation_id": request.causation_id,
+                "requested_effect": request.requested_effect,
+                "risk_class": request.risk_class,
+                "deadline_at": request.deadline_at.map(|v| v.to_rfc3339()),
+                "at": Utc::now().to_rfc3339()
+            });
+            if let Some(out) = output { payload["output"] = out.clone(); }
+            if bus.publish(Event::new(event_type, "james-capability-broker").with_payload(payload)).await.is_err() {
+                warn!("broker audit: failed to publish {}", event_type);
+            }
+        }
+        info!("broker {} request={} correlation={} caller={} capability={}", event_type, request.request_id, request.correlation_id, request.caller_identity, request.capability_id);
     }
 
     async fn audit(
