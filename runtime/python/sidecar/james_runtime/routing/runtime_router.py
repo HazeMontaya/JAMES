@@ -23,7 +23,13 @@ class RuntimeRouter:
         self.hardware = hardware_profile
         self.vram = vram_manager
     
-    def select(self, model: ModelSpec, constraints: Optional[RoutingConstraints] = None) -> EngineSelection:
+    async def select_async(self, model: ModelSpec, constraints: Optional[RoutingConstraints] = None) -> EngineSelection:
+        """Select an engine while excluding engines that currently report unhealthy."""
+        constraints = constraints or RoutingConstraints()
+        health = await self.engine_registry.check_all_health()
+        return self.select(model, constraints, health=health)
+
+    def select(self, model: ModelSpec, constraints: Optional[RoutingConstraints] = None, health: Optional[dict] = None) -> EngineSelection:
         """Select the best engine for a model on current hardware
         
         Priority order:
@@ -32,21 +38,30 @@ class RuntimeRouter:
         3. AirLLM (large model offload when VRAM insufficient)
         """
         constraints = constraints or RoutingConstraints()
-        
+        health = health or {}
+
+        def usable(engine_type: EngineType) -> bool:
+            if not usable(engine_type):
+                return False
+            if constraints.preferred_engine and constraints.preferred_engine != engine_type.value:
+                return False
+            status = health.get(engine_type.value)
+            return status is None or getattr(status, "healthy", False)
+
         # 1. Try vLLM first (highest performance)
-        if self.engine_registry.has_engine(EngineType.VLLM.value):
+        if usable(EngineType.VLLM):
             fit = self.vram.can_fit(model, EngineType.VLLM)
             if fit.fits:
                 return self._create_selection(fit, model)
         
         # 2. Try llama.cpp (broadest hardware support)
-        if self.engine_registry.has_engine(EngineType.LLAMACPP.value):
+        if usable(EngineType.LLAMACPP):
             fit = self.vram.can_fit(model, EngineType.LLAMACPP)
             if fit.fits:
                 return self._create_selection(fit, model)
         
         # 3. Try AirLLM for large models
-        if self.engine_registry.has_engine(EngineType.AIRLLM.value):
+        if usable(EngineType.AIRLLM):
             fit = self.vram.can_fit(model, EngineType.AIRLLM)
             if fit.fits:
                 return self._create_selection(fit, model)
