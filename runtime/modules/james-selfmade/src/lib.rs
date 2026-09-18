@@ -488,6 +488,33 @@ impl SelfMadeModule {
         let diff = workspace.join(".james-selfmade.patch");
         tokio::fs::write(&diff, &proposal.patch).await?;
 
+        // Defense in depth: the model is never allowed to modify the authority
+        // layer even though it is instructed not to. Parse every file header
+        // before git sees the patch.
+        const PROTECTED: &[&str] = &[
+            "runtime/core/crates/james-capability-broker/",
+            "runtime/core/crates/james-core/",
+            "runtime/modules/james-system/src/main.rs",
+            "ops/scripts/start-james.ps1",
+        ];
+        for line in proposal.patch.lines().filter(|line| line.starts_with("diff --git ")) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 4 {
+                bail!("selfmade patch has malformed file header");
+            }
+            for raw in &parts[2..4] {
+                let path = raw.trim_start_matches("a/").trim_start_matches("b/");
+                if PROTECTED.iter().any(|prefix| path == *prefix || path.starts_with(prefix)) {
+                    self.emit("selfmade.change.rejected", serde_json::json!({
+                        "mission_id": proposal.mission_id,
+                        "proposal_id": proposal.id,
+                        "reason": "protected authority path"
+                    })).await;
+                    bail!("selfmade patch targets protected authority path: {path}");
+                }
+            }
+        }
+
         let check = Command::new("git")
             .current_dir(&workspace)
             .args(["apply", "--check"])
