@@ -1,220 +1,107 @@
-# JAMES Void Visual System
+# JAMES Void — Cognitive Interface & Visual System
 
-Status: verbindlicher visueller und interaktiver Vertrag
+Status: **verbindlicher Design- und Interaktionsvertrag, Generation 2**
 
-## 1. Ziel
+## 1. Designwechsel
 
-James-Void soll nicht wie ein normales Dashboard, Cyberpunk-HUD oder eine reine Animation wirken. Der Nutzer soll JAMES beim Wahrnehmen, Denken, Entscheiden, Ausfuehren, Verifizieren und Erholen sehen.
+Void Generation 2 ist **kein Redesign des bisherigen Dashboards**. Es ist eine neue visuelle Sprache.
 
-> Animation ist Information. Jede sichtbare Bewegung benoetigt eine semantische Ursache.
+Verworfen als Primärmetaphern: klassisches Dashboard-Raster, Cyberpunk-/HUD-Ästhetik, dekorative Goldoptik, künstliche Rotationen, Widget-Wand, menschlicher Gehirnschädel als Illustration und Animation ohne Zustandsursache.
 
-## 2. Visuelle Ebenen
+Neue Primärmetapher: **JAMES ist ein lebender kognitiver Laufzeitgraph.**
 
-Void besitzt zwei Hauptbereiche:
+Die Oberfläche zeigt die Beziehung zwischen State, Signal, Intent, Capability, Execution, Verification und Memory.
 
-- **Live Brain:** dauerhaftes Zentrum und Projektion des echten JAMES-Zustands
-- **Dynamic Context Layer:** relevante Informationen, Tasks, Agenten, Module, Geraete, Prozesse, Browser, Forschung, Fehler und Controls
+## 2. Visuelle Identität
 
-Der Inhalt des Dynamic Context Layers ist nicht statisch. Er wird aus `UiIntent` und aktuellen State-Projektionen abgeleitet.
+- nahezu schwarzer Raum
+- dünne technische Linien
+- tiefe Layer statt Kartenstapel
+- Spektral-Cyan als aktives Signal
+- Violett als kognitive Sekundärfrequenz
+- Weiß für Primärinformation
+- Grün für verifizierten Zustand
+- Amber für Warnung
+- Rot nur für echte Fehler/Isolation
 
-## 3. Brain-Anatomie
+Farbe ist semantisch, nicht dekorativ.
 
-Das Brain ist keine menschliche Organ- oder Schaedel-Darstellung. Es ist eine synthetische kognitive Struktur aus:
+Typografie: geometrische Grotesk für UI und Monospace für Telemetrie, IDs und States.
 
-- Core-Kern
-- funktionalen Knoten
-- Verbindungen
-- Signalfluss
-- Aktivitaetsfeld
-- Fokus- und Sicherheitsringen
+## 3. Void-Komposition
 
-Funktionale Zonen koennen intern repraesentiert werden als:
+Primäransicht: Command Header → Cognitive Field → Cognitive Rail → Intent Layer → Context Stream → Conversation.
 
-```text
-MEMORY     REASONING     PLANNING
-INPUT      CORE          ACTION
-OUTPUT     VERIFY        RECOVERY
-```
+Der Brain-Bereich ist dominant. Das operative System wird um den Brain herum projiziert.
 
-Nicht jede Zone oder jedes Modul ist dauerhaft sichtbar. Nur relevante Aktivitaet wird visualisiert.
+## 4. Brain Generation 2
 
-## 4. Brain-Layer
+Das Brain ist eine **synthetische kognitive Topologie**, keine biologische Gehirnzeichnung.
 
-### Core Layer
+Es besteht aus Core, funktionalen Regionen, Knoten, gerichteten Kanten, Signalen, Aktivitätsfeld und Sicherheits-/Verifikationsringen.
 
-Der innere Kern zeigt, dass JAMES aktiv und erreichbar ist. Im Zustand `IDLE` pulsiert er langsam und ruhig.
+Regionen: INPUT → REASONING → PLANNING → ACTION → VERIFY → OUTPUT; MEMORY und RECOVERY bilden unterstützende Pfade.
 
-### Neural Network Layer
+Die Runtime bleibt Quelle der Wahrheit.
 
-Knoten und Kanten repraesentieren relevante aktive Systeme, Module, Agenten oder Verarbeitungsschritte. Ihre Anzahl bleibt begrenzt, damit Aktivitaet lesbar bleibt.
+## 5. Kausalität
 
-### Signal Flow Layer
+Jede relevante Bewegung muss auf Runtime-Zustand zurückführbar sein.
 
-Bewegte Signale zeigen Richtung und Ursache eines realen Informationsflusses:
+LISTENING führt Input zum Core. UNDERSTANDING führt Input Richtung Reasoning. THINKING nutzt Reasoning-Flows. PLANNING visualisiert Planpfade. EXECUTING verlässt den Core Richtung Capability. VERIFYING führt Resultate zurück. LEARNING endet in Memory. ERROR isoliert den betroffenen Bereich. RECOVERING zeigt Diagnose und Wiederherstellung. SECURITY_LOCK fokussiert Policy/Verification.
 
-```text
-INPUT -> PROCESSING -> CAPABILITY -> VERIFICATION -> OUTPUT
-```
+Keine Zufallsanimation darf einen fachlichen Zustand vortäuschen.
 
-### Activity Field
+## 6. Cognitive Rail
 
-Ein dezentes Feld zeigt Systemintensitaet. Es darf nur aus echten Ressourcen-/Aktivitaetsdaten abgeleitet werden, nicht aus Zufall.
+Die rechte Informationsschicht beantwortet: Was ist aktiv? Worauf fokussiert JAMES? Welche Route ist aktiv? Welche Signale sind relevant? Welche Systeme sind beteiligt?
 
-## 5. Brain State Machine
+Nicht relevante Informationen werden ausgeblendet und bleiben über Context/History erreichbar.
 
-Mindestens folgende Zustaende werden definiert:
+## 7. Context Stream
 
-```text
-IDLE
-LISTENING
-UNDERSTANDING
-THINKING
-PLANNING
-SEARCHING
-EXECUTING
-VERIFYING
-COMPLETED
-WAITING
-LEARNING
-WARNING
-ERROR
-RECOVERING
-SLEEPING
-OFFLINE
-RESOURCE_LIMITED
-SECURITY_LOCK
-```
+Der Context Stream ist die dynamische Projektion des aktuellen Systemzustands. Prioritäten sind BACKGROUND, NORMAL, IMPORTANT, URGENT und CRITICAL. Sichtbarkeit folgt Relevanz. Der Renderer entscheidet nicht, was wichtig ist.
 
-Jeder Zustand definiert:
+## 8. Intent Layer
 
-- Motion Profile
-- Signalrichtung und -dichte
-- Geschwindigkeit
-- Lichtintensitaet
-- Partikel-/Knotenverhalten
-- sichtbaren UI-Fokus
-- moegliche Controls
-- optionalen Sound
+Intent ist die Brücke zwischen Wahrnehmung und Handlung: USER INTENT → UNDERSTAND → PLAN → CAPABILITY RESOLUTION → PERMISSION → POLICY → CONFIRMATION → EXECUTION → VERIFICATION.
 
-## 6. Semantische Motion Profiles
+Die Oberfläche darf keine privilegierte Abkürzung erzeugen.
 
-- `IDLE`: langsames Atmen/Pulsieren, wenige Signale, keine Hektik
-- `LISTENING`: Signale bewegen sich zum Brain, Input-Zonen reagieren
-- `THINKING`: zirkulierende Signale, temporaere Knoten, erkundete Verbindungen
-- `PLANNING`: geordnete geometrische Pfade und sichtbare Plan-Schritte
-- `EXECUTING`: Signale verlassen das Brain zu Capability-, Modul- oder Panel-Knoten
-- `VERIFYING`: Signale kehren zurueck, Ergebnisse werden geprueft und eingespeist
-- `ERROR`: betroffener Bereich stoppt oder isoliert sich; keine Alarmshow
-- `RECOVERING`: Isolation, Diagnose, Fallback, Wiederverbindung und Resume werden sichtbar
-- `SECURITY_LOCK`: kontrollierter Ring und sichtbare Policy-Entscheidung `ALLOW`, `DENY` oder `ASK`
-- `SLEEPING`: minimale Bewegung und minimale Aktualisierung, Brain bleibt sichtbar
+## 9. Conversation
 
-## 7. Kausalitaet
+Chat ist kein separates Programm, sondern ein Eingang in den JAMES Execution Spine: MESSAGE → INTENT → PLAN → CAPABILITY → EXECUTION → RESULT → VERIFICATION → MEMORY/EVENT → RESPONSE.
 
-Das Visualsystem darf keinen Zustand vortaeuschen. Es bezieht mindestens ein:
+## 10. System View
 
-- echte Task-/Execution-Zustaende
-- Event- und Correlation-Daten
-- Capability- und Modulstatus
-- Provider-/Agentenstatus
-- CPU/GPU/RAM- und Ressourcenwerte
-- Permission-/Policy-Entscheidungen
-- Verification-Ergebnisse
-- Recovery-Zustaende
+Die Systemansicht ist der operative Kontrollraum für Core, Module, Capabilities, AI, Models, Agents, Memory, Tasks, Automation, Devices, Events, Security und Settings. Sie ist nicht die primäre Identität von JAMES.
 
-Ein hoher GPU-Wert darf die Aktivitaet erhoehen, aber allein keinen `THINKING`-Zustand behaupten. Geschwindigkeit ist ein Signal, nicht die alleinige Statusquelle.
+## 11. Security Visual Language
 
-## 8. Kontextbewegung
+Security basiert auf realen Entscheidungen: ALLOW, DENY, ASK, CONDITIONAL und SECURITY_LOCK. Ein Lock-Zustand soll Caller, Capability, Target, Scope, Policy und Confirmation-Status nachvollziehbar machen.
 
-Informationen koennen im Void priorisiert werden:
+## 12. Motion System
 
-```text
-BACKGROUND -> NORMAL -> IMPORTANT -> URGENT -> CRITICAL
-```
+IDLE/SLEEPING/OFFLINE: minimale Bewegung. UNDERSTANDING/THINKING/PLANNING: gerichtete Signale und temporäre Knoten. EXECUTING: Outbound-Flows. VERIFYING: Rückfluss und Prüfschleifen. ERROR: Isolation statt Explosion. RECOVERING: Diagnose, Reconnect, Resume/Fallback.
 
-Relevante Inhalte naehern sich dem Brain, werden groesser oder erhalten Fokus. Nicht mehr relevante Inhalte ziehen sich zurueck, werden kleiner oder verschwinden in einen aufrufbaren Verlauf.
+## 13. Sound
 
-Darstellung beschreibt:
+Optional und dezent. Nur Zustandswechsel oder reale Ereignisse dürfen Sound auslösen. Keine permanente Sci-Fi-Musik und keine Alarm-Loops.
 
-- Position: `CENTER`, `LEFT`, `RIGHT`, `TOP`, `BOTTOM`, `FLOATING`, `OVERLAY`, `WINDOW`, `TAB`
-- Groesse: `MICRO`, `SMALL`, `MEDIUM`, `LARGE`, `FOCUS`, `FULLSCREEN`
-- Dauer: `MOMENTARY`, `TEMPORARY`, `PERSISTENT`, `UNTIL_RESOLVED`
-- Prioritaet: `BACKGROUND`, `NORMAL`, `IMPORTANT`, `URGENT`, `CRITICAL`
+## 14. Responsive Design
 
-## 9. Window Intelligence
+Desktop nutzt Brain plus Cognitive Rail. Tablet komprimiert den Rail. Mobile hält den Brain als primäre Oberfläche und reduziert sekundäre Orbit-Elemente. System View bleibt vollständig erreichbar.
 
-JAMES oeffnet keine Oberflaechen blind. Der UI-Orchestrator prueft:
+## 15. Accessibility
 
-- Informationsumfang
-- aktuelle freie Flaeche
-- Interaktionskomplexitaet
-- Risiko und Bestaetigungsbedarf
-- Nutzerfokus
-- Geraeteklasse
-- bereits offene Panels/Fenster
+Pflicht: prefers-reduced-motion, Tastaturnavigation, sichtbare Fokuszustände, semantische Labels und Textalternativen. Keine Information darf ausschließlich durch Farbe oder Bewegung vermittelt werden.
 
-Beispiele:
+## 16. Technische Trennung
 
-- kurze Statusinformation: Void-Kontext
-- umfangreiche Recherche: Panel
-- grosse Browser-Interaktion: eigenes Fenster
-- kritische Freigabe: fokussierter Dialog
+JAMES Runtime State → State Projection → Void Context → Relevance/Priority → UI Intent → Motion Parameters → Renderer.
 
-Alle Oeffnungen sind UI-Capabilities und werden policygemaess behandelt.
+Der Renderer darf keine Capability ausführen und keinen fachlichen Zustand erfinden.
 
-## 10. Farb- und Klangsemantik
+## 17. Generation-2-Abnahme
 
-Grundpalette:
-
-- Hintergrund: nahezu schwarz
-- Primaer/Aktivitaet/Fokus: warmes Gold, sparsam
-- Text: warmes Weiss
-- Sekundaertext: gedimmtes Grau
-- Erfolg: kontrolliertes Gruen
-- Warnung: Amber
-- Fehler: kontrolliertes Rot
-- Information: kuehles neutrales Signal
-
-Gold bedeutet Aufmerksamkeit oder Aktivitaet, nicht Dekoration. Partikel, Glitches, Neonregen, dauernde Rotation, zufaellige Explosionen und Gaming-HUD-Effekte sind ausgeschlossen.
-
-Optionaler Sound ist deaktivierbar und bleibt dezent:
-
-```text
-IDLE -> kaum hoerbarer Grundton
-INPUT -> kurzer Impuls
-THINKING -> subtile Textur
-ACTION -> dezenter Impuls
-SUCCESS -> kurze Bestaetigung
-WARNING/ERROR -> kontrolliertes Signal
-```
-
-## 11. Technische Pipeline
-
-```text
-JAMES STATE
-  -> TASK / EVENTS / RESOURCES / SECURITY
-  -> VOID CONTEXT ENGINE
-  -> RELEVANCE ENGINE
-  -> PRIORITY ENGINE
-  -> PRESENTATION ENGINE
-  -> VOID STATE / UI INTENT
-  -> ANIMATION ENGINE
-  -> RENDERER
-```
-
-Die Animation Engine nimmt deterministische State- und Motion-Parameter entgegen. Sie erzeugt keine fachlichen Entscheidungen.
-
-## 12. Abnahme
-
-Das Visualsystem gilt als korrekt, wenn:
-
-1. Brain-Zustaende aus echten Events und State entstehen.
-2. Recherche, Code-Build, Systemmonitoring und Security-Entscheidungen unterschiedliche semantische Darstellungen besitzen.
-3. Fehler sichtbar isoliert, diagnostiziert und recovered werden koennen.
-4. Animation bei fehlender Aktivitaet reduziert wird.
-5. Relevante Informationen sich fokussiert naehern und danach zuruecktreten.
-6. Fenster-/Panel-Oeffnungen als UI-Capabilities auditiert werden.
-7. Ein Rendererwechsel die Semantik nicht veraendert.
-8. Keine Animation eine nicht existierende Aktivitaet behauptet.
-9. Die zentrale Void-Ansicht ohne statische Dashboard-Widgetpflicht funktioniert.
-10. Das System ohne Void weiter lauffaehig bleibt.
+Void gilt erst als abgeschlossen, wenn die neue visuelle Sprache konsistent ist, keine alte Gold-/HUD-/Dashboard-Primärästhetik verbleibt, Brain-Zustände aus realen Runtime-Ereignissen entstehen, Signalflüsse kausal bleiben, Context dynamisch priorisiert wird, System View und Void dieselbe Runtime-Wahrheit verwenden, Security-Entscheidungen nachvollziehbar sind, Chat durch den Execution Spine läuft, Motion bei fehlender Aktivität reduziert wird und Renderer/Runtime semantisch getrennt bleiben.
