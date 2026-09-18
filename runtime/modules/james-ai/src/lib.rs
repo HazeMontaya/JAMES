@@ -215,7 +215,45 @@ impl AiModule {
         if request.model_id.is_none() {
             request.model_id = resolved_model;
         }
-        provider.infer(request).await
+        let provider_name = provider.provider_name().to_string();
+        let requested_model = request.model_id.clone();
+        self.event_bus.publish(
+            james_events::Event::new("ai.inference.started", "james-ai")
+                .with_payload(serde_json::json!({
+                    "provider": provider_name,
+                    "model": requested_model,
+                    "message_count": request.messages.len(),
+                    "stream": request.stream,
+                }))
+        ).await.ok();
+
+        let result = provider.infer(request).await;
+        match &result {
+            Ok(response) => {
+                self.event_bus.publish(
+                    james_events::Event::new("ai.inference.completed", "james-ai")
+                        .with_payload(serde_json::json!({
+                            "provider": provider_name,
+                            "model": response.model,
+                            "response_id": response.id,
+                            "prompt_tokens": response.usage.prompt_tokens,
+                            "completion_tokens": response.usage.completion_tokens,
+                            "total_tokens": response.usage.total_tokens,
+                        }))
+                ).await.ok();
+            }
+            Err(error) => {
+                self.event_bus.publish(
+                    james_events::Event::new("ai.inference.failed", "james-ai")
+                        .with_payload(serde_json::json!({
+                            "provider": provider_name,
+                            "model": requested_model,
+                            "error": error.to_string(),
+                        }))
+                ).await.ok();
+            }
+        }
+        result
     }
 
     pub async fn list_models(&self) -> Result<Vec<ModelInfo>> {
