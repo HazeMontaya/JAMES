@@ -144,7 +144,15 @@ impl CapabilityExecutor for SelfMadeCapabilityExecutor {
     async fn execute(&self, capability_id: &str, _input: serde_json::Value) -> Result<serde_json::Value> {
         match capability_id {
             "selfmade.observe" => self.selfmade.observe_self().await,
-            _ => anyhow::bail!("selfmade capability is not executable through this read-only adapter: {capability_id}"),
+            "selfmade.assess" => {
+                let objective = _input
+                    .get("objective")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("identify the highest-value safe improvement for JAMES");
+                serde_json::to_value(self.selfmade.assess_evolution(objective).await?)
+                    .map_err(Into::into)
+            }
+            _ => anyhow::bail!("selfmade capability is not executable through this adapter: {capability_id}"),
         }
     }
 }
@@ -438,6 +446,15 @@ impl JamesAssembly {
             priority: 10,
             available: true,
             capabilities: vec!["selfmade.observe".to_string()],
+            health: None,
+            executor: selfmade_executor.clone(),
+        });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.assess".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.assess".to_string()],
             health: None,
             executor: selfmade_executor,
         });
