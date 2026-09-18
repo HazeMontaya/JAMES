@@ -817,6 +817,7 @@ impl CapabilityBroker {
     /// Remove expired confirmations and emit an explicit expiration event.
     pub async fn cleanup_expired_confirmations(&self) -> usize {
         let now = Utc::now();
+        let _guard = self.confirmation_lock.lock().await;
         let expired: Vec<(String, ConfirmationRequest)> = self
             .confirmations
             .iter()
