@@ -132,6 +132,20 @@ impl CapabilityExecutor for MemoryCapabilityExecutor {
     }
 }
 
+struct VoidCapabilityExecutor {
+    void: Arc<VoidModule>,
+}
+
+#[async_trait]
+impl CapabilityExecutor for VoidCapabilityExecutor {
+    async fn execute(&self, capability_id: &str, input: serde_json::Value) -> Result<serde_json::Value> {
+        if capability_id != "void.chat" { anyhow::bail!("unsupported Void capability: {capability_id}"); }
+        let message = input.get("message").and_then(|v| v.as_str()).ok_or_else(|| anyhow::anyhow!("void.chat requires message"))?;
+        let response = self.void.execute_chat(message).await?;
+        Ok(serde_json::to_value(response)?)
+    }
+}
+
 /// `AiPlannerProvider` adapter backed by the real assembly `AiModule`.
 /// Lets `LlmPlanner` generate plans from an actual model response.
 struct AssemblyAiPlannerProvider {
@@ -386,6 +400,11 @@ impl JamesAssembly {
     /// screenshot/extract, voice/device, etc.) stay unregistered so plans
     /// resolve honestly to "no candidate".
     pub fn register_resolver_candidates(&self) {
+        let void_executor: Arc<dyn CapabilityExecutor> = Arc::new(VoidCapabilityExecutor { void: self.void.clone() });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "void.chat".to_string(), provider: "james-void".to_string(), priority: 10,
+            available: true, capabilities: vec!["void.chat".to_string()], health: None, executor: void_executor,
+        });
         let memory_executor: Arc<dyn CapabilityExecutor> =
             Arc::new(MemoryCapabilityExecutor {
                 memory: self.memory.clone(),
@@ -642,7 +661,15 @@ impl JamesAssembly {
                 .collect::<Vec<_>>()
                 .join("\n"));
         }
-        Ok(self.void.send_message(trimmed).await?.content)
+        let candidate = self.resolver.resolve("void.chat", &ResolutionContext::preferring("james-void")).selected
+            .ok_or_else(|| anyhow::anyhow!("no executor candidate for void.chat"))?;
+        let outcome = self.broker.execute(CapabilityRequest {
+            caller: "james-chat".to_string(),
+            capability_id: "void.chat".to_string(),
+            input: serde_json::json!({"message": trimmed}),
+        }, candidate.executor.as_ref()).await?;
+        let output = outcome.output.ok_or_else(|| anyhow::anyhow!("void.chat returned no output"))?;
+        Ok(output.get("content").and_then(|v| v.as_str()).unwrap_or("I’m processing your request.").to_string())
     }
 
     pub fn chat(&self) -> Arc<ChatModule> {
