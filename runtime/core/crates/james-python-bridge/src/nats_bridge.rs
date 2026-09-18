@@ -124,9 +124,7 @@ impl NatsBridge {
         self.jetstream = Some(jetstream.clone());
 
         // Set up subscriptions
-        self.subscribe_capability_execute().await?;
         self.subscribe_capability_register().await?;
-        self.subscribe_capability_list().await?;
         self.subscribe_health_check().await?;
         self.subscribe_event_forward().await?;
 
@@ -134,45 +132,6 @@ impl NatsBridge {
         self.start_health_publisher().await?;
 
         info!("NATS bridge connected successfully");
-        Ok(())
-    }
-
-    async fn subscribe_capability_execute(&self) -> anyhow::Result<()> {
-        // Execution requests are sent with NATS request/reply by execute_capability().
-        // This subscription is intentionally limited to the reply wildcard so the
-        // bridge never consumes Python execution requests itself.
-        let client = {
-            let guard = self.client.lock().await;
-            guard
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("NATS client not connected"))?
-                .clone()
-        };
-        let subject = subjects::capability_execute_reply(&self.config);
-        let mut subscriber = client.subscribe(subject).await?;
-
-        let pending = self.pending_requests.clone();
-
-        tokio::spawn(async move {
-            while let Some(msg) = subscriber.next().await {
-                let Ok(response) = serde_json::from_slice::<CapabilityExecuteResponse>(&msg.payload) else {
-                    warn!("Ignoring malformed Python capability response");
-                    continue;
-                };
-
-                let sender = {
-                    let pending_guard = pending.read().await;
-                    pending_guard.get(&response.request_id).map(|entry| entry.value().clone())
-                };
-
-                if let Some(sender) = sender {
-                    let _ = sender.send(response).await;
-                } else {
-                    debug!("No pending request for capability response {}", response.request_id);
-                }
-            }
-        });
-
         Ok(())
     }
 
@@ -195,35 +154,6 @@ impl NatsBridge {
                     let mut caps = python_caps.write().await;
                     caps.retain(|c| c.id != cap_info.id);
                     caps.push(cap_info);
-                }
-            }
-        });
-
-        Ok(())
-    }
-
-    async fn subscribe_capability_list(&self) -> anyhow::Result<()> {
-        let client = {
-            let guard = self.client.lock().await;
-            guard.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("NATS client not connected"))?
-                .clone()
-        };
-        let subject = subjects::capability_list(&self.config);
-        let mut subscriber = client.subscribe(subject).await?;
-
-        let python_caps = self.python_capabilities.clone();
-        let client = client.clone();
-
-        tokio::spawn(async move {
-            while let Some(msg) = subscriber.next().await {
-                let caps = python_caps.read().await;
-                let list: Vec<_> = caps.iter().map(|c| c.id.clone()).collect();
-                let response = serde_json::json!({ "capabilities": list });
-                if let Some(reply) = msg.reply {
-                    if let Ok(bytes) = serde_json::to_vec(&response) {
-                        let _ = client.publish(reply, bytes.into()).await;
-                    }
                 }
             }
         });
