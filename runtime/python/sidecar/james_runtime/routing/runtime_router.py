@@ -45,6 +45,9 @@ class RuntimeRouter:
                 return False
             if constraints.preferred_engine and constraints.preferred_engine != engine_type.value:
                 return False
+            engine = self.engine_registry.get(engine_type.value)
+            if engine is None or not engine.supports_model(model):
+                return False
             status = health.get(engine_type.value)
             return status is None or getattr(status, "healthy", False)
 
@@ -57,13 +60,13 @@ class RuntimeRouter:
         # 2. Try llama.cpp (broadest hardware support)
         if usable(EngineType.LLAMACPP):
             fit = self.vram.can_fit(model, EngineType.LLAMACPP)
-            if fit.fits:
+            if fit.fits and self._meets_constraints(fit, constraints):
                 return self._create_selection(fit, model)
         
         # 3. Try AirLLM for large models
         if usable(EngineType.AIRLLM):
             fit = self.vram.can_fit(model, EngineType.AIRLLM)
-            if fit.fits:
+            if fit.fits and self._meets_constraints(fit, constraints):
                 return self._create_selection(fit, model)
         
         # No engine can run this model
