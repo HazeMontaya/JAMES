@@ -72,17 +72,22 @@ class LlamaCppEngine(InferenceEngine):
         if llamacpp_config.n_threads > 0:
             args.extend(["-t", str(llamacpp_config.n_threads)])
 
-        logger.info(f"Starting llama.cpp server: {' '.join(args)}")
-
-        try:
-            self.server_process = subprocess.Popen(
-                args,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                cwd=r"S:\JAMES\python\sidecar",
-            )
-        except FileNotFoundError:
-            raise EngineInitializationError("llamacpp", "llama-server not found in PATH. Install llama.cpp")
+        if auto_start:
+            logger.info("Starting llama.cpp server with configured executable")
+            try:
+                self.server_process = subprocess.Popen(
+                    args,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    cwd=working_directory,
+                )
+            except FileNotFoundError:
+                raise EngineInitializationError(
+                    "llamacpp",
+                    f"llama-server executable not found: {executable}",
+                )
+        else:
+            logger.info("Using externally managed llama.cpp server")
 
         # Wait for server to be ready
         await self._wait_for_server_ready()
