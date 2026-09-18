@@ -518,6 +518,7 @@ pub struct AgentFactory {
     memory: Arc<MemoryModule>,
     tasks: Arc<TaskManager>,
     executor_registry: Arc<ExecutorRegistry>,
+    shared_resolver: Option<Arc<CapabilityResolver>>,
 }
 
 impl AgentFactory {
@@ -538,7 +539,21 @@ impl AgentFactory {
             memory,
             tasks,
             executor_registry,
+            shared_resolver: None,
         }
+    }
+
+    /// Attach the assembly/shared resolver so factory-created typed agents
+    /// use the same live executor candidates as direct plan execution.
+    pub fn attach_resolver(&mut self, resolver: Arc<CapabilityResolver>) {
+        self.shared_resolver = Some(resolver);
+    }
+
+    fn finish_agent(&self, agent: Agent) -> Agent {
+        if let Some(resolver) = &self.shared_resolver {
+            agent.attach_resolver(resolver.clone());
+        }
+        agent
     }
 
     /// Create a researcher agent
@@ -568,7 +583,7 @@ impl AgentFactory {
                 agent.register_executor(cap, executor);
             }
         }
-        agent
+        self.finish_agent(agent)
     }
 
     /// Create a coder agent
@@ -600,7 +615,7 @@ impl AgentFactory {
                 agent.register_executor(cap, executor);
             }
         }
-        agent
+        self.finish_agent(agent)
     }
 
     /// Create a browser agent
@@ -632,7 +647,7 @@ impl AgentFactory {
                 agent.register_executor(cap, executor);
             }
         }
-        agent
+        self.finish_agent(agent)
     }
 
     /// Create a generic agent with custom config
@@ -645,7 +660,7 @@ impl AgentFactory {
                 agent.register_executor(cap, executor);
             }
         }
-        agent
+        self.finish_agent(agent)
     }
 }
 
