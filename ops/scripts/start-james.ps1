@@ -9,6 +9,10 @@ $env:RUSTUP_TOOLCHAIN = 'stable-x86_64-pc-windows-msvc'
 $env:RUSTC = "$env:USERPROFILE\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin\rustc.exe"
 $env:RUSTC_WRAPPER = ''
 $env:CARGO_INCREMENTAL = ''
+# Local Void runs only on 127.0.0.1. Allow the browser client to use the protected API
+# without exposing the bearer secret to page JavaScript; production deployments
+# should leave this false and use an authenticated client.
+$env:JAMES_AUTH_DEV_MODE = 'true'
 $cargo = "$env:USERPROFILE\.cargo\bin\cargo.exe"
 
 # Ollama: lokale AI-Inferenz sicherstellen. JAMES' AI-Provider spricht den
