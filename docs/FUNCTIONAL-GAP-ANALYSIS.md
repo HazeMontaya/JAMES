@@ -46,8 +46,8 @@ The next work is implementation, not more concept documents.
 | Browser automation | NOT USABLE | `navigate` performs HTTP GET; screenshot/extract capabilities have no real executors |
 | Web research | PARTIAL | DuckDuckGo/fetch methods exist; no broker path, timeout enforcement or robust source trust model |
 | Voice/STT/TTS | NOT VERIFIED | Modules start, but real device/provider execution is not proven |
-| Void renderer | IMPLEMENTED | Black/gold renderer (`interfaces/void`) with Canvas Brain, chat, dashboard tabs, drawer, API and WebSocket wiring; 18-brain-state fabric; consumes orchestrator `ui.intent` over `/ws/v1/events`; security seal reflects live ALLOW/ASK/DENY decisions; telemetry-raised activity respects the "resources never claim a cognitive state" contract |
-| UI orchestrator | IMPLEMENTED | `core/crates/james-ui` projects real bus state (task/security/ai/plan/telemetry) into declarative `UiIntent`; publishes `ui.intent` and serves `GET /api/v1/ui/intent`; 8 unit tests + 2 API endpoint tests pass; live smoke test returns a real idle snapshot |
+| Void renderer | IMPLEMENTED | Black/gold renderer (`ui/void`) with Canvas Brain, chat, dashboard tabs, drawer, API and WebSocket wiring; 18-brain-state fabric; consumes orchestrator `ui.intent` over `/ws/v1/events`; security seal reflects live ALLOW/ASK/DENY decisions; telemetry-raised activity respects the "resources never claim a cognitive state" contract |
+| UI orchestrator | IMPLEMENTED | `runtime/core/crates/james-ui` projects real bus state (task/security/ai/plan/telemetry) into declarative `UiIntent`; publishes `ui.intent` and serves `GET /api/v1/ui/intent`; 8 unit tests + 2 API endpoint tests pass; live smoke test returns a real idle snapshot |
 | 2-way Void socket | IMPLEMENTED | `/ws/v1/void` routes `void.action` through CapabilityBroker (PlatformCapabilityExecutor with 27 capabilities); `void.action_result`/`void.action_error` events flow back; broker wired with PlatformCapabilityExecutor; audit via existing broker event publishing |
 | Semantic motion profiles | IMPLEMENTED | 16 state-specific flows (LISTENING input→core, THINKING core↔reason, EXECUTING core→cap→browser→output, VERIFYING output→verify→core, SECURITY_LOCK ring, ERROR isolation, RECOVERING reconnection); state-specific core pulse; active-zone filtering; prefers-reduced-motion respected |
 | Context priority motion | IMPLEMENTED | BACKGROUND→NORMAL→IMPORTANT→URGENT→CRITICAL with position/size/duration semantics; pulseGlow for unresolved, fadeOut for momentary |
@@ -111,7 +111,7 @@ Acceptance: no registered capability silently points to a missing implementation
 
 ### P0.5 Usable Void surface
 
-The first renderer is implemented under `interfaces/void` with:
+The first renderer is implemented under `ui/void` with:
 
 - chat input/output
 - Core/module/capability health projections
