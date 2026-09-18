@@ -759,7 +759,7 @@ impl JamesAssembly {
             "tasks_pending": pending,
             "tasks_running": running,
             "tasks_completed": completed,
-            "agents": 0,
+            "agents": self.agent_registry.list().len(),
             "events_observed": observed,
             "events_dropped": self.event_bus.dropped_count(),
             "preview_unauthenticated": true,
