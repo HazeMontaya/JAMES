@@ -105,6 +105,8 @@ pub struct Agent {
     tasks: Arc<TaskManager>,
     executors: Arc<DashMap<String, Arc<dyn CapabilityExecutor>>>,
     resolver: Arc<CapabilityResolver>,
+    /// Optional assembly-wide resolver kept separate so local registrations remain local.
+    shared_resolver: Option<Arc<CapabilityResolver>>,
     current_plan: Arc<RwLock<Option<Plan>>>,
     step_results: Arc<RwLock<IndexMap<String, CapabilityOutcome>>>,
     metrics: Arc<RwLock<AgentMetrics>>,
@@ -143,6 +145,7 @@ impl Agent {
             tasks,
             executors: Arc::new(DashMap::new()),
             resolver: Arc::new(CapabilityResolver::new()),
+            shared_resolver: None,
             current_plan: Arc::new(RwLock::new(None)),
             step_results: Arc::new(RwLock::new(IndexMap::new())),
             metrics: Arc::new(RwLock::new(AgentMetrics::default())),
@@ -161,7 +164,14 @@ impl Agent {
 
     /// Attach a shared capability resolver. Its candidates are merged into the
     /// agent's resolver; the agent's own registrations are layered underneath.
-    pub fn attach_resolver(&self, resolver: Arc<CapabilityResolver>) {
+    pub fn attach_resolver(&mut self, resolver: Arc<CapabilityResolver>) {
+        self.shared_resolver = Some(resolver.clone());
+        self.sync_shared_resolver(&resolver);
+    }
+
+    /// Refresh shared candidates before execution so long-lived agents observe
+    /// runtime provider registration and availability changes.
+    fn sync_shared_resolver(&self, resolver: &CapabilityResolver) {
         for id in resolver.ids() {
             for candidate in resolver.candidates(&id) {
                 self.resolver.register_or_replace(candidate);
@@ -302,6 +312,10 @@ impl Agent {
 
     /// Execute a single plan step
     async fn execute_step(&self, plan: &Plan, step: &PlanStep) -> Result<CapabilityOutcome, AgentError> {
+        if let Some(shared) = &self.shared_resolver {
+            self.sync_shared_resolver(shared);
+        }
+
         debug!("Agent {} executing step {}: {}", self.config.id, step.id, step.capability_id);
 
         // Resolve executor via the capability resolver; fall back to the
@@ -610,7 +624,7 @@ impl AgentFactory {
         self.shared_resolver = Some(resolver);
     }
 
-    fn finish_agent(&self, agent: Agent) -> Agent {
+    fn finish_agent(&self, mut agent: Agent) -> Agent {
         if let Some(resolver) = &self.shared_resolver {
             agent.attach_resolver(resolver.clone());
         }
