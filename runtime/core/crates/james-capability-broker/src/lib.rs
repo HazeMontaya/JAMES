@@ -841,35 +841,33 @@ impl CapabilityBroker {
     /// Validate and consume an approved confirmation.
     async fn validate_confirmation(&self, request: &CapabilityRequestV2) -> Result<()> {
         let c = &request.confirmation_context;
-        if !c.required { return Ok(()); }
-        if c.confirmation_id.as_deref().filter(|v| !v.trim().is_empty()).is_none() {
-            self.audit_v2("audit.capability.confirmation_invalid", request, None).await;
-            return Err(BrokerError::ConfirmationBindingFailed {
+        if !c.required {
+            return Ok(());
+        }
+        let confirmation_id = c.confirmation_id.as_deref().filter(|v| !v.trim().is_empty()).ok_or_else(|| {
+            BrokerError::ConfirmationBindingFailed {
                 capability: request.capability_id.clone(),
                 detail: "confirmation id missing".into(),
-            }.into());
-        }
+            }
+        })?;
+
         if c.expires_at.map(|e| e <= Utc::now()).unwrap_or(true) {
-            self.audit_v2("audit.capability.confirmation_invalid", request, None).await;
             return Err(BrokerError::ConfirmationBindingFailed {
                 capability: request.capability_id.clone(),
                 detail: "confirmation expired or missing expiry".into(),
             }.into());
         }
-        if c.caller_identity.as_ref().is_some_and(|v| v != &request.caller_identity) {
-            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "caller identity mismatch".into() }.into());
-        }
-        if c.capability_id.as_ref().is_some_and(|v| v != &request.capability_id) {
-            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "capability mismatch".into() }.into());
-        }
-        if c.target.is_some() && c.target != request.target {
-            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "target mismatch".into() }.into());
-        }
-        if c.scope.is_some() && c.scope != request.scope {
-            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "scope mismatch".into() }.into());
+        if c.caller_identity.as_ref().is_some_and(|v| v != &request.caller_identity)
+            || c.capability_id.as_ref().is_some_and(|v| v != &request.capability_id)
+            || (c.target.is_some() && c.target != request.target)
+            || (c.scope.is_some() && c.scope != request.scope)
+        {
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: request.capability_id.clone(),
+                detail: "confirmation context binding mismatch".into(),
+            }.into());
         }
 
-        let confirmation_id = c.confirmation_id.as_deref().unwrap();
         let pending = {
             let _guard = self.confirmation_lock.lock().await;
             let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
@@ -878,12 +876,14 @@ impl CapabilityBroker {
                     detail: "confirmation not found, rejected, or already consumed".into(),
                 }
             })?;
+
             if pending.request_id != request.request_id
                 || pending.caller_identity != request.caller_identity
                 || pending.capability_id != request.capability_id
                 || pending.target != request.target
                 || pending.scope != request.scope
-                || !pending.approved {
+                || !pending.approved
+            {
                 return Err(BrokerError::ConfirmationBindingFailed {
                     capability: request.capability_id.clone(),
                     detail: "confirmation binding mismatch or approval missing".into(),
@@ -893,46 +893,29 @@ impl CapabilityBroker {
                 let expired = pending.clone();
                 drop(pending);
                 self.confirmations.remove(confirmation_id);
-                self.audit_confirmation("audit.capability.confirmation_expired", &expired, &request.caller_identity).await;
+                self.audit_confirmation(
+                    "audit.capability.confirmation_expired",
+                    &expired,
+                    &request.caller_identity,
+                ).await;
                 return Err(BrokerError::ConfirmationBindingFailed {
                     capability: request.capability_id.clone(),
                     detail: "confirmation expired".into(),
                 }.into());
             }
-            let pending = pending.clone();
+
+            let consumed = pending.clone();
             drop(pending);
             self.confirmations.remove(confirmation_id);
-            pending
+            consumed
         };
-            BrokerError::ConfirmationBindingFailed {
-                capability: request.capability_id.clone(),
-                detail: "confirmation not found, rejected, or already consumed".into(),
-            }
-        })?;
-        if pending.request_id != request.request_id
-            || pending.caller_identity != request.caller_identity
-            || pending.capability_id != request.capability_id
-            || pending.target != request.target
-            || pending.scope != request.scope
-            || !pending.approved
-        {
-            return Err(BrokerError::ConfirmationBindingFailed {
-                capability: request.capability_id.clone(),
-                detail: "confirmation binding mismatch or approval missing".into(),
-            }.into());
-        }
-        if pending.expires_at <= Utc::now() {
-            self.audit_confirmation("audit.capability.confirmation_expired", &pending, &request.caller_identity).await;
-            drop(pending);
-            self.confirmations.remove(confirmation_id);
-            return Err(BrokerError::ConfirmationBindingFailed {
-                capability: request.capability_id.clone(),
-                detail: "confirmation expired".into(),
-            }.into());
-        }
-        drop(pending);
-        self.confirmations.remove(confirmation_id);
+
         self.audit_v2("audit.capability.confirmation_consumed", request, None).await;
+        self.audit_confirmation(
+            "audit.capability.confirmation_consumed",
+            &pending,
+            &request.caller_identity,
+        ).await;
         Ok(())
     }
 
