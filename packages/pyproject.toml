@@ -17,15 +17,15 @@ dependencies = []
 
 [tool.uv.workspace]
 members = [
-    "packages/james-core",
-    "packages/james-memory",
-    "packages/james-skills",
-    "packages/james-world",
-    "packages/james-voice",
-    "packages/james-face",
-    "packages/james-hands",
-    "packages/james-bootstrap",
-    "packages/james-cli",
+    "james-core",
+    "james-memory",
+    "james-skills",
+    "james-world",
+    "james-voice",
+    "james-face",
+    "james-hands",
+    "james-bootstrap",
+    "james-cli",
 ]
 
 [tool.uv.sources]
