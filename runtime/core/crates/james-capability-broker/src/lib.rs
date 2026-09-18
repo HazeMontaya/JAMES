@@ -251,6 +251,17 @@ pub trait ResourceAdmission: Send + Sync {
     async fn admit(&self, request: &CapabilityRequestV2) -> Result<()>;
 }
 
+/// Optional semantic verification performed after schema validation and before
+/// a capability result is exposed to the rest of the runtime.
+#[async_trait]
+pub trait SemanticVerifier: Send + Sync {
+    async fn verify(
+        &self,
+        request: &CapabilityRequestV2,
+        output: &serde_json::Value,
+    ) -> Result<()>;
+}
+
 /// The Capability Broker — the single gate every action must pass.
 pub struct CapabilityBroker {
     registry: Arc<CapabilityRegistry>,
@@ -264,6 +275,7 @@ pub struct CapabilityBroker {
     /// outputs that passed verification but the caller may still read
     verified_cache: DashMap<String, serde_json::Value>,
     resource_admission: Option<Arc<dyn ResourceAdmission>>,
+    semantic_verifier: Option<Arc<dyn SemanticVerifier>>,
 }
 
 impl CapabilityBroker {
@@ -276,6 +288,7 @@ impl CapabilityBroker {
             audit_enabled: true,
             verified_cache: DashMap::new(),
             resource_admission: None,
+            semantic_verifier: None,
         }
     }
 
@@ -291,6 +304,11 @@ impl CapabilityBroker {
 
     pub fn with_resource_admission(mut self, admission: Arc<dyn ResourceAdmission>) -> Self {
         self.resource_admission = Some(admission);
+        self
+    }
+
+    pub fn with_semantic_verifier(mut self, verifier: Arc<dyn SemanticVerifier>) -> Self {
+        self.semantic_verifier = Some(verifier);
         self
     }
 
@@ -481,40 +499,79 @@ impl CapabilityBroker {
     }
 
     /// Preferred structured execution entry point for new runtime code.
-    pub async fn execute_v2(&self, request: CapabilityRequestV2, executor: &dyn CapabilityExecutor) -> Result<CapabilityOutcomeV2> {
+    ///
+    /// This is the canonical execution path. It deliberately does not call
+    /// the legacy broker so every v2 request traverses one explicit sequence:
+    /// availability → permission → input → policy → confirmation →
+    /// resources → executor → output → semantic verification → usage/audit.
+    pub async fn execute_v2(
+        &self,
+        request: CapabilityRequestV2,
+        executor: &dyn CapabilityExecutor,
+    ) -> Result<CapabilityOutcomeV2> {
         let started = Instant::now();
-        if let Some(timeout) = request.effective_timeout() {
-            if timeout.is_zero() {
-                self.audit_v2("audit.capability.deadline_exceeded", &request, None).await;
-                return Err(BrokerError::ExecutionFailed { capability: request.capability_id.clone(), detail: "request deadline/timeout already expired".to_string() }.into());
+
+        if request.effective_timeout().is_some_and(|timeout| timeout.is_zero()) {
+            self.audit_v2("audit.capability.deadline_exceeded", &request, None).await;
+            return Err(BrokerError::ExecutionFailed {
+                capability: request.capability_id.clone(),
+                detail: "request deadline/timeout already expired".to_string(),
+            }.into());
+        }
+
+        let registered = self.registry.get(&request.capability_id).ok_or_else(|| {
+            BrokerError::CapabilityUnavailable(request.capability_id.clone())
+        })?;
+        if registered.status != CapabilityStatus::Available {
+            return Err(BrokerError::CapabilityUnavailable(request.capability_id.clone()).into());
+        }
+        let definition = registered.definition;
+
+        for perm in &definition.required_permissions {
+            let granted = self.grants.get(&request.caller_identity)
+                .map(|e| e.contains(perm))
+                .unwrap_or(false);
+            if !granted {
+                self.audit_v2("audit.capability.permission_denied", &request, None).await;
+                return Err(BrokerError::PermissionDenied {
+                    caller: request.caller_identity.clone(),
+                    permission: perm.clone(),
+                    capability: request.capability_id.clone(),
+                }.into());
             }
         }
 
+        if let Err(e) = self.registry.validate_input(&request.capability_id, &request.input) {
+            self.audit_v2("audit.capability.invalid_input", &request, None).await;
+            return Err(BrokerError::InputValidationFailed {
+                capability: request.capability_id.clone(),
+                detail: e.to_string(),
+            }.into());
+        }
+
         self.validate_confirmation(&request).await?;
-        let legacy = request.legacy();
-        let decision = self.decide(&legacy).await?;
+
+        let decision = self.decide_v2(&request).await?;
         match &decision {
             PolicyDecision::Allow => {}
             PolicyDecision::Deny(reason) => {
                 self.audit_v2("audit.capability.policy_denied", &request, None).await;
-                return Err(BrokerError::PolicyDenied(request.capability_id.clone(), reason.clone()).into());
+                return Err(BrokerError::PolicyDenied(
+                    request.capability_id.clone(), reason.clone()
+                ).into());
             }
             PolicyDecision::Ask => {
                 self.audit_v2("audit.capability.confirmation_required", &request, None).await;
-                return Err(BrokerError::ConfirmationRequired(request.capability_id.clone()).into());
+                return Err(BrokerError::ConfirmationRequired(
+                    request.capability_id.clone()
+                ).into());
             }
             PolicyDecision::Conditional(condition) => {
                 self.audit_v2("audit.capability.conditional", &request, None).await;
-                return Err(BrokerError::PolicyDenied(request.capability_id.clone(), format!("condition not satisfied: {condition}")).into());
-            }
-        }
-
-        if request.confirmation_context.required {
-            let valid = request.confirmation_context.confirmation_id.is_some()
-                && request.confirmation_context.expires_at.map(|e| e > Utc::now()).unwrap_or(false);
-            if !valid {
-                self.audit_v2("audit.capability.confirmation_required", &request, None).await;
-                return Err(BrokerError::ConfirmationRequired(request.capability_id.clone()).into());
+                return Err(BrokerError::PolicyDenied(
+                    request.capability_id.clone(),
+                    format!("condition not satisfied: {condition}"),
+                ).into());
             }
         }
 
@@ -528,30 +585,56 @@ impl CapabilityBroker {
             }
         }
 
-        let execution = async { self.execute(legacy, executor).await };
-        let outcome = match request.effective_timeout() {
-            Some(timeout) => tokio::time::timeout(timeout, execution).await.map_err(|_| BrokerError::ExecutionFailed {
-                capability: request.capability_id.clone(), detail: "request timeout exceeded".to_string()
-            })??,
-            None => execution.await?,
+        let execution = executor.execute(&request.capability_id, request.input.clone());
+        let output = match request.effective_timeout() {
+            Some(timeout) => tokio::time::timeout(timeout, execution).await
+                .map_err(|_| BrokerError::ExecutionFailed {
+                    capability: request.capability_id.clone(),
+                    detail: "request timeout exceeded".to_string(),
+                })??,
+            None => execution.await.map_err(|e| BrokerError::ExecutionFailed {
+                capability: request.capability_id.clone(),
+                detail: e.to_string(),
+            })?,
         };
 
-        self.audit_v2("audit.capability.executed.v2", &request, outcome.output.as_ref()).await;
+        if let Err(e) = self.registry.validate_output(&request.capability_id, &output) {
+            self.audit_v2("audit.capability.invalid_output", &request, Some(&output)).await;
+            return Err(BrokerError::OutputValidationFailed {
+                capability: request.capability_id.clone(),
+                detail: e.to_string(),
+            }.into());
+        }
+
+        if let Some(verifier) = &self.semantic_verifier {
+            if let Err(e) = verifier.verify(&request, &output).await {
+                self.audit_v2("audit.capability.semantic_verification_failed", &request, Some(&output)).await;
+                return Err(BrokerError::OutputValidationFailed {
+                    capability: request.capability_id.clone(),
+                    detail: format!("semantic verification failed: {e}"),
+                }.into());
+            }
+        }
+
+        self.registry.record_usage(&request.capability_id).ok();
+        self.verified_cache.insert(request.request_id.clone(), output.clone());
+        self.audit_v2("audit.capability.executed.v2", &request, Some(&output)).await;
+
         Ok(CapabilityOutcomeV2 {
             request_id: request.request_id,
             correlation_id: request.correlation_id,
             causation_id: request.causation_id,
             caller_identity: request.caller_identity,
             capability_id: request.capability_id,
-            allowed: outcome.allowed,
-            decision: outcome.decision,
-            executed: outcome.executed,
-            output: outcome.output,
-            input_verified: outcome.input_verified,
-            output_verified: outcome.output_verified,
+            allowed: true,
+            decision,
+            executed: true,
+            output: Some(output),
+            input_verified: true,
+            output_verified: true,
             duration_ms: started.elapsed().as_millis() as u64,
-            reason: outcome.reason,
-            audited: outcome.audited,
+            reason: None,
+            audited: self.audit_enabled,
         })
     }
 
