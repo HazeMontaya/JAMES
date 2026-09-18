@@ -83,21 +83,45 @@ class GoldenPathWorkflow(Workflow):
         steps.append(f"understood:{task}")
 
         # THINKING / PLANNING
+        goal_id = f"gp-{len(self.visited)}"
+        route_request = self.runtime._to_routing_request(
+            __import__("james_runtime.core.requests", fromlist=["CompletionRequest"]).CompletionRequest(
+                model=model,
+                messages=[{"role": "user", "content": input_text}],
+                max_tokens=256,
+            )
+        )
+        route_request.agent_id = agent_id
+        route_request.goal_id = goal_id
+        decision = await self.runtime.route_model(route_request)
+        selected_model = decision["model_id"]
+
         plan = [
             {"step": 1, "action": f"classify task ({task})", "status": "done"},
-            {"step": 2, "action": "delegate to agent with tools", "status": "pending"},
-            {"step": 3, "action": "verify output", "status": "pending"},
+            {"step": 2, "action": f"route to {selected_model}", "status": "done"},
+            {"step": 3, "action": "delegate to agent with tools", "status": "pending"},
+            {"step": 4, "action": "verify output", "status": "pending"},
         ]
-        self._emit("THINKING", {"plan": plan})
+        self._emit("THINKING", {"plan": plan, "goal_id": goal_id})
         await asyncio.sleep(0.05)
-        self._emit("PLANNING", {"plan": plan})
+        self._emit("PLANNING", {
+            "plan": plan,
+            "goal_id": goal_id,
+            "routing": decision,
+        })
         steps.append(f"planned:{len(plan)}_steps")
+        steps.append(f"routed:{selected_model}")
 
         # EXECUTING
-        self._emit("EXECUTING", {"agent": agent_id, "model": model})
+        self._emit("EXECUTING", {
+            "agent": agent_id,
+            "model": selected_model,
+            "requested_model": model,
+            "goal_id": goal_id,
+        })
         result = await self.agents.run(
-            input_text, agent_id=agent_id, model=model, max_steps=max_steps,
-            goal_id=f"gp-{len(self.visited)}",
+            input_text, agent_id=agent_id, model=selected_model, max_steps=max_steps,
+            goal_id=goal_id,
         )
         steps.append(f"executed:{result.tool_calls}_tools")
 
