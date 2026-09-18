@@ -33,7 +33,7 @@ class FinancialCortexService:
         })
         result = await self.router.forecast(request)
         verification = verify_forecast(result)
-        await self._emit("FORECAST_VERIFIED", correlation_id, {"
+        await self._emit("FORECAST_VERIFIED", correlation_id, {
             "request_id": result.request_id, "valid": verification.valid,
             "checks": verification.checks, "errors": verification.errors,
         })
