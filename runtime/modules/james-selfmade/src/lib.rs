@@ -96,6 +96,13 @@ pub struct EvolutionCycle {
 #[async_trait::async_trait]
 pub trait DevelopmentAgent: Send + Sync {
     async fn propose(&self, context: &str) -> Result<EvolutionProposal>;
+
+    /// Generate a unified diff for the isolated workspace. The runtime still
+    /// validates, applies, tests and rolls back the patch; the agent has no
+    /// canonical-repository authority.
+    async fn generate_patch(&self, _context: &str) -> Result<String> {
+        bail!("development agent does not implement patch generation")
+    }
 }
 
 pub struct SelfMadeModule {
@@ -398,6 +405,37 @@ impl SelfMadeModule {
             "promotion_allowed": false
         })).await;
         Ok(proposal)
+    }
+
+    /// Turn a bounded evolution cycle into an actual source change inside the
+    /// isolated worktree, then verify it. This is the first real self-development
+    /// path: model proposes code, runtime owns application and verification.
+    pub async fn develop_cycle(
+        &self,
+        cycle: &EvolutionCycle,
+        agent: &dyn DevelopmentAgent,
+    ) -> Result<VerificationReport> {
+        let context = serde_json::to_string_pretty(cycle)?;
+        self.emit("selfmade.patch.generation.started", serde_json::json!({
+            "cycle_id": cycle.id,
+            "objective": cycle.objective
+        })).await;
+        let patch = agent.generate_patch(&context).await?;
+        if patch.trim().is_empty() {
+            bail!("development agent returned an empty patch");
+        }
+        let proposal = ChangeProposal {
+            id: Uuid::now_v7().to_string(),
+            mission_id: cycle.mission.id.clone(),
+            objective: cycle.objective.clone(),
+            patch,
+            created_at: Utc::now(),
+        };
+        self.emit("selfmade.patch.created", serde_json::json!({
+            "cycle_id": cycle.id,
+            "proposal_id": proposal.id
+        })).await;
+        self.apply_proposal(&proposal).await
     }
 
     pub fn new_mission(&self, objective: impl Into<String>) -> DevelopmentMission {
