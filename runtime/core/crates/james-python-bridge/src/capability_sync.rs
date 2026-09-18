@@ -69,6 +69,13 @@ impl CapabilitySync {
             _ => CapabilityCategory::Custom(cap_info.category.clone()),
         };
 
+        let risk_level = match cap_info.risk_level.to_ascii_lowercase().as_str() {
+            "critical" => RiskLevel::Critical,
+            "high" => RiskLevel::High,
+            "medium" => RiskLevel::Medium,
+            _ => RiskLevel::Low,
+        };
+
         CapabilityDefinition {
             id: cap_info.id.clone(),
             name: cap_info.name.clone(),
@@ -76,7 +83,7 @@ impl CapabilitySync {
             version: cap_info.version.clone(),
             provider: "python".to_string(),
             description: cap_info.description.clone(),
-            risk_level: RiskLevel::Low, // Default; could be derived from tags
+            risk_level,
             required_permissions: cap_info.required_permissions.clone(),
             dependencies: vec![],
             input_schema: cap_info.input_schema.clone(),
