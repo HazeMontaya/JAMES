@@ -8,6 +8,7 @@ as remotely executable capabilities and publishes capability metadata.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -49,6 +50,10 @@ class NatsCapabilityBridge:
     def health_subject(self) -> str:
         return f"{self.subject_prefix}.health"
 
+    @property
+    def list_subject(self) -> str:
+        return f"{self.subject_prefix}.capability.list"
+
     @staticmethod
     def _category(tool_name: str) -> str:
         if tool_name.startswith("file_"):
@@ -86,6 +91,7 @@ class NatsCapabilityBridge:
 
         await self.client.subscribe(self.execute_subject, cb=self._handle_execute)
         await self.client.subscribe(self.health_subject, cb=self._handle_health)
+        await self.client.subscribe(self.list_subject, cb=self._handle_list)
 
         for tool in self.registry.list_tools():
             await self._register(tool)
@@ -101,7 +107,7 @@ class NatsCapabilityBridge:
         payload = self._capability_info(tool)
         await self.client.publish(
             self.register_subject,
-            __import__("json").dumps(payload).encode("utf-8"),
+            json.dumps(payload).encode("utf-8"),
         )
 
     async def register_tool(self, tool: Any) -> None:
@@ -157,9 +163,13 @@ class NatsCapabilityBridge:
             }
             await self.client.publish(msg.reply, json.dumps(response).encode("utf-8"))
 
-    async def _handle_health(self, msg: Any) -> None:
-        import json
+    async def _handle_list(self, msg: Any) -> None:
+        if not msg.reply:
+            return
+        payload = {"capabilities": [tool.name for tool in self.registry.list_tools()]}
+        await self.client.publish(msg.reply, json.dumps(payload).encode("utf-8"))
 
+    async def _handle_health(self, msg: Any) -> None:
         if not msg.reply:
             return
         payload = {
