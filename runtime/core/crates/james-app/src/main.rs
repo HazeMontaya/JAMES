@@ -410,6 +410,30 @@ async fn main() -> Result<()> {
     for cap in &python_caps {
         agent_service.register_python_executor(cap.id.clone(), python_executor.clone());
     }
+
+    // Keep the shared registry and resolver synchronized when the Python
+    // sidecar starts after the Rust app or reconnects to NATS.
+    let sync_service = agent_service.clone();
+    let sync_nats = python_nats.clone();
+    let sync_registry = capability_registry.clone();
+    let sync_bus = event_bus.clone();
+    let sync_executor = python_executor.clone();
+    let sync_config = PythonBridgeConfig::load().unwrap_or_default();
+    let _python_sync_task = tokio::spawn(async move {
+        let sync = CapabilitySync::new(sync_config, sync_registry, Some(sync_bus));
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
+        loop {
+            interval.tick().await;
+            let caps = sync_nats.list_python_capabilities().await;
+            if let Err(error) = sync.sync_all(&caps).await {
+                tracing::warn!("Python capability sync failed: {}", error);
+                continue;
+            }
+            for cap in caps {
+                sync_service.register_python_executor(cap.id, sync_executor.clone());
+            }
+        }
+    });
     agent_service.executor.attach_resolver(shared_resolver.clone());
     info!(
         "{} Agent service ready: {} platform capabilities resolvable",
