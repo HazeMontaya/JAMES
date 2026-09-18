@@ -215,6 +215,15 @@ impl CapabilityExecutor for SelfMadeCapabilityExecutor {
                 serde_json::to_value(self.selfmade.assess_evolution(objective).await?)
                     .map_err(Into::into)
             }
+            "selfmade.verify" => {
+                let workspace = self.selfmade.ensure_workspace().await?;
+                let report = self.selfmade.verify_workspace_public(&workspace).await?;
+                serde_json::to_value(report).map_err(Into::into)
+            }
+            "selfmade.rollback" => {
+                let result = self.selfmade.rollback_workspace().await?;
+                Ok(result)
+            }
             _ => anyhow::bail!("selfmade capability is not executable through this adapter: {capability_id}"),
         }
     }
@@ -502,7 +511,7 @@ impl JamesAssembly {
     /// resolve honestly to "no candidate".
     pub fn register_resolver_candidates(&self) {
         let selfmade_executor: Arc<dyn CapabilityExecutor> =
-            Arc::new(SelfMadeCapabilityExecutor { selfmade: self.selfmade.clone() });
+            Arc::new(SelfMadeCapabilityExecutor { selfmade: self.selfmade.clone(), ai: self.ai.clone() });
         self.resolver.register(ExecutorCandidate {
             capability_id: "selfmade.observe".to_string(),
             provider: "james-selfmade".to_string(),
@@ -527,6 +536,24 @@ impl JamesAssembly {
             priority: 10,
             available: true,
             capabilities: vec!["selfmade.assess".to_string()],
+            health: None,
+            executor: selfmade_executor,
+        });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.verify".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.verify".to_string()],
+            health: None,
+            executor: selfmade_executor.clone(),
+        });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.rollback".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.rollback".to_string()],
             health: None,
             executor: selfmade_executor,
         });
