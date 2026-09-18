@@ -506,16 +506,21 @@ impl JamesAssembly {
         let core_tasks = Arc::new(james_tasks_core::TaskManager::new(Some(event_bus.clone())));
         let executor_registry = Arc::new(james_agents::ExecutorRegistry::with_provider("james-assembly"));
         let resolver = Arc::new(CapabilityResolver::new());
+        let mut agent_factory = james_agents::AgentFactory::new(
+            event_bus.clone(),
+            capability_registry.clone(),
+            broker.clone(),
+            identity_registry,
+            memory.clone(),
+            core_tasks,
+            executor_registry,
+        );
+        // Built-in typed agents (researcher/coder/browser) must use the same
+        // live resolver as direct intent execution; otherwise their factory
+        // path would only see the empty legacy executor registry.
+        agent_factory.attach_resolver(resolver.clone());
         let agent_registry = Arc::new(james_agents::AgentRegistry::new(
-            Arc::new(james_agents::AgentFactory::new(
-                event_bus.clone(),
-                capability_registry.clone(),
-                broker.clone(),
-                identity_registry,
-                memory.clone(),
-                core_tasks,
-                executor_registry,
-            )),
+            Arc::new(agent_factory),
         ));
 
         Ok(Self {
