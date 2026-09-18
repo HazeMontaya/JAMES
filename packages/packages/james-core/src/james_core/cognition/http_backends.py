@@ -38,7 +38,10 @@ class OpenAICompatibleBackend(ModelBackend):
                 "temperature": temperature,
                 "max_tokens": max_tokens,
             }
-            url = f"{self._base_url}/v1/completions"
+            # OpenAI-compatible providers expose chat models through the
+            # chat-completions endpoint. Keep the payload compatible with
+            # vLLM, llama.cpp, Ollama-compatible gateways, and OpenAI.
+            url = f"{self._base_url}/v1/chat/completions"
 
         try:
             resp = await self._http.post(url, json=payload, headers=headers)
