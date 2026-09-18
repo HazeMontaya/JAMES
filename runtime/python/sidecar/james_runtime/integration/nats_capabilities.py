@@ -116,13 +116,11 @@ class NatsCapabilityBridge:
         if self.client.is_connected:
             await self._register(tool)
 
-    async def _handle_execute(self, msg: Any) -> None:
-        import json
-
+    async def _execute_request(self, payload: bytes) -> dict[str, Any]:
         started = time.perf_counter()
         request_id = ""
         try:
-            request = json.loads(msg.data.decode("utf-8"))
+            request = json.loads(payload.decode("utf-8"))
             request_id = str(request.get("request_id", ""))
             capability_id = str(request.get("capability_id", ""))
             caller = str(request.get("caller", "unknown"))
@@ -130,6 +128,8 @@ class NatsCapabilityBridge:
 
             if not request_id:
                 raise ValueError("missing request_id")
+            if not capability_id:
+                raise ValueError("missing capability_id")
             if not isinstance(args, dict):
                 raise ValueError("capability input must be a JSON object")
 
@@ -143,24 +143,26 @@ class NatsCapabilityBridge:
                 caller,
             )
             result = await self.registry.execute(capability_id, args)
-            success = bool(result.get("success"))
-            output: Any = result.get("output")
-            error = result.get("error")
-
-        except Exception as exc:
-            logger.exception("Python capability execution failed")
-            success = False
-            output = None
-            error = str(exc)
-
-        if msg.reply:
-            response = {
+            return {
                 "request_id": request_id,
-                "success": success,
-                "output": output,
-                "error": error,
+                "success": bool(result.get("success")),
+                "output": result.get("output"),
+                "error": result.get("error"),
                 "duration_ms": int((time.perf_counter() - started) * 1000),
             }
+        except Exception as exc:
+            logger.exception("Python capability execution failed")
+            return {
+                "request_id": request_id,
+                "success": False,
+                "output": None,
+                "error": str(exc),
+                "duration_ms": int((time.perf_counter() - started) * 1000),
+            }
+
+    async def _handle_execute(self, msg: Any) -> None:
+        response = await self._execute_request(msg.data)
+        if msg.reply:
             await self.client.publish(msg.reply, json.dumps(response).encode("utf-8"))
 
     async def _handle_list(self, msg: Any) -> None:
