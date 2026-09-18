@@ -576,7 +576,11 @@ impl CapabilityBroker {
             }.into());
         }
 
-        self.validate_confirmation(&request).await?;
+        // Only require/consume a confirmation when the request explicitly carries one.
+        // This lets low-risk capabilities execute without manufacturing confirmation state.
+        if request.confirmation_context.required {
+            self.validate_confirmation(&request).await?;
+        }
 
         let decision = self.decide_v2(&request).await?;
         match &decision {
