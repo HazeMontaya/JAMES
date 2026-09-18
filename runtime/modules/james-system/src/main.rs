@@ -218,6 +218,14 @@ async fn main() -> Result<()> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(false);
 
+    // Production fail-closed: enabling authentication without a configured
+    // credential must never silently fall back to an unauthenticated router.
+    if auth_enabled && !dev_mode && token_store.is_none() {
+        anyhow::bail!(
+            "JAMES API authentication is enabled but no bearer token is configured;              set JAMES_API_TOKEN (or JAMES_LOCALHOST_BEARER), or explicitly enable              JAMES_AUTH_DEV_MODE only for local development"
+        );
+    }
+
     let api_state = AppState {
         bus: event_bus,
         status: Arc::new(RwLock::new(james_events::CoreStatus::Running)),
