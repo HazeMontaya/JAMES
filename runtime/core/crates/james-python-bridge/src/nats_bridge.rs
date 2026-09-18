@@ -361,7 +361,42 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
 
     /// Get list of registered Python capabilities
     pub async fn list_python_capabilities(&self) -> Vec<PythonCapabilityInfo> {
-        self.python_capabilities.read().await.clone()
+        let cached = self.python_capabilities.read().await.clone();
+        let client = {
+            let guard = self.client.lock().await;
+            match guard.as_ref() {
+                Some(client) => client.clone(),
+                None => return cached,
+            }
+        };
+
+        let subject = subjects::capability_list(&self.config);
+        let response = match tokio::time::timeout(
+            Duration::from_secs(self.config.request_timeout_secs.min(10)),
+            client.request(subject, serde_json::json!({}).to_string().into()),
+        ).await {
+            Ok(Ok(message)) => message,
+            _ => return cached,
+        };
+
+        let names = match serde_json::from_slice::<serde_json::Value>(&response.payload)
+            .ok()
+            .and_then(|value| value.get("capabilities").cloned())
+            .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
+        {
+            Some(names) => names,
+            None => return cached,
+        };
+
+        let cached_by_id: std::collections::HashMap<_, _> =
+            cached.into_iter().map(|cap| (cap.id.clone(), cap)).collect();
+        let refreshed: Vec<_> = names
+            .into_iter()
+            .filter_map(|id| cached_by_id.get(&id).cloned())
+            .collect();
+
+        *self.python_capabilities.write().await = refreshed.clone();
+        refreshed
     }
 
     /// Shutdown the bridge
