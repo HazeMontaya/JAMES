@@ -259,16 +259,17 @@ class JamesRuntime:
                     f"{input_budget} input tokens remain",
                 )
         request_copy.runtime_hint = runtime_selection.engine_type.value
+        request_copy.model = routing_decision.model_id
         
         start_time = asyncio.get_event_loop().time()
         self._emit_event("INFERENCE_STARTED", {"request_id": request.request_id})
         
         try:
             if hasattr(request, 'stream') and request.stream:
-                return self._stream_with_tracking(engine, request, routing_decision, runtime_selection)
+                return self._stream_with_tracking(engine, request_copy, routing_decision, runtime_selection)
             else:
                 response = await asyncio.wait_for(
-                    engine.complete(request),
+                    engine.complete(request_copy),
                     timeout=request.max_tokens * 100 / 1000 if request.max_tokens else 30.0  # rough timeout
                 )
                 
@@ -354,25 +355,24 @@ class JamesRuntime:
     
     def _track_and_emit(self, response, routing_decision, duration_ms, engine="llamacpp"):
         """Track cost and emit events"""
-        # Simplified token counting
-        tokens_in = 100  # placeholder
-        tokens_out = 100  # placeholder
-        
+        usage = getattr(response, "usage", None) or {}
+        tokens_in = int(usage.get("prompt_tokens", usage.get("input_tokens", 0)) or 0)
+        tokens_out = int(usage.get("completion_tokens", usage.get("output_tokens", 0)) or 0)
         cost = self.pricing_registry.calculate_cost(
-            routing_decision.model_id, 100, 100
+            routing_decision.model_id, tokens_in, tokens_out
         )
-        
+
         self.cost_tracker.record_usage(
             model=routing_decision.model_id,
-            tokens_in=100,
-            tokens_out=100,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
             cost_usd=cost,
             engine=engine,
         )
-        
+
         self._emit_event("INFERENCE_COMPLETED", {
             "model_id": routing_decision.model_id,
-            "tokens_generated": 100,
+            "tokens_generated": tokens_out,
             "duration_ms": duration_ms,
             "cost_usd": float(cost),
         })
