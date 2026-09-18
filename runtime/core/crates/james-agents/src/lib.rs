@@ -415,44 +415,48 @@ impl Agent {
 
         debug!("Agent {} executing step {}: {}", self.config.id, step.id, step.capability_id);
 
-        // Resolve executor via the capability resolver; fall back to the
-        // legacy per-agent map (Block C resolution then broker enforcement).
-        let executor = self
-            .resolver
-            .resolve_executor(&step.capability_id, &ResolutionContext::default())
-            .or_else(|| self.executors.get(&step.capability_id).map(|e| e.clone()))
-            .ok_or_else(|| AgentError::ExecutorNotFound(step.capability_id.clone()))?;
-
-        // Prepare input with variable substitution
         let input = self.substitute_variables(&step.input, &plan.variables)?;
-
-        // The agent's allowed-capabilities list is the agent-level authorization
-        // boundary. Convert explicit entries into broker grants once per step;
-        // wildcard agents intentionally do not receive implicit grants.
         let caller = format!("agent:{}", self.config.id);
         if self.config.allowed_capabilities.iter().any(|cap| cap == &step.capability_id) {
             self.broker.grant_capability_permissions(caller.clone(), &step.capability_id);
         }
 
-        // All typed-agent execution now uses the structured v2 broker path.
-        // This preserves request/correlation metadata, confirmation binding,
-        // resource admission, semantic verification, deadlines/timeouts and
-        // the v2 audit trail instead of falling back to the legacy path.
         let request = CapabilityRequestV2 {
             requested_effect: Self::requested_effect_for(&step.capability_id),
             timeout_ms: Some(self.config.timeout_secs.saturating_mul(1000)),
             ..CapabilityRequestV2::new(caller, step.capability_id.clone(), input)
         };
 
-        // Honor the step's retry policy at the real Agent execution boundary.
-        // Permission/policy failures are not retried; transient infrastructure
-        // failures use bounded exponential backoff.
+        // Re-resolve on every attempt. A failed provider can therefore be
+        // removed from routing before the retry is executed.
         let mut attempt = 0u32;
         loop {
+            let resolution = self.resolver.resolve(&step.capability_id, &ResolutionContext::default());
+            let selected_provider = resolution.selected.as_ref().map(|c| c.provider.clone());
+            let executor = resolution.selected
+                .as_ref()
+                .map(|c| c.executor.clone())
+                .or_else(|| self.executors.get(&step.capability_id).map(|e| e.clone()))
+                .ok_or_else(|| AgentError::ExecutorNotFound(step.capability_id.clone()))?;
+
             match self.broker.execute_v2(request.clone(), executor.as_ref()).await {
-                Ok(outcome) => return Ok(Self::legacy_outcome(outcome)),
+                Ok(outcome) => {
+                    if let Some(provider) = selected_provider.as_deref() {
+                        self.resolver.set_provider_health(provider, ProviderHealth::Available);
+                    }
+                    return Ok(Self::legacy_outcome(outcome));
+                }
                 Err(error) => {
                     let message = error.to_string();
+                    if let Some(provider) = selected_provider.as_deref() {
+                        let health = if Self::provider_failure_is_transport_like(&message) {
+                            ProviderHealth::Unavailable
+                        } else {
+                            ProviderHealth::Degraded
+                        };
+                        self.resolver.set_provider_health(provider, health);
+                    }
+
                     let should_retry = Self::retry_condition_matches(&message, &step.retry_policy);
                     if !should_retry || attempt >= step.retry_policy.max_retries {
                         return Err(AgentError::BrokerError(message));
@@ -469,6 +473,7 @@ impl Agent {
                             "max_retries": step.retry_policy.max_retries,
                             "delay_ms": delay.as_millis() as u64,
                             "error": message,
+                            "provider": selected_provider,
                         }))).await?;
 
                     tokio::time::sleep(delay).await;
@@ -476,6 +481,17 @@ impl Agent {
             }
         }
     }
+
+
+fn provider_failure_is_transport_like(error: &str) -> bool {
+    let message = error.to_ascii_lowercase();
+    message.contains("timeout")
+        || message.contains("timed out")
+        || message.contains("connection")
+        || message.contains("transport")
+        || message.contains("network")
+        || message.contains("service unavailable")
+}
 
 fn retry_backoff(policy: &RetryPolicy, attempt: u32) -> std::time::Duration {
     let base = policy.base_delay_ms.max(1) as f64;
