@@ -127,8 +127,10 @@ impl MemoryModule {
         let path = Path::new(&self.config.database_path);
         if path.exists() {
             let raw = tokio::fs::read_to_string(path).await?;
-            let entries: Vec<MemoryEntry> = serde_json::from_str(&raw)?;
-            *self.entries.write().await = entries;
+            if !raw.trim().is_empty() {
+                let entries: Vec<MemoryEntry> = serde_json::from_str(&raw)?;
+                *self.entries.write().await = entries;
+            }
         }
         Ok(())
     }
