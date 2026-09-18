@@ -11,7 +11,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use james_agents::{
     AgentConfig, AiPlannerProvider, CapabilityResolver, ExecutorCandidate, HeuristicPlanner,
-    LlmPlanner, PlanExecutionResult, PlanExecutor, Planner, ResolutionContext, UserIntent,
+    LlmPlanner, PlanExecutionResult, PlanExecutor, ResolutionContext, UserIntent,
 };
 use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequestV2, RequestedEffect};
 use james_capabilities::CapabilityRegistry;
@@ -1142,11 +1142,14 @@ mod tests {
                 .resolve(capability_id, &ResolutionContext::default())
                 .selected
                 .unwrap_or_else(|| panic!("no candidate for {capability_id}"));
-            let outcome = assembly.broker().execute(
-                CapabilityRequest {
-                    caller: "test-agent".to_string(),
-                    capability_id: capability_id.to_string(),
-                    input: serde_json::json!({"limit": 10}),
+            let outcome = assembly.broker().execute_v2(
+                CapabilityRequestV2 {
+                    requested_effect: RequestedEffect::Read,
+                    ..CapabilityRequestV2::new(
+                        "test-agent",
+                        capability_id,
+                        serde_json::json!({"limit": 10}),
+                    )
                 },
                 candidate.executor.as_ref(),
             ).await.unwrap_or_else(|e| panic!("broker rejected {capability_id}: {e}"));
