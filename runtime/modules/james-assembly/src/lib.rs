@@ -13,7 +13,7 @@ use james_agents::{
     AgentConfig, AiPlannerProvider, CapabilityResolver, ExecutorCandidate, HeuristicPlanner,
     LlmPlanner, PlanExecutionResult, PlanExecutor, Planner, ResolutionContext, UserIntent,
 };
-use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequest};
+use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequestV2, RequestedEffect};
 use james_capabilities::CapabilityRegistry;
 use james_core::JamesCore;
 use james_events::{EventBus, EventEnvelope};
@@ -631,11 +631,14 @@ impl JamesAssembly {
         let candidate = outcome
             .selected
             .ok_or_else(|| anyhow::anyhow!("no executor candidate for memory.read"))?;
-        let broker_outcome = self.broker.execute(
-            CapabilityRequest {
-                caller: caller.into(),
-                capability_id: "memory.read".to_string(),
-                input: serde_json::json!({"limit": limit}),
+        let broker_outcome = self.broker.execute_v2(
+            CapabilityRequestV2 {
+                requested_effect: RequestedEffect::Read,
+                ..CapabilityRequestV2::new(
+                    caller.into(),
+                    "memory.read",
+                    serde_json::json!({"limit": limit}),
+                )
             },
             candidate.executor.as_ref(),
         ).await?;
@@ -663,11 +666,17 @@ impl JamesAssembly {
         }
         let candidate = self.resolver.resolve("void.chat", &ResolutionContext::preferring("james-void")).selected
             .ok_or_else(|| anyhow::anyhow!("no executor candidate for void.chat"))?;
-        let outcome = self.broker.execute(CapabilityRequest {
-            caller: "james-chat".to_string(),
-            capability_id: "void.chat".to_string(),
-            input: serde_json::json!({"message": trimmed}),
-        }, candidate.executor.as_ref()).await?;
+        let outcome = self.broker.execute_v2(
+            CapabilityRequestV2 {
+                requested_effect: RequestedEffect::Communicate,
+                ..CapabilityRequestV2::new(
+                    "james-chat",
+                    "void.chat",
+                    serde_json::json!({"message": trimmed}),
+                )
+            },
+            candidate.executor.as_ref(),
+        ).await?;
         let output = outcome.output.ok_or_else(|| anyhow::anyhow!("void.chat returned no output"))?;
         Ok(output.get("content").and_then(|v| v.as_str()).unwrap_or("I’m processing your request.").to_string())
     }
