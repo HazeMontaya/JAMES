@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use james_agents::UserIntent;
 use james_assembly::{AssemblyOptions, JamesAssembly};
-use james_app_api::{serve, AppState, AgentHandler, ChatHandler, DashboardProvider, DashboardSnapshot};
+use james_app_api::{serve, AppState, AgentHandler, ChatHandler, DashboardProvider, DashboardSnapshot, EnvTokenStore, TokenStore};
 use james_core::{CoreConfig, init_tracing, LogFields};
 use std::sync::Arc;
 use std::path::Path;
@@ -138,6 +138,30 @@ async fn main() -> Result<()> {
         });
     }
 
+    let token_store: Option<Arc<dyn TokenStore>> = if std::env::var("JAMES_LOCALHOST_BEARER")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .is_some()
+    {
+        Some(Arc::new(EnvTokenStore::new("JAMES_LOCALHOST_BEARER")))
+    } else if std::env::var("JAMES_API_TOKEN")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .is_some()
+    {
+        Some(Arc::new(EnvTokenStore::new("JAMES_API_TOKEN")))
+    } else {
+        None
+    };
+    let auth_enabled = std::env::var("JAMES_AUTH_ENABLED")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(true);
+    let dev_mode = std::env::var("JAMES_AUTH_DEV_MODE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(false);
+
     let api_state = AppState {
         bus: event_bus,
         status: Arc::new(RwLock::new(james_events::CoreStatus::Running)),
@@ -145,7 +169,7 @@ async fn main() -> Result<()> {
         started_at: chrono::Utc::now(),
         static_dir: void_static_dir(),
         dashboard: dashboard.clone(),
-        preview_unauthenticated: true,
+        preview_unauthenticated: token_store.is_none() && (!auth_enabled || dev_mode),
         chat_handler: Some(Arc::new(AssemblyChatHandler {
             assembly: assembly.clone(),
         })),
@@ -158,7 +182,7 @@ async fn main() -> Result<()> {
             assembly: assembly.clone(),
         })),
         intent: None,
-        token_store: None,
+        token_store,
     };
     let api_listener = tokio::net::TcpListener::bind(("127.0.0.1", 38241)).await?;
     let api_handle = tokio::spawn(serve(api_listener, api_state));
