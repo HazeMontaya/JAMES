@@ -19,10 +19,18 @@
       <span class="signal" id="conn-dot"></span><span id="connection-label">OFFLINE</span>
       <span class="runtime-separator"></span><span id="clock">--:--:--</span>
     </div>
-    <nav class="command-nav" aria-label="System controls">
-      <button class="nav-chip" data-action="toggle-events">EVENTS</button>
-      <button class="nav-chip" data-action="toggle-dashboard">SYSTEM</button>
-      <button class="nav-chip" data-action="toggle-settings">CONFIG</button>
+    <nav class="edge-nav edge-nav-left" aria-label="JAMES navigation">
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="overview">HOME</button>
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="tasks">MISSION</button>
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="agents">AGENTS</button>
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="memory">MEMORY</button>
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="devices">WORLD</button>
+    </nav>
+    <nav class="edge-nav edge-nav-right" aria-label="JAMES control navigation">
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="system">SYSTEM</button>
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="security">SECURITY</button>
+      <button class="nav-chip" data-action="toggle-dashboard" data-tab="ai">ECONOMY</button>
+      <button class="nav-chip" data-action="toggle-events">ACTIVITY</button>
       <button class="nav-chip accent" data-action="open-palette"><span>COMMAND</span><kbd>CTRL K</kbd></button>
     </nav>
   </header>
