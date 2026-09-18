@@ -379,26 +379,15 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
             _ => return cached,
         };
 
-        let names = match serde_json::from_slice::<serde_json::Value>(&response.payload)
+        let refreshed = serde_json::from_slice::<serde_json::Value>(&response.payload)
             .ok()
             .and_then(|value| value.get("capabilities").cloned())
-            .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
-        {
-            Some(names) => names,
-            None => return cached,
-        };
-
-        let cached_by_id: std::collections::HashMap<_, _> =
-            cached.into_iter().map(|cap| (cap.id.clone(), cap)).collect();
-        let refreshed: Vec<_> = names
-            .into_iter()
-            .filter_map(|id| cached_by_id.get(&id).cloned())
-            .collect();
+            .and_then(|value| serde_json::from_value::<Vec<PythonCapabilityInfo>>(value).ok())
+            .unwrap_or(cached);
 
         *self.python_capabilities.write().await = refreshed.clone();
         refreshed
     }
-
     /// Shutdown the bridge
     pub async fn shutdown(&self) {
         if let Some(tx) = self.shutdown_tx.lock().await.take() {
