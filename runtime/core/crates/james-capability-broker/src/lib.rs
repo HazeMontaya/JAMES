@@ -1383,6 +1383,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_confirmation_cannot_be_approved_twice() {
+        let reg = Arc::new(CapabilityRegistry::new());
+        let mut def = test_definition("file.write", vec!["file.write"]);
+        def.risk_level = RiskLevel::High;
+        reg.register(def, "test").await.unwrap();
+        let broker = Arc::new(CapabilityBroker::new(reg).without_audit());
+        broker.grant_capability_permissions("agent:test", "file.write");
+
+        let request = CapabilityRequestV2::new(
+            "agent:test",
+            "file.write",
+            serde_json::json!({"path":"workspace/a.txt","content":"x"}),
+        )
+        .with_target("workspace/a.txt")
+        .with_scope("workspace")
+        .with_confirmation_context(ConfirmationContext {
+            required: false,
+            confirmation_id: None,
+            expires_at: None,
+            caller_identity: None,
+            capability_id: None,
+            target: None,
+            scope: None,
+        });
+
+        let confirmation = broker.request_confirmation(&request).await.unwrap();
+        broker.approve_confirmation(&confirmation.confirmation_id, "human:1").await.unwrap();
+        let second = broker.approve_confirmation(&confirmation.confirmation_id, "human:2").await;
+        assert!(second.is_err());
+    }
+
+    #[tokio::test]
     async fn test_confirmation_cannot_be_reused_for_another_target() {
         let mut def = test_definition("file.write", vec!["file.write"]);
         def.risk_level = RiskLevel::High;
