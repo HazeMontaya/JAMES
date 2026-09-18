@@ -1,211 +1,135 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#070605">
-  <meta name="color-scheme" content="dark">
-  <title>JAMES / Void</title>
-  <link rel="stylesheet" href="style.css?v=2026.1">
-  <style>
-    /* Critical inline first paint: prevents a white flash before style.css arrives. */
-    html { background: #070605; color: #f2ead6; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<meta name="color-scheme" content="dark">
+<title>JAMES — Cognitive Runtime</title>
+<link rel="stylesheet" href="style.css?v=2026.2">
 </head>
 <body>
-  <div class="app-shell" id="app-shell">
-
-    <!-- ============ TOPBAR ============ -->
-    <header class="topbar" role="banner">
-      <a class="brand" href="#void" aria-label="JAMES home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="6.5" stroke="currentColor" stroke-width="1.4"/>
-            <circle cx="16" cy="16" r="1.6" fill="currentColor"/>
-            <path d="M2 16h6M24 16h6M16 2v6M16 24v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            <path d="M16 9.5a6.5 6.5 0 0 1 0 13M16 9.5a6.5 6.5 0 0 0 0 13" stroke="currentColor" stroke-width=".8" opacity=".55"/>
-          </svg>
-        </span>
-        <span class="brand-text"><strong>JAMES</strong><small>LOCAL INTELLIGENCE</small></span>
-      </a>
-
-      <div class="top-status">
-        <span class="status-dot" id="conn-dot" aria-hidden="true"></span>
-        <span id="connection-label">VERBINDUNG …</span>
-        <span class="divider" aria-hidden="true"></span>
-        <time id="clock">--:--:--</time>
-      </div>
-
-      <div class="top-actions">
-        <button class="icon-button" data-action="toggle-events" title="Ereignisprotokoll" aria-label="Ereignisprotokoll">
-          <svg viewBox="0 0 20 20" fill="none"><path d="M4 3h12v14H4zM7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.3"/></svg>
-        </button>
-        <button class="icon-button" data-action="toggle-dashboard" title="Dashboard" aria-label="Dashboard">
-          <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" stroke="currentColor" stroke-width="1.3"/><rect x="11" y="3" width="6" height="6" stroke="currentColor" stroke-width="1.3"/><rect x="3" y="11" width="6" height="6" stroke="currentColor" stroke-width="1.3"/><rect x="11" y="11" width="6" height="6" stroke="currentColor" stroke-width="1.3"/></svg>
-        </button>
-        <button class="icon-button" data-action="toggle-settings" title="Einstellungen" aria-label="Einstellungen">
-          <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2.6" stroke="currentColor" stroke-width="1.3"/><path d="M10 2.4v2M10 15.6v2M2.4 10h2M15.6 10h2M4.6 4.6l1.4 1.4M14 14l1.4 1.4M15.4 4.6L14 6M6 14l-1.4 1.4" stroke="currentColor" stroke-width="1.3"/></svg>
-        </button>
-        <button class="icon-button kbd-hint" data-action="open-palette" title="Befehlspalette (Strg+K)" aria-label="Befehlspalette">
-          <svg viewBox="0 0 20 20" fill="none"><path d="M3 6h14M6 10h8M8 14h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><span class="kbd">^K</span>
-        </button>
-      </div>
-    </header>
-
-    <!-- ============ VOID VIEW ============ -->
-    <main id="void-view" class="view active-view" data-view="void">
-
-      <section class="hero-stage" aria-label="JAMES Live Brain">
-        <div class="stage-head">
-          <div class="stage-kicker">
-            <span id="mode-label">VOID / JETZT</span>
-            <span class="live-pulse" id="live-pulse">LIVE ZUSTAND</span>
-          </div>
-          <div class="stage-clock" id="session-clock">--:--:--</div>
-        </div>
-
-        <canvas id="brain-canvas" aria-label="Animiertes JAMES Live Brain"></canvas>
-
-        <div class="brain-readout">
-          <span class="eyebrow">AKTUELLER ZUSTAND</span>
-          <h1 id="brain-state">IDLE</h1>
-          <p id="brain-detail">Ein ruhiges System, bereit zu denken.</p>
-          <div class="brain-zone" id="brain-zone">CORE</div>
-          <div class="brain-metrics">
-            <span><i class="dot gold"></i>AKTIVITÄT <b id="activity-value">--</b></span>
-            <span><i class="dot cool"></i>EREIGNISRATE <b id="event-rate">--</b></span>
-            <span><i class="dot white"></i>LAUTSTÄRKE <b id="signal-density">--</b></span>
-          </div>
-        </div>
-
-        <div class="orbit orbit-memory">
-          <span class="orbit-ring" aria-hidden="true"></span>
-          <label>MEMORY</label><b id="memory-count">--</b>
-        </div>
-        <div class="orbit orbit-task">
-          <span class="orbit-ring" aria-hidden="true"></span>
-          <label>TASKS</label><b id="task-count">--</b>
-        </div>
-        <div class="orbit orbit-capability">
-          <span class="orbit-ring" aria-hidden="true"></span>
-          <label>CAPABILITIES</label><b id="capability-count">--</b>
-        </div>
-
-        <div class="security-seal" id="security-seal" title="Security-Posture">
-          <svg viewBox="0 0 40 40" fill="none" aria-hidden="true">
-            <path d="M20 4l12 4v9c0 8-5 14-12 19C13 31 8 25 8 17V8z" stroke="currentColor" stroke-width="1.2"/>
-            <path d="M14 20l4 4 8-9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span id="security-label">LOOPBACK</span>
-        </div>
-      </section>
-
-      <!-- Context layer: dynamically prioritized by the relevance engine -->
-      <section class="intent-band" id="intent-band" aria-label="Intent-Steuerung">
-        <div class="intent-meta">
-          <span class="eyebrow">STEUERZENTRALE</span>
-          <span class="intent-mode" id="intent-mode">VOID / JETZT</span>
-          <span class="intent-focus" id="intent-focus">FOKUS BREIT</span>
-        </div>
-        <div class="intent-sections" id="intent-sections" aria-label="Sichtbare Bereiche"></div>
-        <div class="intent-actions" id="intent-actions" aria-label="Vorgeschlagene Aktionen"></div>
-      </section>
-
-      <section class="context-band" aria-label="Kontextlage">
-        <div class="context-head">
-          <span class="eyebrow">KONTEXTLAGE</span>
-          <span class="context-focus" id="context-focus">BREIT</span>
-        </div>
-        <div class="context-layer" id="context-layer"></div>
-      </section>
-
-      <section class="error-rail" id="error-rail" hidden aria-label="Störungen">
-        <div class="error-head"><span class="eyebrow">STÖRUNGEN &amp; BLOCKADEN</span><button class="text-action" data-action="clear-errors">Leeren</button></div>
-        <div id="error-feed"></div>
-      </section>
-
-      <section class="chat-dock" aria-label="Chat">
-        <div class="chat-history" id="chat-history" aria-live="polite"></div>
-        <div class="chat-status" id="chat-status"></div>
-        <form id="chat-form" class="chat-form" autocomplete="off">
-          <span class="input-prompt" aria-hidden="true">›</span>
-          <input id="chat-input" placeholder="Sprich mit JAMES …  ( /memory , Strg+K für Befehle)" aria-label="Nachricht an JAMES">
-          <button type="submit" class="send-button" aria-label="Senden" title="Senden">
-            <svg viewBox="0 0 20 20" fill="none"><path d="M4 10h11M11 5l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-        </form>
-      </section>
-    </main>
-
-    <!-- ============ DASHBOARD VIEW ============ -->
-    <main id="dashboard-view" class="view dashboard-view" data-view="dashboard" hidden>
-      <div class="dashboard-header">
-        <div>
-          <span class="eyebrow">OPERATION / JAMES-ZUSTAND</span>
-          <h1 id="dash-title">Übersicht</h1>
-        </div>
-        <button class="back-button" data-action="toggle-dashboard">← Zurück zum Void</button>
-      </div>
-
-      <div class="dashboard-layout">
-        <nav class="dashboard-nav" id="dash-nav" aria-label="Dashboard-Bereiche">
-          <button class="tab active" data-tab="overview">Übersicht</button>
-          <button class="tab" data-tab="chat">Chat</button>
-          <button class="tab" data-tab="tasks">Tasks</button>
-          <button class="tab" data-tab="memory">Memory</button>
-          <button class="tab" data-tab="modules">Module</button>
-          <button class="tab" data-tab="ai">AI</button>
-          <button class="tab" data-tab="agents">Agenten</button>
-          <button class="tab" data-tab="devices">Geräte</button>
-          <button class="tab" data-tab="capabilities">Capabilities</button>
-          <button class="tab" data-tab="events">Ereignisse</button>
-          <button class="tab" data-tab="automation">Automation</button>
-          <button class="tab" data-tab="system">System</button>
-          <button class="tab" data-tab="security">Security</button>
-          <button class="tab" data-tab="settings">Einstellungen</button>
-        </nav>
-        <section class="dash-content" id="dash-content" tabindex="0"></section>
-      </div>
-    </main>
-
-    <!-- ============ DRAWER / PANELS ============ -->
-    <aside id="drawer" class="drawer" aria-hidden="true">
-      <header class="drawer-head">
-        <span class="eyebrow" id="drawer-kicker">JAMES / KONTEXT</span>
-        <button class="drawer-close" data-action="close-drawer" aria-label="Schließen">×</button>
-      </header>
-      <div id="drawer-content"></div>
-    </aside>
-
-    <!-- ============ EVENTS PANEL ============ -->
-    <aside id="event-panel" class="drawer event-panel" aria-hidden="true">
-      <header class="drawer-head">
-        <span class="eyebrow">EREIGNISPROTOKOLL</span>
-        <button class="drawer-close" data-action="close-events" aria-label="Schließen">×</button>
-      </header>
-      <div class="event-list" id="event-list"></div>
-    </aside>
-
-    <!-- ============ COMMAND PALETTE ============ -->
-    <div id="palette" class="palette" aria-hidden="true">
-      <div class="palette-inner" role="dialog" aria-label="Befehlspalette">
-        <input id="palette-input" placeholder="Befehl suchen oder ausführen …" aria-label="Befehl suchen">
-        <div id="palette-results" class="palette-results"></div>
-        <footer class="palette-foot"><span>↵ ausführen</span><span>esc schließen</span></footer>
-      </div>
+<div id="app-shell" class="james-shell">
+  <header class="command-header">
+    <a class="identity" href="#void" aria-label="JAMES">
+      <span class="identity-glyph">J</span>
+      <span><strong>JAMES</strong><small>COGNITIVE RUNTIME</small></span>
+    </a>
+    <div class="runtime-strip">
+      <span class="signal" id="conn-dot"></span><span id="connection-label">OFFLINE</span>
+      <span class="runtime-separator"></span><span id="clock">--:--:--</span>
     </div>
+    <nav class="command-nav" aria-label="System controls">
+      <button class="nav-chip" data-action="toggle-events">EVENTS</button>
+      <button class="nav-chip" data-action="toggle-dashboard">SYSTEM</button>
+      <button class="nav-chip" data-action="toggle-settings">CONFIG</button>
+      <button class="nav-chip accent" data-action="open-palette"><span>COMMAND</span><kbd>CTRL K</kbd></button>
+    </nav>
+  </header>
 
-    <!-- ============ TOASTS ============ -->
-    <div id="toasts" class="toasts" aria-live="polite"></div>
+  <main id="void-view" class="void-view view active-view" data-view="void">
+    <section class="cognitive-field" aria-label="JAMES cognitive field">
+      <div class="field-grid" aria-hidden="true"></div>
+      <div class="field-header">
+        <div><span class="micro">LIVE COGNITION</span><span class="field-mode" id="mode-label">VOID / NOW</span></div>
+        <div class="session" id="session-clock">--:--:--</div>
+      </div>
 
-    <footer class="bottombar">
-      <span>JAMES INSTANZ / WINDOWS</span>
-      <span id="event-count">0 EREIGNISSE</span>
-      <span id="uptime">UPTIME --</span>
-      <span class="bottombar-meta"><i class="dot" id="foot-dot"></i><b id="foot-state">IDLE</b></span>
-    </footer>
+      <div class="brain-frame">
+        <div class="brain-aura aura-a"></div><div class="brain-aura aura-b"></div>
+        <canvas id="brain-canvas" aria-label="JAMES cognitive neural field"></canvas>
+        <div class="core-label">
+          <span class="micro">CURRENT STATE</span>
+          <h1 id="brain-state">IDLE</h1>
+          <p id="brain-detail">System ready.</p>
+          <span class="state-zone" id="brain-zone">CORE</span>
+        </div>
+        <div class="metric-cluster">
+          <div><span>ACTIVITY</span><b id="activity-value">--</b></div>
+          <div><span>EVENT RATE</span><b id="event-rate">--</b></div>
+          <div><span>SIGNAL DENSITY</span><b id="signal-density">--</b></div>
+        </div>
+        <div class="orbit-card memory"><i></i><span>MEMORY</span><b id="memory-count">--</b></div>
+        <div class="orbit-card tasks"><i></i><span>TASKS</span><b id="task-count">--</b></div>
+        <div class="orbit-card caps"><i></i><span>CAPABILITY</span><b id="capability-count">--</b></div>
+        <div class="security-state" id="security-seal"><span class="shield-mark">◇</span><span id="security-label">LOOPBACK</span></div>
+      </div>
+
+      <aside class="cognition-rail">
+        <div class="rail-section">
+          <span class="micro">COGNITIVE ROUTE</span>
+          <div class="route-line"><span></span><b>INPUT</b><i></i><b>REASON</b><i></i><b>ACTION</b><i></i><b>VERIFY</b></div>
+        </div>
+        <div class="rail-section focus-readout">
+          <span class="micro">FOCUS</span>
+          <strong id="intent-focus">BROAD</strong>
+          <span id="context-focus">SYSTEM CONTEXT</span>
+        </div>
+        <div class="rail-section">
+          <span class="micro">ACTIVE SIGNALS</span>
+          <div id="intent-sections" class="signal-list"></div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="intent-band" class="intent-layer" aria-label="Cognitive controls">
+      <div class="intent-heading"><span class="micro">INTENT LAYER</span><b id="intent-mode">NOW</b></div>
+      <div id="intent-actions" class="intent-actions"></div>
+    </section>
+
+    <section class="context-layer-wrap">
+      <div class="section-heading"><span class="micro">CONTEXT STREAM</span><span>REAL STATE → PRESENTATION</span></div>
+      <div id="context-layer" class="context-layer"></div>
+    </section>
+
+    <section id="error-rail" class="error-layer" hidden>
+      <div class="section-heading"><span class="micro">EXCEPTIONS / BLOCKS</span><button class="text-action" data-action="clear-errors">CLEAR</button></div>
+      <div id="error-feed"></div>
+    </section>
+
+    <section class="conversation">
+      <div id="chat-history" class="chat-history" aria-live="polite"></div>
+      <div id="chat-status" class="chat-status"></div>
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <span class="prompt-mark">/</span>
+        <input id="chat-input" placeholder="Ask JAMES to observe, reason, act or verify…" aria-label="Message to JAMES">
+        <button class="execute-button" type="submit">EXECUTE <span>↗</span></button>
+      </form>
+    </section>
+  </main>
+
+  <main id="dashboard-view" class="view system-view" data-view="dashboard" hidden>
+    <div class="system-head"><div><span class="micro">RUNTIME CONTROL PLANE</span><h1 id="dash-title">System</h1></div><button class="back-button" data-action="toggle-dashboard">RETURN TO VOID</button></div>
+    <div class="system-layout">
+      <nav id="dash-nav" class="system-nav" aria-label="Runtime sections">
+        <button class="tab active" data-tab="overview">Overview</button><button class="tab" data-tab="chat">Chat</button>
+        <button class="tab" data-tab="tasks">Tasks</button><button class="tab" data-tab="memory">Memory</button>
+        <button class="tab" data-tab="modules">Modules</button><button class="tab" data-tab="ai">AI</button>
+        <button class="tab" data-tab="agents">Agents</button><button class="tab" data-tab="devices">Devices</button>
+        <button class="tab" data-tab="capabilities">Capabilities</button><button class="tab" data-tab="events">Events</button>
+        <button class="tab" data-tab="automation">Automation</button><button class="tab" data-tab="system">System</button>
+        <button class="tab" data-tab="security">Security</button><button class="tab" data-tab="settings">Settings</button>
+      </nav>
+      <section id="dash-content" class="system-content" tabindex="0"></section>
+    </div>
+  </main>
+
+  <aside id="drawer" class="overlay-panel" aria-hidden="true"><header><span class="micro" id="drawer-kicker">JAMES / CONTEXT</span><button class="close" data-action="close-drawer">×</button></header><div id="drawer-content"></div></aside>
+  <aside id="event-panel" class="overlay-panel event-panel" aria-hidden="true"><header><span class="micro">EVENT STREAM</span><button class="close" data-action="close-events">×</button></header><div id="event-list"></div></aside>
+
+  <div id="palette" class="command-palette" aria-hidden="true">
+    <div class="palette-card" role="dialog" aria-label="Command palette">
+      <div class="palette-input"><span>⌘</span><input id="palette-input" placeholder="Search capability, task, state or command…" aria-label="Command"></div>
+      <div id="palette-results" class="palette-results"></div>
+      <footer><span>ENTER EXECUTE</span><span>ESC CLOSE</span></footer>
+    </div>
   </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <script src="app.js?v=2026.1"></script>
+  <footer class="status-footer">
+    <span>JAMES / WINDOWS</span><span id="event-count">0 EVENTS</span><span id="uptime">UPTIME --</span><span class="footer-state"><i id="foot-dot"></i><b id="foot-state">IDLE</b></span>
+  </footer>
+</div>
+<script src="app.js?v=2026.2"></script>
 </body>
 </html>
