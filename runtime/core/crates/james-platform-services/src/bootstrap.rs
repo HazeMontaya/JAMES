@@ -179,6 +179,24 @@ mod tests {
                 "user must not receive unsafe default grant {id}"
             );
         }
+
+        // Verify the broker enforces the default deny at execution time.
+        let err = ctx
+            .broker
+            .execute(
+                james_capability_broker::CapabilityRequest {
+                    caller: "user".to_string(),
+                    capability_id: ids::FS_WRITE_TEXT.to_string(),
+                    input: serde_json::json!({
+                        "path": "mem://security-test.txt",
+                        "contents": "must not execute",
+                    }),
+                },
+                ctx.executor.as_ref(),
+            )
+            .await
+            .expect_err("unsafe write must be denied without an explicit grant");
+        assert!(err.to_string().contains("permission denied"), "{err:?}");
     }
 
     #[tokio::test]
