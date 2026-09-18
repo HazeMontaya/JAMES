@@ -1,7 +1,7 @@
 # start-james.ps1 — Baue (falls noetig) und starte JAMES System (Void-UI).
 # UI: http://127.0.0.1:38241   |   Beenden: Strg+C
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # Toolchain-Fix: explizit die MSVC-Toolchain verwenden, damit Cargo-Subprozesse
 # nicht den GNU-rustc aus C:\ProgramData\chocolatey\bin auf PATH erwischen.
