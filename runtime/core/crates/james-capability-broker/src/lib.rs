@@ -587,15 +587,45 @@ impl CapabilityBroker {
 
         let execution = executor.execute(&request.capability_id, request.input.clone());
         let output = match request.effective_timeout() {
-            Some(timeout) => tokio::time::timeout(timeout, execution).await
-                .map_err(|_| BrokerError::ExecutionFailed {
-                    capability: request.capability_id.clone(),
-                    detail: "request timeout exceeded".to_string(),
-                })??,
-            None => execution.await.map_err(|e| BrokerError::ExecutionFailed {
-                capability: request.capability_id.clone(),
-                detail: e.to_string(),
-            })?,
+            Some(timeout) => match tokio::time::timeout(timeout, execution).await {
+                Ok(Ok(output)) => output,
+                Ok(Err(error)) => {
+                    self.audit_v2(
+                        "audit.capability.failed",
+                        &request,
+                        None,
+                    ).await;
+                    return Err(BrokerError::ExecutionFailed {
+                        capability: request.capability_id.clone(),
+                        detail: error.to_string(),
+                    }.into());
+                }
+                Err(_) => {
+                    self.audit_v2(
+                        "audit.capability.timeout",
+                        &request,
+                        None,
+                    ).await;
+                    return Err(BrokerError::ExecutionFailed {
+                        capability: request.capability_id.clone(),
+                        detail: "request timeout exceeded".to_string(),
+                    }.into());
+                }
+            },
+            None => match execution.await {
+                Ok(output) => output,
+                Err(error) => {
+                    self.audit_v2(
+                        "audit.capability.failed",
+                        &request,
+                        None,
+                    ).await;
+                    return Err(BrokerError::ExecutionFailed {
+                        capability: request.capability_id.clone(),
+                        detail: error.to_string(),
+                    }.into());
+                }
+            },
         };
 
         if let Err(e) = self.registry.validate_output(&request.capability_id, &output) {
