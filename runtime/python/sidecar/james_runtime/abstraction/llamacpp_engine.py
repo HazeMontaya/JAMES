@@ -79,7 +79,7 @@ class LlamaCppEngine(InferenceEngine):
                 args,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                cwd=r"S:\JAMES\python\sidecar",
+                cwd=str(cwd),
             )
         except FileNotFoundError:
             raise EngineInitializationError("llamacpp", "llama-server not found in PATH. Install llama.cpp")
@@ -93,6 +93,22 @@ class LlamaCppEngine(InferenceEngine):
         """Wait for llama-server to be ready"""
         start = time.time()
         while time.time() - start < timeout:
+        from pathlib import Path
+        cwd = Path(working_directory).expanduser().resolve() if working_directory else Path.cwd()
+        model_path = Path(llamacpp_config.model_path).expanduser()
+        if not model_path.is_absolute():
+            model_path = cwd / model_path
+        if not model_path.exists():
+            raise EngineInitializationError(
+                "llamacpp",
+                f"Model file not found: {model_path}. Run the local model bootstrap first.",
+            )
+        args[2] = str(model_path.resolve())
+
+        if not auto_start:
+            logger.info("llama.cpp auto_start disabled; engine remains offline")
+            return
+
             try:
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(f"{self._base_url}/health", timeout=2.0)
