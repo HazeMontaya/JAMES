@@ -274,9 +274,9 @@ const STATE_FLOWS = {
     // Activity field - derived from real activity only
     if (activityMix > 0.02) {
       const ring = ctx.createRadialGradient(cx, cy, 0, cx, cy, base * 0.62);
-      ring.addColorStop(0, `rgba(212,175,95,${0.05 + glowMix * 0.09})`);
-      ring.addColorStop(0.6, `rgba(212,175,95,${0.012 + glowMix * 0.04})`);
-      ring.addColorStop(1, "rgba(212,175,95,0)");
+      ring.addColorStop(0, `rgba(112,231,255,${0.05 + glowMix * 0.09})`);
+      ring.addColorStop(0.6, `rgba(112,231,255,${0.012 + glowMix * 0.04})`);
+      ring.addColorStop(1, "rgba(112,231,255,0)");
       ctx.fillStyle = ring;
       ctx.beginPath();
       ctx.arc(cx, cy, base * 0.62, 0, Math.PI * 2);
@@ -293,15 +293,15 @@ const STATE_FLOWS = {
       const x = s.x + (s.tx - s.x) * s.t;
       const y = s.y + (s.ty - s.y) * s.t;
       const flow = 0.04 + 0.1 * activityMix;
-      ctx.strokeStyle = `rgba(212,175,95,${flow})`;
+      ctx.strokeStyle = `rgba(112,231,255,${flow})`;
       ctx.lineWidth = 1 + activityMix;
       ctx.beginPath();
       ctx.moveTo(s.x, s.y);
       ctx.lineTo(x, y);
       ctx.stroke();
       const head = ctx.createRadialGradient(x, y, 0, x, y, 3 + activityMix * 4);
-      head.addColorStop(0, s.kind === "out" ? "rgba(240,212,135,.95)" : "rgba(212,175,95,.85)");
-      head.addColorStop(1, "rgba(212,175,95,0)");
+      head.addColorStop(0, s.kind === "out" ? "rgba(225,244,255,.95)" : "rgba(112,231,255,.85)");
+      head.addColorStop(1, "rgba(112,231,255,0)");
       ctx.fillStyle = head;
       ctx.beginPath();
       ctx.arc(x, y, 3 + activityMix * 4, 0, Math.PI * 2);
@@ -319,12 +319,12 @@ const STATE_FLOWS = {
       if (!activeZones.has(zone[0])) return;
       const [zx, zy, zr] = zoneCenter(zone[0]);
       const isFocus = zone[0] === profile.zone;
-      ctx.strokeStyle = `rgba(212,175,95,${isFocus ? 0.34 : 0.12})`;
+      ctx.strokeStyle = `rgba(112,231,255,${isFocus ? 0.34 : 0.12})`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.arc(zx, zy, zr, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = `rgba(212,175,95,${isFocus ? 0.85 : 0.25})`;
+      ctx.fillStyle = `rgba(112,231,255,${isFocus ? 0.85 : 0.25})`;
       ctx.font = "7px 'JetBrains Mono', monospace";
       ctx.letterSpacing = "2px";
       ctx.fillText(zone[0], zx - 12, zy - zr - 6);
@@ -337,7 +337,7 @@ const STATE_FLOWS = {
       : isSleeping ? 0.3 + Math.sin(brainPhase * 0.5) * 0.1
       : isIdle ? 0.4 + Math.sin(brainPhase * 0.8) * 0.15
       : 0.6 + Math.sin(brainPhase * 1.2) * 0.2;
-    ctx.strokeStyle = `rgba(240,212,135,${corePulse * (0.5 + glowMix * 0.3)})`;
+    ctx.strokeStyle = `rgba(225,244,255,${corePulse * (0.5 + glowMix * 0.3)})`;
     ctx.lineWidth = isSecurityLock ? 2.2 : 1.4;
     ctx.beginPath();
     ctx.arc(cx, cy, base * 0.18 + Math.sin(brainPhase * (isSecurityLock ? 2.5 : 1.5)) * (isSecurityLock ? 4 : 2), 0, Math.PI * 2);
@@ -349,7 +349,7 @@ const STATE_FLOWS = {
       if (verifyNode) {
         const [vx, vy] = nodePosition(verifyNode);
         const r = 28 + Math.sin(brainPhase * 2) * 3;
-        ctx.strokeStyle = `rgba(232,197,100,${0.5 + Math.sin(brainPhase * 3) * 0.3})`;
+        ctx.strokeStyle = `rgba(168,140,255,${0.5 + Math.sin(brainPhase * 3) * 0.3})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(vx, vy, r, 0, Math.PI * 2);
@@ -362,7 +362,7 @@ const STATE_FLOWS = {
       const recoverNode = getNodeById("recover");
       if (recoverNode) {
         const [rx, ry] = nodePosition(recoverNode);
-        ctx.strokeStyle = `rgba(210,80,80,${0.4 + Math.sin(brainPhase * 4) * 0.2})`;
+        ctx.strokeStyle = `rgba(255,113,133,${0.4 + Math.sin(brainPhase * 4) * 0.2})`;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.arc(rx, ry, 30 + Math.sin(brainPhase * 2) * 4, 0, Math.PI * 2);
@@ -372,7 +372,7 @@ const STATE_FLOWS = {
 
     // Core inner glow rings (static, not rotating)
     if (!isOffline && !isSleeping) {
-      ctx.strokeStyle = `rgba(212,175,95,${0.1 + glowMix * 0.15})`;
+      ctx.strokeStyle = `rgba(112,231,255,${0.1 + glowMix * 0.15})`;
       ctx.lineWidth = 1;
       for (let i = 1; i <= 3; i++) {
         ctx.beginPath();
@@ -386,13 +386,13 @@ const STATE_FLOWS = {
       const isActiveZone = activeZones.has(n.zone);
       const node = nodePosition(n);
       n.activity = isActiveZone ? Math.min(1, n.activity + 0.03) : n.activity * 0.98;
-      const hue = n.zone === "CORE" ? "240,212,135" : "212,175,95";
+      const hue = n.zone === "CORE" ? "225,244,255" : "112,231,255";
       ctx.fillStyle = `rgba(${hue},${isActiveZone ? 0.4 + n.activity * 0.5 : 0.15 + n.activity * 0.3})`;
       ctx.beginPath();
       ctx.arc(node[0], node[1], n.rad, 0, Math.PI * 2);
       ctx.fill();
       if (n.zone === "CORE") {
-        ctx.strokeStyle = `rgba(240,212,135,${0.5 + n.activity * 0.5})`;
+        ctx.strokeStyle = `rgba(225,244,255,${0.5 + n.activity * 0.5})`;
         ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.arc(node[0], node[1], 5 + Math.sin(brainPhase * 2) * 1.5, 0, Math.PI * 2);
@@ -402,14 +402,14 @@ const STATE_FLOWS = {
 
     // Central core fill
     const vg = ctx.createRadialGradient(cx, cy, 0, cx, cy, base * 0.2);
-    vg.addColorStop(0, `rgba(212,175,95,${0.05 + glowMix * 0.06})`);
-    vg.addColorStop(1, "rgba(212,175,95,0)");
+    vg.addColorStop(0, `rgba(112,231,255,${0.05 + glowMix * 0.06})`);
+    vg.addColorStop(1, "rgba(112,231,255,0)");
     ctx.fillStyle = vg;
     ctx.beginPath();
     ctx.arc(cx, cy, base * 0.2, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = `rgba(240,212,135,${0.55 + glowMix * 0.3})`;
+    ctx.fillStyle = `rgba(225,244,255,${0.55 + glowMix * 0.3})`;
     ctx.beginPath();
     ctx.arc(cx, cy, 2.6, 0, Math.PI * 2);
     ctx.fill();
