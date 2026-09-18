@@ -731,7 +731,7 @@ impl CapabilityBroker {
     pub async fn approve_confirmation(
         &self,
         confirmation_id: &str,
-        caller_identity: &str,
+        approver_identity: &str,
     ) -> Result<ConfirmationResult> {
         let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
             BrokerError::ConfirmationBindingFailed {
@@ -739,10 +739,10 @@ impl CapabilityBroker {
                 detail: "confirmation not found or already consumed".into(),
             }
         })?;
-        if pending.caller_identity != caller_identity {
+        if approver_identity.trim().is_empty() {
             return Err(BrokerError::ConfirmationBindingFailed {
                 capability: pending.capability_id.clone(),
-                detail: "approval caller mismatch".into(),
+                detail: "approver identity missing".into(),
             }.into());
         }
         if pending.expires_at <= Utc::now() {
@@ -769,7 +769,7 @@ impl CapabilityBroker {
     pub async fn reject_confirmation(
         &self,
         confirmation_id: &str,
-        caller_identity: &str,
+        approver_identity: &str,
     ) -> Result<()> {
         let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
             BrokerError::ConfirmationBindingFailed {
@@ -777,10 +777,10 @@ impl CapabilityBroker {
                 detail: "confirmation not found or already consumed".into(),
             }
         })?;
-        if pending.caller_identity != caller_identity {
+        if approver_identity.trim().is_empty() {
             return Err(BrokerError::ConfirmationBindingFailed {
                 capability: pending.capability_id.clone(),
-                detail: "rejection caller mismatch".into(),
+                detail: "approver identity missing".into(),
             }.into());
         }
         drop(pending);
