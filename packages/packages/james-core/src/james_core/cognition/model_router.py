@@ -1,5 +1,6 @@
 """Model Router for JAMES - Routes to different LLM backends"""
 
+from dataclasses import dataclass
 from typing import Any
 
 from ..config import JamesConfig
@@ -75,6 +76,15 @@ class OllamaBackend(OpenAICompatibleBackend):
     pass
 
 
+@dataclass(frozen=True)
+class ModelRequirements:
+    """Capabilities a task requires from a model backend."""
+
+    min_context_tokens: int = 0
+    max_latency_ms: float | None = None
+    preferred_providers: tuple[ModelProvider, ...] = ()
+
+
 class ModelRouter:
     def __init__(self, configs: list[ModelConfig]):
         self._backends: dict[ModelProvider, ModelBackend] = {}
@@ -100,6 +110,40 @@ class ModelRouter:
     def get_healthy_backends(self) -> list[ModelBackend]:
         return [b for b in self._backends.values() if b.healthy]
 
+    def select_backend(
+        self,
+        requirements: ModelRequirements | None = None,
+        preferred_provider: ModelProvider | None = None,
+    ) -> ModelBackend | None:
+        """Select the healthiest backend matching task requirements.
+
+        Selection is deterministic: explicit provider preference wins, then
+        requirement preferences, then priority. Backends that cannot satisfy
+        the requested context/latency constraints are excluded.
+        """
+        req = requirements or ModelRequirements()
+        candidates = [b for b in self._backends.values() if b.healthy]
+        candidates = [b for b in candidates if b.config.max_tokens >= req.min_context_tokens]
+        if req.max_latency_ms is not None:
+            candidates = [
+                b for b in candidates
+                if b.config.timeout * 1000 <= req.max_latency_ms
+            ]
+        if not candidates:
+            return None
+
+        preferred = preferred_provider or (req.preferred_providers[0] if req.preferred_providers else None)
+        if preferred is not None:
+            preferred_backend = next((b for b in candidates if b.config.provider == preferred), None)
+            if preferred_backend is not None:
+                return preferred_backend
+
+        provider_order = {provider: index for index, provider in enumerate(req.preferred_providers)}
+        return max(
+            candidates,
+            key=lambda b: (-(provider_order.get(b.config.provider, len(provider_order))), b.config.priority),
+        )
+
     async def generate(
         self,
         prompt: str,
@@ -107,19 +151,27 @@ class ModelRouter:
         fallback: bool = True,
         **kwargs: Any,
     ) -> ModelResponse:
-        if preferred_provider and preferred_provider in self._backends:
-            backend = self._backends[preferred_provider]
-            if backend.healthy:
-                return await backend.generate(prompt, **kwargs)
+        requirements = kwargs.pop("requirements", None)
+        selected = self.select_backend(requirements=requirements, preferred_provider=preferred_provider)
+        if selected is not None:
+            try:
+                return await selected.generate(prompt, **kwargs)
+            except Exception:
+                if not fallback:
+                    raise
+                selected._healthy = False
 
         for backend in sorted(self._backends.values(), key=lambda b: b.config.priority, reverse=True):
-            if backend.healthy:
-                try:
-                    return await backend.generate(prompt, **kwargs)
-                except Exception:
-                    if not fallback:
-                        raise
-                    continue
+            if not backend.healthy:
+                continue
+            if requirements is not None and backend.config.max_tokens < requirements.min_context_tokens:
+                continue
+            try:
+                return await backend.generate(prompt, **kwargs)
+            except Exception:
+                if not fallback:
+                    raise
+                backend._healthy = False
 
         raise RuntimeError("No healthy model backends available")
 
