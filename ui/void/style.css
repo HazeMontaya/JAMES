@@ -68,3 +68,7 @@ html[data-state="IDLE"] .brain-frame canvas{opacity:.94}
 .core-label h1{font-weight:400}
 .orbit-card{box-shadow:none}
 @media(min-width:901px){.command-header{background:rgba(8,9,11,.72)}.command-nav{position:fixed;left:18px;top:82px;display:grid;gap:3px;z-index:30}.command-nav .nav-chip{writing-mode:horizontal-tb;text-align:left}.command-nav .nav-chip.accent{margin-top:7px}.cognition-rail{background:linear-gradient(90deg,transparent,rgba(8,9,11,.30))}}
+
+.edge-nav{position:fixed;z-index:35;display:flex;gap:3px}.edge-nav-left{left:18px;top:50%;transform:translateY(-50%);flex-direction:column}.edge-nav-right{right:18px;top:50%;transform:translateY(-50%);flex-direction:column;align-items:stretch}.edge-nav .nav-chip{min-width:86px;text-align:left}.edge-nav-right .nav-chip{text-align:right}.edge-nav .nav-chip.accent{margin-top:8px;color:var(--gold-bright)}
+@media(max-width:900px){.edge-nav{position:static;transform:none;display:flex;overflow:auto;padding:7px 12px;border-bottom:1px solid var(--border);background:rgba(8,9,11,.7)}.edge-nav-left,.edge-nav-right{flex-direction:row}.edge-nav-right{justify-content:flex-end}.edge-nav .nav-chip{min-width:auto;white-space:nowrap}.edge-nav-right .nav-chip{text-align:left}.edge-nav .nav-chip.accent{margin-top:0}}
+@media(max-width:560px){.edge-nav{gap:2px}.edge-nav .nav-chip{padding:6px 7px;font-size:7px}.edge-nav-right{justify-content:flex-start}}
