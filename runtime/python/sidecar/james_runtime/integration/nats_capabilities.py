@@ -73,7 +73,7 @@ class NatsCapabilityBridge:
             "description": tool.description,
             "required_permissions": [],
             "input_schema": {"type": "object", "properties": tool.parameters},
-            "output_schema": {"type": "object"},
+            "output_schema": None,
         }
 
     async def start(self) -> None:
