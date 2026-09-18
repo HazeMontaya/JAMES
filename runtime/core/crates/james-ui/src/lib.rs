@@ -59,6 +59,16 @@ pub struct UiIntent {
     pub at: DateTime<Utc>,
     /// Correlates the intent to the driving event.
     pub correlation_id: Option<Uuid>,
+    #[serde(default)]
+    pub agent_id: Option<String>,
+    #[serde(default)]
+    pub plan_id: Option<String>,
+    #[serde(default)]
+    pub step_id: Option<String>,
+    #[serde(default)]
+    pub capability_id: Option<String>,
+    #[serde(default)]
+    pub verification_status: Option<String>,
 }
 
 impl Default for UiIntent {
@@ -83,6 +93,11 @@ impl UiIntent {
             reason: "System bereit; wartet auf Aufgaben und Eingaben.".into(),
             at: Utc::now(),
             correlation_id: None,
+            agent_id: None,
+            plan_id: None,
+            step_id: None,
+            capability_id: None,
+            verification_status: None,
         }
     }
 }
@@ -132,6 +147,11 @@ struct Projection {
     last_learning_at: Option<DateTime<Utc>>,
     last_thinking_at: Option<DateTime<Utc>>,
     last_plan_at: Option<DateTime<Utc>>,
+    agent_id: Option<String>,
+    plan_id: Option<String>,
+    step_id: Option<String>,
+    capability_id: Option<String>,
+    verification_status: Option<String>,
     cpu_usage: Option<f64>,
     ram_usage: Option<f64>,
     /// Events observed within the projection window.
@@ -163,7 +183,27 @@ impl Projection {
         }
 
         let t = ev.event_type.as_str();
-        if t.starts_with("task.") || t.starts_with("tools.") || t == "capability.run" || t == "capability.executed" {
+        if let Some(v) = ev.payload.get("agent_id").and_then(|v| v.as_str()) { self.agent_id = Some(v.to_string()); }
+        if let Some(v) = ev.payload.get("plan_id").and_then(|v| v.as_str()) { self.plan_id = Some(v.to_string()); }
+        if let Some(v) = ev.payload.get("step_id").and_then(|v| v.as_str()) { self.step_id = Some(v.to_string()); }
+        if let Some(v) = ev.payload.get("capability_id").and_then(|v| v.as_str()) { self.capability_id = Some(v.to_string()); }
+
+        if t.starts_with("agent.step.") {
+            self.last_task_at = Some(now);
+            self.last_task_action = Some(t.to_string());
+            if t.ends_with("started") {
+                self.active_tasks += 1;
+                self.verification_status = Some("pending".into());
+            } else if t.ends_with("completed") {
+                self.active_tasks = self.active_tasks.saturating_sub(1);
+                self.verification_status = Some("pending".into());
+            } else if t.ends_with("failed") {
+                self.active_tasks = self.active_tasks.saturating_sub(1);
+                self.verification_status = Some("failed".into());
+            } else if t.ends_with("retrying") {
+                self.verification_status = Some("retrying".into());
+            }
+        } else if t.starts_with("task.") || t.starts_with("tools.") || t == "capability.run" || t == "capability.executed" {
             self.last_task_at = Some(now);
             self.last_task_action = Some(t.to_string());
             if t.contains("started") && !t.contains("another") {
@@ -351,6 +391,11 @@ fn project(p: &Projection, now: DateTime<Utc>) -> UiIntent {
         reason,
         at: now,
         correlation_id,
+        agent_id: p.agent_id.clone(),
+        plan_id: p.plan_id.clone(),
+        step_id: p.step_id.clone(),
+        capability_id: p.capability_id.clone(),
+        verification_status: p.verification_status.clone(),
     }
 }
 
@@ -545,6 +590,11 @@ impl UiOrchestrator {
                                 || last.activity != intent.activity
                                 || last.focus != intent.focus
                                 || last.open != intent.open
+                                || last.agent_id != intent.agent_id
+                                || last.plan_id != intent.plan_id
+                                || last.step_id != intent.step_id
+                                || last.capability_id != intent.capability_id
+                                || last.verification_status != intent.verification_status
                         };
                         let mut latest = this.latest.write().await;
                         *latest = intent.clone();
