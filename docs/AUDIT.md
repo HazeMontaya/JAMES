@@ -13,8 +13,8 @@ Only `S:\JAMES` was available in the workspace. No sibling repository named JARV
 | Area | Current result |
 |---|---|
 | Language | Rust 2021 for Core/Modules, TypeScript for Discovery |
-| Build | Cargo workspaces `core/` and `modules/`, npm project under `tools/discovery/` |
-| Core entry point | `core/crates/james-app` |
+| Build | Cargo workspaces `runtime/core/` and `runtime/modules/`, npm project under `runtime/tools/discovery/` |
+| Core entry point | `runtime/core/crates/james-app` |
 | Full assembly entry point | `modules/james-system` |
 | Core infrastructure | lifecycle, events, registry, capabilities, services, tasks, scheduler, health |
 | Security infrastructure | broker, permissions, identity registry, audit crate |
@@ -49,7 +49,7 @@ Builds were executed with `CARGO_INCREMENTAL=0` and an empty `RUSTC_WRAPPER` bec
 - Broker does not execute unevaluated conditional policies.
 - `memory.read` is registered by James-Memory and executed through the Assembly Broker executor with output-schema verification.
 - stdin and HTTP chat share the same Assembly orchestrator; `/memory [limit]` is a verified broker-routed interaction.
-- `interfaces/void` now provides a static black/gold Canvas-Brain renderer with chat, dashboard views, drawers and WebSocket event client; live server integration remains to be verified after the Rust toolchain is repaired.
+- `ui/void` now provides a static black/gold Canvas-Brain renderer with chat, dashboard views, drawers and WebSocket event client; live server integration remains to be verified after the Rust toolchain is repaired.
 - Discovery build passed and 30 tests passed; 22 live/hardware tests remain skipped.
 - Full assembly starts first-party modules.
 - `james-system` provides stdin and localhost chat paths through the same Void/AI handler.
