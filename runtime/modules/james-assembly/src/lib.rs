@@ -509,6 +509,10 @@ impl JamesAssembly {
         self.browser.start().await?;
         self.web_research.start().await?;
         self.selfmade.start().await?;
+        // Establish the first durable self-model immediately at boot. Later
+        // autonomy cycles consume this inventory instead of guessing about
+        // JAMES capabilities or repository state.
+        self.selfmade.observe_self().await?;
         self.void.start().await?;
         self.dashboard.start().await?;
 
