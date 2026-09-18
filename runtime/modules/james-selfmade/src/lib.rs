@@ -742,6 +742,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn protected_authority_paths_are_rejected() {
+        let bus = Arc::new(EventBus::new(32));
+        let registry = Arc::new(CapabilityRegistry::new());
+        let root = std::env::temp_dir().join(format!("james-self-protect-{}", Uuid::now_v7()));
+        let module = SelfMadeModule::new(root.clone(), bus, registry);
+        module.start().await.unwrap();
+        let proposal = ChangeProposal {
+            id: Uuid::now_v7().to_string(),
+            mission_id: Uuid::now_v7().to_string(),
+            objective: "test protection".into(),
+            patch: "diff --git a/runtime/core/crates/james-capability-broker/src/lib.rs b/runtime/core/crates/james-capability-broker/src/lib.rs\n".into(),
+            created_at: Utc::now(),
+        };
+        let result = module.apply_proposal(&proposal).await;
+        assert!(result.is_err());
+        let _ = tokio::fs::remove_dir_all(root).await;
+    }
+
+    #[tokio::test]
     async fn manifest_is_selfmade() {
         assert_eq!(manifest().id, "james.selfmade");
     }
