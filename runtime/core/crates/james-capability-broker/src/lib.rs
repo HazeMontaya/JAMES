@@ -64,86 +64,7 @@ impl PolicyRule {
         }
 
 
-    #[tokio::test]
-    async fn test_high_risk_confirmation_round_trip_is_bound_and_single_use() {
-        let mut def = test_definition("file.write", vec!["file.write"]);
-        def.risk_level = RiskLevel::High;
-        let reg = registry_with(&[]).await;
-        reg.register(def, "test").await.unwrap();
-
-        let broker = CapabilityBroker::new(reg).without_audit();
-        broker.grant_capability_permissions("agent:test", "file.write");
-
-        let mut request = CapabilityRequestV2::new(
-            "agent:test",
-            "file.write",
-            serde_json::json!({"path": "workspace/a.txt", "content": "hello"}),
-        );
-        request.target = Some("workspace/a.txt".to_string());
-        request.scope = Some("workspace".to_string());
-
-        let confirmation = broker.request_confirmation(&request).await.unwrap();
-        assert_eq!(confirmation.request_id, request.request_id);
-        assert!(!confirmation.approved);
-
-        let before = broker.execute_v2(request.clone(), &NoopExecutor).await.unwrap_err();
-        assert!(before.to_string().contains("confirmation"));
-
-        broker.approve_confirmation(&confirmation.confirmation_id, "agent:test").await.unwrap();
-        request.confirmation_context = ConfirmationContext {
-            required: true,
-            confirmation_id: Some(confirmation.confirmation_id.clone()),
-            expires_at: Some(confirmation.expires_at),
-            caller_identity: Some("agent:test".to_string()),
-            capability_id: Some("file.write".to_string()),
-            target: Some("workspace/a.txt".to_string()),
-            scope: Some("workspace".to_string()),
-        };
-
-        let outcome = broker.execute_v2(request.clone(), &NoopExecutor).await.unwrap();
-        assert!(outcome.executed);
-
-        let replay = broker.execute_v2(request, &NoopExecutor).await.unwrap_err();
-        assert!(replay.to_string().contains("confirmation"), "{replay:?}");
-    }
-
-    #[tokio::test]
-    async fn test_confirmation_cannot_be_reused_for_another_target() {
-        let mut def = test_definition("file.write", vec!["file.write"]);
-        def.risk_level = RiskLevel::High;
-        let reg = registry_with(&[]).await;
-        reg.register(def, "test").await.unwrap();
-
-        let broker = CapabilityBroker::new(reg).without_audit();
-        broker.grant_capability_permissions("agent:test", "file.write");
-
-        let request = CapabilityRequestV2::new(
-            "agent:test",
-            "file.write",
-            serde_json::json!({"path": "workspace/a.txt", "content": "hello"}),
-        );
-        let confirmation = broker.request_confirmation(&request).await.unwrap();
-        broker.approve_confirmation(&confirmation.confirmation_id, "agent:test").await.unwrap();
-
-        let mut altered = request.clone();
-        altered.target = Some("workspace/other.txt".to_string());
-        altered.confirmation_context = ConfirmationContext {
-            required: true,
-            confirmation_id: Some(confirmation.confirmation_id),
-            expires_at: Some(confirmation.expires_at),
-            caller_identity: Some("agent:test".to_string()),
-            capability_id: Some("file.write".to_string()),
-            target: Some("workspace/other.txt".to_string()),
-            scope: Some("workspace".to_string()),
-        };
-
-        let err = broker.execute_v2(altered, &NoopExecutor).await.unwrap_err();
-        assert!(err.to_string().contains("binding"), "{err:?}");
-    }
-    }
-}
-
-/// The executor trait — a module or tool that actually performs a capability.
+ trait — a module or tool that actually performs a capability.
 #[async_trait]
 pub trait CapabilityExecutor: Send + Sync {
     /// Execute a capability. Must return a JSON value matching the capability's
@@ -1315,4 +1236,82 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("condition not satisfied"), "{err:?}");
     }
+    #[tokio::test]
+    async fn test_high_risk_confirmation_round_trip_is_bound_and_single_use() {
+        let mut def = test_definition("file.write", vec!["file.write"]);
+        def.risk_level = RiskLevel::High;
+        let reg = registry_with(&[]).await;
+        reg.register(def, "test").await.unwrap();
+
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("agent:test", "file.write");
+
+        let mut request = CapabilityRequestV2::new(
+            "agent:test",
+            "file.write",
+            serde_json::json!({"path": "workspace/a.txt", "content": "hello"}),
+        );
+        request.target = Some("workspace/a.txt".to_string());
+        request.scope = Some("workspace".to_string());
+
+        let confirmation = broker.request_confirmation(&request).await.unwrap();
+        assert_eq!(confirmation.request_id, request.request_id);
+        assert!(!confirmation.approved);
+
+        let before = broker.execute_v2(request.clone(), &NoopExecutor).await.unwrap_err();
+        assert!(before.to_string().contains("confirmation"));
+
+        broker.approve_confirmation(&confirmation.confirmation_id, "agent:test").await.unwrap();
+        request.confirmation_context = ConfirmationContext {
+            required: true,
+            confirmation_id: Some(confirmation.confirmation_id.clone()),
+            expires_at: Some(confirmation.expires_at),
+            caller_identity: Some("agent:test".to_string()),
+            capability_id: Some("file.write".to_string()),
+            target: Some("workspace/a.txt".to_string()),
+            scope: Some("workspace".to_string()),
+        };
+
+        let outcome = broker.execute_v2(request.clone(), &NoopExecutor).await.unwrap();
+        assert!(outcome.executed);
+
+        let replay = broker.execute_v2(request, &NoopExecutor).await.unwrap_err();
+        assert!(replay.to_string().contains("confirmation"), "{replay:?}");
+    }
+
+    #[tokio::test]
+    async fn test_confirmation_cannot_be_reused_for_another_target() {
+        let mut def = test_definition("file.write", vec!["file.write"]);
+        def.risk_level = RiskLevel::High;
+        let reg = registry_with(&[]).await;
+        reg.register(def, "test").await.unwrap();
+
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("agent:test", "file.write");
+
+        let request = CapabilityRequestV2::new(
+            "agent:test",
+            "file.write",
+            serde_json::json!({"path": "workspace/a.txt", "content": "hello"}),
+        );
+        let confirmation = broker.request_confirmation(&request).await.unwrap();
+        broker.approve_confirmation(&confirmation.confirmation_id, "agent:test").await.unwrap();
+
+        let mut altered = request.clone();
+        altered.target = Some("workspace/other.txt".to_string());
+        altered.confirmation_context = ConfirmationContext {
+            required: true,
+            confirmation_id: Some(confirmation.confirmation_id),
+            expires_at: Some(confirmation.expires_at),
+            caller_identity: Some("agent:test".to_string()),
+            capability_id: Some("file.write".to_string()),
+            target: Some("workspace/other.txt".to_string()),
+            scope: Some("workspace".to_string()),
+        };
+
+        let err = broker.execute_v2(altered, &NoopExecutor).await.unwrap_err();
+        assert!(err.to_string().contains("binding"), "{err:?}");
+    }
+    }
+
 }
