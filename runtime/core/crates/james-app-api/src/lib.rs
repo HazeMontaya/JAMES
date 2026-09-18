@@ -243,8 +243,15 @@ pub fn router(state:AppState)->Router{
 }
 
 pub async fn serve(listener:tokio::net::TcpListener,state:AppState)->anyhow::Result<()>{
-    if state.preview_unauthenticated { warn!("JAMES API running in unauthenticated preview mode; keep binding loopback-only"); }
-    axum::serve(listener,router(state)).await?;
+    if state.preview_unauthenticated {
+        warn!("JAMES API running in unauthenticated preview mode; keep binding loopback-only");
+    }
+    let app = if let Some(store) = state.token_store.clone() {
+        create_router_with_auth(state, store)
+    } else {
+        router(state)
+    };
+    axum::serve(listener, app).await?;
     Ok(())
 }
 
