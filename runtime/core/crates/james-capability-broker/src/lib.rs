@@ -90,6 +90,10 @@ pub struct ConfirmationContext {
     pub required: bool,
     pub confirmation_id: Option<String>,
     pub expires_at: Option<chrono::DateTime<Utc>>,
+    pub caller_identity: Option<String>,
+    pub capability_id: Option<String>,
+    pub target: Option<String>,
+    pub scope: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -138,7 +142,15 @@ impl CapabilityRequestV2 {
             deadline_at: None,
             timeout_ms: None,
             policy_context: PolicyContext::default(),
-            confirmation_context: ConfirmationContext { required: false, confirmation_id: None, expires_at: None },
+            confirmation_context: ConfirmationContext {
+                required: false,
+                confirmation_id: None,
+                expires_at: None,
+                caller_identity: None,
+                capability_id: None,
+                target: None,
+                scope: None,
+            },
         }
     }
 
@@ -228,6 +240,15 @@ pub enum BrokerError {
     ConfirmationRequired(String),
     #[error("executor error for '{capability}': {detail}")]
     ExecutionFailed { capability: String, detail: String },
+    #[error("confirmation binding failed for '{capability}': {detail}")]
+    ConfirmationBindingFailed { capability: String, detail: String },
+    #[error("resource admission denied for '{capability}': {detail}")]
+    ResourceAdmissionDenied { capability: String, detail: String },
+}
+
+#[async_trait]
+pub trait ResourceAdmission: Send + Sync {
+    async fn admit(&self, request: &CapabilityRequestV2) -> Result<()>;
 }
 
 /// The Capability Broker — the single gate every action must pass.
@@ -242,6 +263,7 @@ pub struct CapabilityBroker {
     audit_enabled: bool,
     /// outputs that passed verification but the caller may still read
     verified_cache: DashMap<String, serde_json::Value>,
+    resource_admission: Option<Arc<dyn ResourceAdmission>>,
 }
 
 impl CapabilityBroker {
@@ -253,6 +275,7 @@ impl CapabilityBroker {
             policies: DashMap::new(),
             audit_enabled: true,
             verified_cache: DashMap::new(),
+            resource_admission: None,
         }
     }
 
@@ -263,6 +286,11 @@ impl CapabilityBroker {
 
     pub fn without_audit(mut self) -> Self {
         self.audit_enabled = false;
+        self
+    }
+
+    pub fn with_resource_admission(mut self, admission: Arc<dyn ResourceAdmission>) -> Self {
+        self.resource_admission = Some(admission);
         self
     }
 
@@ -462,6 +490,7 @@ impl CapabilityBroker {
             }
         }
 
+        self.validate_confirmation(&request).await?;
         let legacy = request.legacy();
         let decision = self.decide(&legacy).await?;
         match &decision {
@@ -486,6 +515,16 @@ impl CapabilityBroker {
             if !valid {
                 self.audit_v2("audit.capability.confirmation_required", &request, None).await;
                 return Err(BrokerError::ConfirmationRequired(request.capability_id.clone()).into());
+            }
+        }
+
+        if let Some(admission) = &self.resource_admission {
+            if let Err(e) = admission.admit(&request).await {
+                self.audit_v2("audit.capability.resource_denied", &request, None).await;
+                return Err(BrokerError::ResourceAdmissionDenied {
+                    capability: request.capability_id.clone(),
+                    detail: e.to_string(),
+                }.into());
             }
         }
 
@@ -514,6 +553,38 @@ impl CapabilityBroker {
             reason: outcome.reason,
             audited: outcome.audited,
         })
+    }
+
+    async fn validate_confirmation(&self, request: &CapabilityRequestV2) -> Result<()> {
+        let c = &request.confirmation_context;
+        if !c.required { return Ok(()); }
+        if c.confirmation_id.as_deref().filter(|v| !v.trim().is_empty()).is_none() {
+            self.audit_v2("audit.capability.confirmation_invalid", request, None).await;
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: request.capability_id.clone(),
+                detail: "confirmation id missing".into(),
+            }.into());
+        }
+        if c.expires_at.map(|e| e <= Utc::now()).unwrap_or(true) {
+            self.audit_v2("audit.capability.confirmation_invalid", request, None).await;
+            return Err(BrokerError::ConfirmationBindingFailed {
+                capability: request.capability_id.clone(),
+                detail: "confirmation expired or missing expiry".into(),
+            }.into());
+        }
+        if c.caller_identity.as_ref().is_some_and(|v| v != &request.caller_identity) {
+            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "caller identity mismatch".into() }.into());
+        }
+        if c.capability_id.as_ref().is_some_and(|v| v != &request.capability_id) {
+            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "capability mismatch".into() }.into());
+        }
+        if c.target.is_some() && c.target != request.target {
+            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "target mismatch".into() }.into());
+        }
+        if c.scope.is_some() && c.scope != request.scope {
+            return Err(BrokerError::ConfirmationBindingFailed { capability: request.capability_id.clone(), detail: "scope mismatch".into() }.into());
+        }
+        Ok(())
     }
 
     pub async fn decide_v2(&self, request: &CapabilityRequestV2) -> Result<PolicyDecision> {
