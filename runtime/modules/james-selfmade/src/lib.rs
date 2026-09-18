@@ -580,6 +580,11 @@ impl SelfMadeModule {
                 "promotion_allowed": false
             })).await;
         if !report.passed {
+            let _ = self.record_learning(
+                &proposal.objective,
+                false,
+                "isolated verification failed; candidate was rolled back"
+            ).await;
             let rollback = Command::new("git")
                 .current_dir(&workspace)
                 .args(["reset", "--hard", "HEAD"])
@@ -592,6 +597,11 @@ impl SelfMadeModule {
                 "proposal_id": proposal.id
             })).await;
         } else {
+            let _ = self.record_learning(
+                &proposal.objective,
+                true,
+                "isolated candidate passed deterministic verification"
+            ).await;
             self.emit("selfmade.change.verified", serde_json::json!({
                 "mission_id": proposal.mission_id,
                 "proposal_id": proposal.id
