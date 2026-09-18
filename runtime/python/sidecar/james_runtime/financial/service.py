@@ -6,19 +6,24 @@ from .events import FinancialEvent
 from .router import FinancialRouter
 from .schemas import ForecastRequest, ForecastResult
 from .verification import verify_forecast
+from .state import FinancialStateStore
+from .audit import FinancialAuditLog
 
 EventSink = Callable[[FinancialEvent], Awaitable[None]]
 
 class FinancialCortexService:
-    def __init__(self, router: Optional[FinancialRouter] = None, event_sink: Optional[EventSink] = None):
+    def __init__(self, router: Optional[FinancialRouter] = None, event_sink: Optional[EventSink] = None, state_store: Optional[FinancialStateStore] = None, audit_log: Optional[FinancialAuditLog] = None):
         self.router = router or FinancialRouter()
         self.event_sink = event_sink
+        self.state_store = state_store
+        self.audit_log = audit_log
 
     async def _emit(self, event_type: str, correlation_id: str, payload: dict) -> None:
+        event = FinancialEvent(event_type=event_type, correlation_id=correlation_id, payload=payload)
+        if self.audit_log:
+            self.audit_log.append(event)
         if self.event_sink:
-            await self.event_sink(FinancialEvent(
-                event_type=event_type, correlation_id=correlation_id, payload=payload
-            ))
+            await self.event_sink(event)
 
     async def forecast(self, request: ForecastRequest) -> ForecastResult:
         correlation_id = str(uuid4())
@@ -39,6 +44,8 @@ class FinancialCortexService:
         })
         if not verification.valid:
             raise ValueError("Financial forecast failed integrity verification")
+        if self.state_store:
+            self.state_store.save_forecast(result)
         await self._emit("KRONOS_FORECAST_READY", correlation_id, {
             "request_id": result.request_id,
             "model_id": result.model_id,
