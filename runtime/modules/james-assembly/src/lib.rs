@@ -40,6 +40,7 @@ use james_tts::TtsModule;
 use james_void::VoidModule;
 use james_voice::VoiceModule;
 use james_webresearch::WebResearchModule;
+use james_selfmade::SelfMadeModule;
 
 /// Fully assembled JAMES system: core + all first-party modules.
 pub struct JamesAssembly {
@@ -64,6 +65,7 @@ pub struct JamesAssembly {
     voice: Arc<VoiceModule>,
     browser: Arc<BrowserModule>,
     web_research: Arc<WebResearchModule>,
+    selfmade: Arc<SelfMadeModule>,
     void: Arc<VoidModule>,
     dashboard: Arc<DashboardModule>,
     /// Registry of live `Agent` instances (typed plan lifecycle, state
@@ -319,6 +321,18 @@ impl JamesAssembly {
             capability_registry.clone(),
         ));
 
+        // ---- SelfMade autonomous development ----
+        // The module works in an isolated git worktree and never mutates the
+        // running checkout during proposal/verification.
+        let selfmade_root = std::env::var_os("JAMES_ROOT")
+            .map(std::path::PathBuf::from)
+            .unwrap_or(std::env::current_dir()?);
+        let selfmade = Arc::new(SelfMadeModule::new(
+            selfmade_root,
+            event_bus.clone(),
+            capability_registry.clone(),
+        ));
+
         // ---- Void (web chat shell) ----
         let void = Arc::new(VoidModule::new(
             james_void::VoidConfig::default(),
@@ -383,6 +397,7 @@ impl JamesAssembly {
             voice,
             browser,
             web_research,
+            selfmade,
             void,
             dashboard,
             agent_registry,
@@ -466,6 +481,7 @@ impl JamesAssembly {
         self.voice.start().await?;
         self.browser.start().await?;
         self.web_research.start().await?;
+        self.selfmade.start().await?;
         self.void.start().await?;
         self.dashboard.start().await?;
 
@@ -477,6 +493,7 @@ impl JamesAssembly {
     pub async fn stop(&mut self) -> Result<()> {
         self.dashboard.stop().await?;
         self.void.stop().await?;
+        self.selfmade.stop().await?;
         self.web_research.stop().await?;
         self.browser.stop().await?;
         self.voice.stop().await?;
@@ -510,6 +527,10 @@ impl JamesAssembly {
 
     pub fn resolver(&self) -> Arc<CapabilityResolver> {
         self.resolver.clone()
+    }
+
+    pub fn selfmade(&self) -> Arc<SelfMadeModule> {
+        self.selfmade.clone()
     }
 
     /// Execute a user intent end-to-end (Block D):
