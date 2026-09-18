@@ -134,6 +134,21 @@ impl CapabilityExecutor for MemoryCapabilityExecutor {
     }
 }
 
+
+struct SelfMadeCapabilityExecutor {
+    selfmade: Arc<SelfMadeModule>,
+}
+
+#[async_trait]
+impl CapabilityExecutor for SelfMadeCapabilityExecutor {
+    async fn execute(&self, capability_id: &str, _input: serde_json::Value) -> Result<serde_json::Value> {
+        match capability_id {
+            "selfmade.observe" => self.selfmade.observe_self().await,
+            _ => anyhow::bail!("selfmade capability is not executable through this read-only adapter: {capability_id}"),
+        }
+    }
+}
+
 struct VoidCapabilityExecutor {
     void: Arc<VoidModule>,
 }
@@ -415,6 +430,18 @@ impl JamesAssembly {
     /// screenshot/extract, voice/device, etc.) stay unregistered so plans
     /// resolve honestly to "no candidate".
     pub fn register_resolver_candidates(&self) {
+        let selfmade_executor: Arc<dyn CapabilityExecutor> =
+            Arc::new(SelfMadeCapabilityExecutor { selfmade: self.selfmade.clone() });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.observe".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.observe".to_string()],
+            health: None,
+            executor: selfmade_executor,
+        });
+
         let void_executor: Arc<dyn CapabilityExecutor> = Arc::new(VoidCapabilityExecutor { void: self.void.clone() });
         self.resolver.register(ExecutorCandidate {
             capability_id: "void.chat".to_string(), provider: "james-void".to_string(), priority: 10,
@@ -1116,6 +1143,7 @@ async fn register_all_capabilities(registry: &CapabilityRegistry) -> Result<()> 
     james_webresearch::register_capabilities(registry).await?;
     james_void::register_capabilities(registry).await?;
     james_dashboard::register_capabilities(registry).await?;
+    james_selfmade::register_capabilities(registry).await?;
     Ok(())
 }
 
