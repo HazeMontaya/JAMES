@@ -16,7 +16,7 @@ concurrency:
 jobs:
   rust:
     name: Rust workspace
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: runtime/core
@@ -34,7 +34,7 @@ jobs:
 
   python:
     name: Python sidecar
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: runtime/python/sidecar
@@ -50,7 +50,7 @@ jobs:
 
   discovery:
     name: Windows discovery tool
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: runtime/tools/discovery
@@ -63,3 +63,23 @@ jobs:
           cache-dependency-path: runtime/tools/discovery/package-lock.json
       - run: npm ci
       - run: npm test
+
+  packages:
+    name: Python agent packages
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync workspace
+        run: uv sync --all-extras
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Tests
+        run: uv run pytest tests/ -m "not slow"
