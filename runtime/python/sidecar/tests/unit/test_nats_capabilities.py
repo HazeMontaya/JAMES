@@ -14,6 +14,8 @@ def test_capability_info_matches_rust_contract():
     info = bridge._capability_info(Calculator())
     assert info["id"] == "calculator"
     assert info["version"] == "1.0.0"
+    assert info["risk_level"] == "low"
+    assert info["required_permissions"] == []
     assert info["input_schema"]["type"] == "object"
     assert "operation" in info["input_schema"]["properties"]
     assert info["output_schema"] is None
@@ -93,3 +95,16 @@ async def test_execute_request_rejects_non_object_input():
     assert response["request_id"] == "test-3"
     assert response["success"] is False
     assert "JSON object" in response["error"]
+
+
+def test_dangerous_capabilities_require_permissions():
+    bridge = NatsCapabilityBridge.__new__(NatsCapabilityBridge)
+
+    class FakeTool:
+        name = "python_exec"
+        description = "execute python"
+        parameters = {"code": {"type": "string"}}
+
+    info = bridge._capability_info(FakeTool())
+    assert info["risk_level"] == "critical"
+    assert "process.python" in info["required_permissions"]
