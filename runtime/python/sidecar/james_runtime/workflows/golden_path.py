@@ -102,8 +102,19 @@ class GoldenPathWorkflow(Workflow):
         steps.append(f"executed:{result.tool_calls}_tools")
 
         # VERIFYING
-        valid = bool(result.answer.strip())
-        self._emit("VERIFYING", {"valid": valid, "answer_length": len(result.answer)})
+        answer = result.answer.strip()
+        terminal_answer = bool(answer) and any(
+            step.step_type == "answer" for step in result.steps
+        )
+        valid = bool(result.success and terminal_answer and answer)
+        self._emit("VERIFYING", {
+            "valid": valid,
+            "answer_length": len(answer),
+            "agent_success": result.success,
+            "terminal_answer": terminal_answer,
+            "tool_calls": result.tool_calls,
+            "agent_message": result.message,
+        })
         steps.append(f"verified:{valid}")
 
         # SUCCESS / IDLE
@@ -116,7 +127,6 @@ class GoldenPathWorkflow(Workflow):
             final_state = "IDLE"
             success = False
 
-        self._emit("IDLE")
         return WorkflowResult(
             state=final_state,
             answer=result.answer,
