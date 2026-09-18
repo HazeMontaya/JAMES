@@ -9,7 +9,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use indexmap::IndexMap;
-use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequest, CapabilityOutcome};
+use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityOutcome, CapabilityOutcomeV2, CapabilityRequestV2, RequestedEffect};
 use james_capabilities::CapabilityRegistry;
 use james_events::{Event, EventBus, builtin_events, create_system_event};
 use james_identity::IdentityRegistry;
@@ -315,19 +315,76 @@ impl Agent {
         // Prepare input with variable substitution
         let input = self.substitute_variables(&step.input, &plan.variables)?;
 
-        // Create capability request
-        let request = CapabilityRequest {
-            caller: format!("agent:{}", self.config.id),
-            capability_id: step.capability_id.clone(),
-            input,
+        // The agent's allowed-capabilities list is the agent-level authorization
+        // boundary. Convert explicit entries into broker grants once per step;
+        // wildcard agents intentionally do not receive implicit grants.
+        let caller = format!("agent:{}", self.config.id);
+        if self.config.allowed_capabilities.iter().any(|cap| cap == &step.capability_id) {
+            self.broker.grant_capability_permissions(caller.clone(), &step.capability_id);
+        }
+
+        // All typed-agent execution now uses the structured v2 broker path.
+        // This preserves request/correlation metadata, confirmation binding,
+        // resource admission, semantic verification, deadlines/timeouts and
+        // the v2 audit trail instead of falling back to the legacy path.
+        let request = CapabilityRequestV2 {
+            requested_effect: requested_effect_for(&step.capability_id),
+            timeout_ms: Some(self.config.timeout_secs.saturating_mul(1000)),
+            ..CapabilityRequestV2::new(caller, step.capability_id.clone(), input)
         };
 
-        // Execute through broker
-        let outcome = self.broker.execute(request, executor.as_ref()).await
+        let outcome = self.broker.execute_v2(request, executor.as_ref()).await
             .map_err(|e| AgentError::BrokerError(e.to_string()))?;
 
-        Ok(outcome)
+        Ok(legacy_outcome(outcome))
     }
+
+fn requested_effect_for(capability_id: &str) -> RequestedEffect {
+    if capability_id.starts_with("memory.read")
+        || capability_id.starts_with("memory.")
+        || capability_id.ends_with(".read")
+        || capability_id.ends_with(".fetch")
+        || capability_id.ends_with(".extract")
+        || capability_id.ends_with(".search")
+    {
+        return RequestedEffect::Read;
+    }
+    if capability_id.ends_with(".write")
+        || capability_id.ends_with(".create")
+        || capability_id.ends_with(".delete")
+        || capability_id.starts_with("filesystem.")
+    {
+        return RequestedEffect::Write;
+    }
+    if capability_id.ends_with(".execute") || capability_id == "code.execute" {
+        return RequestedEffect::Execute;
+    }
+    if capability_id.starts_with("browser.")
+        || capability_id.starts_with("voice.")
+        || capability_id.starts_with("tts.")
+        || capability_id.starts_with("stt.")
+        || capability_id == "void.chat"
+    {
+        return RequestedEffect::Communicate;
+    }
+    RequestedEffect::Transform
+}
+
+fn legacy_outcome(outcome: CapabilityOutcomeV2) -> CapabilityOutcome {
+    CapabilityOutcome {
+        caller: outcome.caller_identity,
+        capability_id: outcome.capability_id,
+        allowed: outcome.allowed,
+        decision: outcome.decision,
+        executed: outcome.executed,
+        output: outcome.output,
+        input_verified: outcome.input_verified,
+        output_verified: outcome.output_verified,
+        duration_ms: outcome.duration_ms,
+        reason: outcome.reason,
+        audited: outcome.audited,
+    }
+}
 
     /// Validate a plan before execution
     async fn validate_plan(&self, plan: &Plan) -> Result<(), AgentError> {
