@@ -64,8 +64,8 @@
   const pos=id=>{const n=nodes.find(x=>x[0]===id)||nodes[3];return[n[1]*W,n[2]*H]};
   function layout(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=Math.max(1,r.width);H=Math.max(1,r.height);canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0)}
   function draw(){ctx.clearRect(0,0,W,H);const active=store.state!=="OFFLINE",pulse=store.settings.reducedMotion?0:(Math.sin(phase)+1)/2,focus=store.zone;
-    for(const [a,b] of edges){const p=pos(a),q=pos(b);ctx.beginPath();ctx.moveTo(...p);ctx.lineTo(...q);ctx.strokeStyle=active?"rgba(0,229,255,.18)":"rgba(100,120,140,.07)";ctx.lineWidth=1;ctx.stroke()}
-    for(const n of nodes){const p=pos(n[0]),on=n[3]===focus||n[3]==="CORE",r=n[0]==="core"?7:4+(on?pulse*2:0);ctx.beginPath();ctx.arc(...p,r,0,Math.PI*2);ctx.fillStyle=on&&active?"rgba(0,229,255,.9)":"rgba(100,120,140,.24)";ctx.fill();if(on&&active){ctx.beginPath();ctx.arc(...p,r+7+pulse*3,0,Math.PI*2);ctx.strokeStyle="rgba(139,92,255,.25)";ctx.stroke()}}
+    for(const [a,b] of edges){const p=pos(a),q=pos(b);ctx.beginPath();ctx.moveTo(...p);ctx.lineTo(...q);ctx.strokeStyle=active?"rgba(200,169,107,.18)":"rgba(100,120,140,.07)";ctx.lineWidth=1;ctx.stroke()}
+    for(const n of nodes){const p=pos(n[0]),on=n[3]===focus||n[3]==="CORE",r=n[0]==="core"?7:4+(on?pulse*2:0);ctx.beginPath();ctx.arc(...p,r,0,Math.PI*2);ctx.fillStyle=on&&active?"rgba(200,169,107,.9)":"rgba(100,120,140,.24)";ctx.fill();if(on&&active){ctx.beginPath();ctx.arc(...p,r+7+pulse*3,0,Math.PI*2);ctx.strokeStyle="rgba(224,200,138,.25)";ctx.stroke()}}
     const routes={INPUT:["input","reason"],REASONING:["reason","core"],PLANNING:["core","plan"],ACTION:["plan","action"],VERIFY:["action","verify"],OUTPUT:["core","output"],MEMORY:["core","memory"],RECOVERY:["core","recover"],CORE:["core","output"]};
     const route=routes[focus]||routes.CORE;
     if(active&&!store.settings.reducedMotion){
