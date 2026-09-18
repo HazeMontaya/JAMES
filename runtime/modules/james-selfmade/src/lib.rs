@@ -93,6 +93,11 @@ pub struct EvolutionCycle {
     pub next_action: String,
 }
 
+#[async_trait::async_trait]
+pub trait DevelopmentAgent: Send + Sync {
+    async fn propose(&self, context: &str) -> Result<EvolutionProposal>;
+}
+
 pub struct SelfMadeModule {
     event_bus: Arc<EventBus>,
     capability_registry: Arc<CapabilityRegistry>,
@@ -361,6 +366,38 @@ impl SelfMadeModule {
             "cycle_file": cycle_path
         })).await;
         Ok(cycle)
+    }
+
+    /// Ask an authorized development agent to turn an observed cycle into a
+    /// concrete proposal. The agent has no execution or promotion authority.
+    pub async fn create_agent_proposal(
+        &self,
+        cycle: &EvolutionCycle,
+        agent: &dyn DevelopmentAgent,
+    ) -> Result<EvolutionProposal> {
+        self.emit("selfmade.development_agent.started", serde_json::json!({
+            "cycle_id": cycle.id,
+            "objective": cycle.objective
+        })).await;
+        let context = serde_json::to_string_pretty(cycle)?;
+        let proposal = agent.propose(&context).await?;
+        if proposal.mission_id != cycle.mission.id || proposal.objective != cycle.objective {
+            bail!("development agent proposal is not bound to the active mission");
+        }
+        if proposal.promotion_allowed {
+            bail!("development agent cannot enable canonical promotion");
+        }
+        let dir = self.workspace.parent().unwrap().join("agent-proposals");
+        tokio::fs::create_dir_all(&dir).await?;
+        let path = dir.join(format!("{}.json", proposal.id));
+        tokio::fs::write(&path, serde_json::to_vec_pretty(&proposal)?).await?;
+        self.emit("selfmade.development_agent.proposal_ready", serde_json::json!({
+            "cycle_id": cycle.id,
+            "proposal_id": proposal.id,
+            "path": path,
+            "promotion_allowed": false
+        })).await;
+        Ok(proposal)
     }
 
     pub fn new_mission(&self, objective: impl Into<String>) -> DevelopmentMission {
