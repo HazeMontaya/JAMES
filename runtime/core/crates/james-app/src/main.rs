@@ -1,6 +1,7 @@
 use james_app_api::{preview_bind_allowed, serve, AppState, DashboardSnapshot, IntentProvider, AuthConfig, EnvTokenStore, TokenStore};
 use james_core::{init_tracing, CoreConfig, JamesCore, LogFields};
 use james_agents::{model::*, planner::*, executor::*, Planner, PlanExecutor, UserIntent, PlanStep, Plan, RetryPolicy, StepMetadata, PlanExecutionResult};
+use james_python_bridge::{BridgeConfig as PythonBridgeConfig, CapabilitySync, NatsBridge, PythonExecutor};
 use anyhow::Result;
 use std::sync::Arc;
 use std::path::Path;
@@ -239,6 +240,10 @@ impl AgentService {
         
         Self { planner, executor }
     }
+
+    fn register_python_executor(&self, capability_id: impl Into<String>, executor: Arc<dyn james_capability_broker::CapabilityExecutor>) {
+        self.executor.register_executor(capability_id, executor);
+    }
     
     async fn execute_intent(&self, intent: UserIntent) -> Result<PlanExecutionResult> {
         tracing::info!("AgentService: execute_intent called for user_id={}, raw_input={}", intent.user_id, intent.raw_input);
@@ -317,7 +322,10 @@ async fn main() -> Result<()> {
     // Phase 2: platform runtime (Windows adapter / memory double per env).
     // Registers platform.* capabilities, wires the broker, publishes telemetry.
     let platform_ctx = Arc::new(
-        james_platform_services::bootstrap::bootstrap(Some(event_bus.clone())).await?,
+        james_platform_services::bootstrap::bootstrap_with_registry(
+            Some(event_bus.clone()),
+            capability_registry.clone(),
+        ).await?,
     );
     let _telemetry =
         james_platform_services::bootstrap::spawn_telemetry(platform_ctx.clone(), event_bus.clone());
@@ -373,8 +381,35 @@ async fn main() -> Result<()> {
     let shared_resolver = Arc::new(james_agents::CapabilityResolver::new());
     executor_registry.seed(&shared_resolver);
 
+    // Python capability bridge: Python tools share the same registry and broker
+    // as platform capabilities. This makes PlanExecutor -> broker -> NATS ->
+    // Python ToolRegistry a real execution path rather than a parallel service.
+    let python_bridge_config = PythonBridgeConfig::load().unwrap_or_default();
+    let mut python_nats = NatsBridge::new(python_bridge_config.clone());
+    python_nats.set_event_bus(event_bus.clone());
+    python_nats.connect().await?;
+    let python_nats = Arc::new(python_nats);
+    let python_executor: Arc<dyn james_capability_broker::CapabilityExecutor> =
+        Arc::new(PythonExecutor::new(python_nats.clone()).with_caller("agent-runtime".to_string()));
+
+    let python_sync = CapabilitySync::new(
+        python_bridge_config,
+        capability_registry.clone(),
+        Some(event_bus.clone()),
+    );
+    let python_caps = python_nats.list_python_capabilities().await;
+    python_sync.sync_all(&python_caps).await?;
+    info!(
+        "{} Python capability bridge ready: {} capabilities discovered",
+        log.prefix(),
+        python_caps.len()
+    );
+
     // Agent service for intent execution
     let agent_service = Arc::new(AgentService::new(platform_ctx.broker.clone()));
+    for cap in &python_caps {
+        agent_service.register_python_executor(cap.id.clone(), python_executor.clone());
+    }
     agent_service.executor.attach_resolver(shared_resolver.clone());
     info!(
         "{} Agent service ready: {} platform capabilities resolvable",
