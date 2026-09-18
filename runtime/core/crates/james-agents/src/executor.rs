@@ -117,8 +117,6 @@ impl PlanExecutor {
             CapabilityRequestV2 {
                 requested_effect,
                 timeout_ms: step.timeout_ms,
-                target: step.metadata.target.clone(),
-                scope: step.metadata.scope.clone(),
                 ..CapabilityRequestV2::new(caller.to_string(), step.capability_id.clone(), input)
             },
             executor.as_ref(),
