@@ -37,10 +37,10 @@ impl DashboardProvider for AssemblyData {
 }
 
 fn void_static_dir() -> String {
-    ["interfaces/void", "../interfaces/void"]
+    ["ui/void", "../ui/void", "../../ui/void"]
         .iter()
         .find(|path| Path::new(*path).join("index.html").exists())
-        .unwrap_or(&"interfaces/void")
+        .unwrap_or(&"ui/void")
         .to_string()
 }
 
