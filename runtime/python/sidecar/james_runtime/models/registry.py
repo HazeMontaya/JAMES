@@ -40,6 +40,7 @@ class ModelRegistry:
             ModelSpec("llama-3.1-8b-instruct-q4", "local", 8, 8192,
                       ["conversation", "coding", "reasoning", "planning", "tool_use", "analysis"],
                       "fast", 0.74),
+            ModelSpec("qwen2.5-3b-instruct-q4", "local", 3, 32768, ["conversation", "coding", "reasoning", "summarization", "translation", "analysis"], "fast", 0.72, local_path=".james/models/Qwen2.5-3B-Instruct-Q4_K_M.gguf", format="gguf"),
             ModelSpec("llama-3.2-3b-instruct", "local", 3, 8192,
                       ["conversation", "coding", "reasoning", "summarization", "translation"],
                       "fast", 0.68),
