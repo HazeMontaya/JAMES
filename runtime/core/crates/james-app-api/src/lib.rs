@@ -246,6 +246,21 @@ pub fn router(state:AppState)->Router{
 }
 
 pub async fn serve(listener:tokio::net::TcpListener,state:AppState)->anyhow::Result<()>{
+    let auth_enabled = std::env::var("JAMES_AUTH_ENABLED")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(true);
+    let dev_mode = std::env::var("JAMES_AUTH_DEV_MODE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(false);
+
+    if auth_enabled && !dev_mode && state.token_store.is_none() {
+        anyhow::bail!(
+            "API authentication is enabled but no token store is configured;              refusing to start an unauthenticated API"
+        );
+    }
+
     if state.preview_unauthenticated {
         warn!("JAMES API running in unauthenticated preview mode; keep binding loopback-only");
     }
