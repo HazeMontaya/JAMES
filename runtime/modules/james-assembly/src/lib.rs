@@ -188,6 +188,41 @@ Context:
             .map_err(|e| anyhow::anyhow!("development agent returned invalid proposal JSON: {e}"))?;
         Ok(proposal)
     }
+
+    async fn generate_patch(&self, context: &str) -> Result<String> {
+        let root = std::env::var_os("JAMES_ROOT")
+            .map(std::path::PathBuf::from)
+            .unwrap_or(std::env::current_dir()?);
+        let source_path = root.join("runtime/modules/james-selfmade/src/lib.rs");
+        let source = tokio::fs::read_to_string(&source_path).await?;
+        let prompt = [
+            "You are JAMES's bounded coding agent.",
+            "Produce ONLY a valid unified git diff.",
+            "Modify only files necessary for the stated objective. Prefer small, testable changes.",
+            "Do not modify security roots, authentication roots, audit integrity, kill controls, or promotion policy.",
+            "The diff is applied only inside an isolated git worktree and automatically tested.",
+            "Evolution context:", context, "Current selfmade source:", &source,
+        ].join("\n");
+        let response = self.ai.infer(InferenceRequest {
+            model_id: None,
+            messages: vec![
+                ChatMessage { role: MessageRole::System, content: "Conservative Rust maintainer. Output only unified diff.".into(), name: None, tool_calls: None, tool_call_id: None },
+                ChatMessage { role: MessageRole::User, content: prompt, name: None, tool_calls: None, tool_call_id: None },
+            ],
+            temperature: Some(0.1),
+            max_tokens: Some(4096),
+            stream: false,
+            response_format: None,
+            tools: None,
+        }).await?;
+        let raw = response.choices.first()
+            .map(|choice| choice.message.content.trim().to_string())
+            .ok_or_else(|| anyhow::anyhow!("development agent returned no patch"))?;
+        if !raw.starts_with("diff --git ") {
+            anyhow::bail!("development agent returned content that is not a unified git diff");
+        }
+        Ok(raw)
+    }
 }
 
 
@@ -206,6 +241,16 @@ impl CapabilityExecutor for SelfMadeCapabilityExecutor {
                 let agent = AssemblyDevelopmentAgent { ai: self.ai.clone() };
                 let proposal = self.selfmade.create_agent_proposal(&cycle, &agent).await?;
                 serde_json::to_value(proposal).map_err(Into::into)
+            },
+            "selfmade.develop" => {
+                let objective = _input
+                    .get("objective")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("make the highest-value safe improvement for JAMES");
+                let cycle = self.selfmade.run_evolution_cycle(objective).await?;
+                let agent = AssemblyDevelopmentAgent { ai: self.ai.clone() };
+                let report = self.selfmade.develop_cycle(&cycle, &agent).await?;
+                serde_json::to_value(report).map_err(Into::into)
             }
             "selfmade.assess" => {
                 let objective = _input
@@ -530,6 +575,16 @@ impl JamesAssembly {
             health: None,
             executor: selfmade_executor.clone(),
         });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.develop".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.develop".to_string()],
+            health: None,
+            executor: selfmade_executor.clone(),
+        });
+
         self.resolver.register(ExecutorCandidate {
             capability_id: "selfmade.assess".to_string(),
             provider: "james-selfmade".to_string(),
