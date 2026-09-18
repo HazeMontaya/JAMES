@@ -111,6 +111,93 @@ impl SelfMadeModule {
         &self.workspace
     }
 
+    /// Build a durable self-inventory from the live runtime registry and the
+    /// canonical repository state. This is JAMES's machine-readable answer to
+    /// "what am I, what do I have, and what is currently usable?".
+    pub async fn observe_self(&self) -> Result<serde_json::Value> {
+        let capabilities: Vec<serde_json::Value> = self
+            .capability_registry
+            .list_all()
+            .into_iter()
+            .map(|registered| serde_json::json!({
+                "id": registered.definition.id,
+                "name": registered.definition.name,
+                "version": registered.definition.version,
+                "provider": registered.definition.provider,
+                "category": registered.definition.category,
+                "risk_level": registered.definition.risk_level,
+                "status": registered.status,
+                "experimental": registered.definition.experimental,
+                "usage_count": registered.usage_count,
+                "last_used": registered.last_used,
+            }))
+            .collect();
+
+        let git_head = Command::new("git")
+            .current_dir(&self.root)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .await
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+        let git_status = Command::new("git")
+            .current_dir(&self.root)
+            .args(["status", "--porcelain=v1"])
+            .output()
+            .await
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(str::to_string).collect::<Vec<_>>())
+            .unwrap_or_default();
+
+        let snapshot = serde_json::json!({
+            "identity": {
+                "name": "JAMES",
+                "role": "local-first cognitive runtime and agent operating environment",
+                "selfmade_module": "james.selfmade",
+                "architecture": "runtime -> event bus -> state -> capabilities -> policy -> execution -> verification -> memory"
+            },
+            "time": Utc::now(),
+            "repository": {
+                "root": self.root,
+                "workspace": self.workspace,
+                "git_head": git_head,
+                "git_status": git_status,
+            },
+            "runtime": {
+                "selfmade_running": self.is_running().await,
+                "capability_count": capabilities.len(),
+                "capabilities": capabilities,
+            },
+            "autonomy": {
+                "observe": true,
+                "propose": true,
+                "sandbox_apply": true,
+                "verify": true,
+                "rollback": true,
+                "canonical_promotion": false,
+                "security_root_mutation": false,
+                "kill_control_mutation": false,
+            }
+        });
+
+        let state_dir = self.workspace.parent().unwrap();
+        tokio::fs::create_dir_all(state_dir).await?;
+        let state_file = state_dir.join("self-state.json");
+        tokio::fs::write(&state_file, serde_json::to_vec_pretty(&snapshot)?).await?;
+        self.emit("selfmade.self.observed", serde_json::json!({
+            "state_file": state_file,
+            "capability_count": capabilities.len(),
+            "git_head": snapshot["repository"]["git_head"],
+            "dirty": !snapshot["repository"]["git_status"].as_array().map(|v| v.is_empty()).unwrap_or(true)
+        })).await;
+
+        Ok(snapshot)
+    }
+
+
     pub fn new_mission(&self, objective: impl Into<String>) -> DevelopmentMission {
         DevelopmentMission {
             id: Uuid::now_v7().to_string(),
