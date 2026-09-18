@@ -46,7 +46,7 @@ if (Test-Ollama) {
 $exe = Join-Path $root 'out\modules\debug\james-system.exe'
 if (-not (Test-Path -LiteralPath $exe)) {
     Write-Host 'james-system.exe fehlt - baue zuerst ...'
-    Push-Location (Join-Path $root 'modules')
+    Push-Location (Join-Path $root 'runtime\modules')
     try {
         & $cargo build -p james-system
         if ($LASTEXITCODE -ne 0) { throw "Build fehlgeschlagen (exit $LASTEXITCODE)" }
@@ -59,7 +59,7 @@ Write-Host ''
 Write-Host 'JAMES System - Void-UI: http://127.0.0.1:38241  (Strg+C zum Beenden)'
 Write-Host ''
 
-Push-Location (Join-Path $root 'modules')
+Push-Location (Join-Path $root 'runtime\modules')
 try {
     & $exe
     if ($LASTEXITCODE -ne 0) { Write-Host ('james-system beendet mit exit={0}' -f $LASTEXITCODE) }
