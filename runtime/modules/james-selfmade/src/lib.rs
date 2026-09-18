@@ -198,6 +198,46 @@ impl SelfMadeModule {
     }
 
 
+    /// Run one bounded evolution assessment. This deliberately does not
+    /// promote source code: it turns observed evidence into a durable mission
+    /// that a later development agent can execute in the isolated workspace.
+    pub async fn assess_evolution(&self, objective: impl Into<String>) -> Result<DevelopmentMission> {
+        let objective = objective.into();
+        let self_state = self.observe_self().await?;
+        let capability_count = self_state["runtime"]["capability_count"].as_u64().unwrap_or(0);
+        let dirty = self_state["repository"]["git_status"]
+            .as_array()
+            .map(|items| !items.is_empty())
+            .unwrap_or(false);
+
+        let mut mission = self.new_mission(&objective);
+        mission.status = MissionStatus::Planning;
+        let mission_file = self.workspace.parent().unwrap().join("missions");
+        tokio::fs::create_dir_all(&mission_file).await?;
+        let path = mission_file.join(format!("{}.json", mission.id));
+
+        let assessment = serde_json::json!({
+            "mission": mission,
+            "evidence": {
+                "capability_count": capability_count,
+                "repository_dirty": dirty,
+                "self_state": self_state,
+            },
+            "next_phase": "proposal",
+            "promotion": "disabled_until_explicit_policy_gate"
+        });
+
+        tokio::fs::write(&path, serde_json::to_vec_pretty(&assessment)?).await?;
+        self.emit("selfmade.evolution.assessed", serde_json::json!({
+            "mission_id": mission.id,
+            "objective": objective,
+            "mission_file": path,
+            "capability_count": capability_count,
+            "repository_dirty": dirty
+        })).await;
+        Ok(mission)
+    }
+
     pub fn new_mission(&self, objective: impl Into<String>) -> DevelopmentMission {
         DevelopmentMission {
             id: Uuid::now_v7().to_string(),
@@ -410,6 +450,35 @@ mod tests {
         let mission = module.new_mission("improve runtime");
         assert_eq!(mission.status, MissionStatus::Observing);
         assert!(!mission.id.is_empty());
+    }
+
+    #[tokio::test]
+    async fn self_observation_contains_identity_and_capabilities() {
+        let bus = Arc::new(EventBus::new(32));
+        let registry = Arc::new(CapabilityRegistry::new());
+        registry.register(CapabilityDefinition {
+            id: "test.capability".into(),
+            name: "Test".into(),
+            category: CapabilityCategory::Custom("test".into()),
+            version: "1.0.0".into(),
+            provider: "test".into(),
+            description: "test".into(),
+            risk_level: RiskLevel::Low,
+            required_permissions: vec![],
+            dependencies: vec![],
+            input_schema: None,
+            output_schema: None,
+            execution_target: ExecutionTarget::Local,
+            tags: vec![],
+            deprecated: false,
+            experimental: false,
+        }, "test").await.unwrap();
+        let module = SelfMadeModule::new(std::env::temp_dir().join(format!("james-self-{}", Uuid::now_v7())), bus, registry);
+        module.start().await.unwrap();
+        let state = module.observe_self().await.unwrap();
+        assert_eq!(state["identity"]["name"], "JAMES");
+        assert_eq!(state["runtime"]["capability_count"], 1);
+        let _ = tokio::fs::remove_dir_all(module.root.clone()).await;
     }
 
     #[tokio::test]
