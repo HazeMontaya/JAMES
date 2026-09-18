@@ -697,6 +697,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn agent_step_projects_causal_execution_metadata() {
+        let bus = Arc::new(EventBus::new(1024));
+        bus.start().await.unwrap();
+        let orch = Arc::new(UiOrchestrator::new(bus.clone()));
+        let mut ev = Event::new("agent.step.started", "james-agents")
+            .with_payload(serde_json::json!({
+                "agent_id": "agent-1",
+                "plan_id": "plan-1",
+                "step_id": "step-1",
+                "capability_id": "code.execute",
+            }));
+        let ev = at(&mut ev, 0);
+        orch.projection.write().await.shift(&envelope(ev));
+        let intent = orch.project_current().await;
+        assert_eq!(intent.brain_state, "executing");
+        assert_eq!(intent.agent_id.as_deref(), Some("agent-1"));
+        assert_eq!(intent.plan_id.as_deref(), Some("plan-1"));
+        assert_eq!(intent.step_id.as_deref(), Some("step-1"));
+        assert_eq!(intent.capability_id.as_deref(), Some("code.execute"));
+        assert_eq!(intent.verification_status.as_deref(), Some("pending"));
+        assert!(intent.correlation_id.is_some());
+    }
+
+    #[tokio::test]
     async fn security_event_projects_lock() {
         let bus = Arc::new(EventBus::new(1024));
         bus.start().await.unwrap();
