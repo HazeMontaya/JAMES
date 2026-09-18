@@ -412,6 +412,7 @@ pub fn manifest() -> ModuleManifest {
 pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> {
     for (id, name, description, risk) in [
         ("selfmade.observe", "SelfMade Observe", "Inspect JAMES runtime and development state", RiskLevel::Low),
+        ("selfmade.assess", "SelfMade Assess", "Assess a bounded self-improvement mission from current evidence", RiskLevel::Medium),
         ("selfmade.propose", "SelfMade Propose", "Create a bounded source change proposal", RiskLevel::Medium),
         ("selfmade.verify", "SelfMade Verify", "Run deterministic verification in isolated workspace", RiskLevel::Medium),
         ("selfmade.rollback", "SelfMade Rollback", "Discard an unpromoted self-development workspace change", RiskLevel::High),
