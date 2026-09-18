@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use tracing::warn;
 
 use crate::model::*;
-use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequest};
+use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequestV2, RequestedEffect};
 use crate::{AgentError, AgentState, CapabilityResolver, ExecutorCandidate, ResolutionContext, PlanExecutionResult, StepResult};
 
 /// Simple exponential backoff delay for a retry attempt.
@@ -104,16 +104,25 @@ impl PlanExecutor {
         let input = substitute_variables(&step.input, &plan.variables)?;
         tracing::debug!("PlanExecutor: substituted input for step '{}': {}", step.name, input);
         
-        let request = CapabilityRequest {
-            caller: caller.to_string(),
-            capability_id: step.capability_id.clone(),
-            input,
-        };
-
         let started_at = Utc::now();
         let started = std::time::Instant::now();
 
-        let outcome_fut = self.broker.execute(request, executor.as_ref());
+        let requested_effect = match step.capability_id.split('.').next().unwrap_or_default() {
+            "memory" | "web" | "browser" | "filesystem" | "device" => RequestedEffect::Read,
+            "message" | "voice" | "communication" => RequestedEffect::Communicate,
+            "code" | "task" | "process" | "system" => RequestedEffect::Execute,
+            _ => RequestedEffect::Transform,
+        };
+        let outcome_fut = self.broker.execute_v2(
+            CapabilityRequestV2 {
+                requested_effect,
+                timeout_ms: step.timeout_ms,
+                target: step.metadata.target.clone(),
+                scope: step.metadata.scope.clone(),
+                ..CapabilityRequestV2::new(caller.to_string(), step.capability_id.clone(), input)
+            },
+            executor.as_ref(),
+        );
         let outcome = match step.timeout_ms {
             Some(ms) => {
                 tracing::debug!("PlanExecutor: executing with timeout {}ms", ms);
