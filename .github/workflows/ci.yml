@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   rust:
-    name: Rust workspace
+    name: Rust workspace (Windows MSVC)
     runs-on: windows-latest
     defaults:
       run:
@@ -24,11 +24,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
+          targets: x86_64-pc-windows-msvc
           components: rustfmt
+      - name: Verify Windows toolchain
+        shell: pwsh
+        run: |
+          rustc -vV
+          cargo -vV
+          rustup target list --installed
+          if (-not ((rustup target list --installed) -contains "x86_64-pc-windows-msvc")) {
+            throw "Required MSVC target is not installed."
+          }
       - name: Check workspace
-        run: cargo check --workspace
+        run: cargo check --workspace --target x86_64-pc-windows-msvc
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --workspace --target x86_64-pc-windows-msvc
 
   python:
     name: Python sidecar
@@ -48,7 +58,7 @@ jobs:
 
   discovery:
     name: Windows discovery tool
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: runtime/tools/discovery
