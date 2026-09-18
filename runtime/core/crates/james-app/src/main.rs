@@ -418,12 +418,14 @@ async fn main() -> Result<()> {
     let sync_registry = capability_registry.clone();
     let sync_bus = event_bus.clone();
     let sync_executor = python_executor.clone();
+    let sync_broker = platform_ctx.broker.clone();
     let sync_config = PythonBridgeConfig::load().unwrap_or_default();
     let _python_sync_task = tokio::spawn(async move {
         let sync = CapabilitySync::new(sync_config, sync_registry, Some(sync_bus));
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(10));
         loop {
             interval.tick().await;
+            let _expired_confirmations = sync_broker.cleanup_expired_confirmations().await;
             let caps = sync_nats.list_python_capabilities().await;
             if let Err(error) = sync.sync_all(&caps).await {
                 tracing::warn!("Python capability sync failed: {}", error);
