@@ -196,9 +196,9 @@ class JamesRuntime:
             model_context = getattr(selected_spec, "max_context", None)
             if model_context and required_context > model_context:
                 raise ModelUnavailableError(
-                    f"Request needs about {required_context} tokens, "
-                    f"but {routing_decision.model_id} supports {model_context}. "
-                    "Reduce history/output or use a larger-context model."
+                    routing_decision.model_id,
+                    f"request needs about {required_context} tokens but model supports {model_context}; "
+                    "reduce history/output or use a larger-context model",
                 )
         
         # Emit model selected event
@@ -254,8 +254,9 @@ class JamesRuntime:
             estimated = ContextManager.estimate_message_tokens(messages)
             if estimated > input_budget:
                 raise ModelUnavailableError(
-                    f"Prompt is approximately {estimated} tokens but only "
-                    f"{input_budget} input tokens remain for {routing_decision.model_id}."
+                    routing_decision.model_id,
+                    f"prompt is approximately {estimated} tokens but only "
+                    f"{input_budget} input tokens remain",
                 )
         request_copy.runtime_hint = runtime_selection.engine_type.value
         
