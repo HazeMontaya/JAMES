@@ -1,18 +1,10 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use std::path::PathBuf;
     use std::env;
+    use std::path::PathBuf;
 
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR")
-        .map(|p| PathBuf::from(p))
-        .unwrap_or_else(|_| env::current_dir().unwrap());
-
-    let workspace_root = manifest_dir
-        .parent().unwrap()  // crates
-        .parent().unwrap()  // core
-        .parent().unwrap(); // JAMES
-
-    let proto_path = workspace_root.join("proto").join("james_runtime.proto");
-    let proto_dir = workspace_root.join("proto");
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
+    let proto_dir = manifest_dir.join("proto");
+    let proto_path = proto_dir.join("james_runtime.proto");
 
     if !proto_path.exists() {
         return Err(format!("Proto file not found at: {:?}", proto_path).into());
