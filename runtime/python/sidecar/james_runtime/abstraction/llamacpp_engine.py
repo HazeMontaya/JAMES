@@ -47,9 +47,13 @@ class LlamaCppEngine(InferenceEngine):
         self._model_spec = config.model_spec
         llamacpp_config = config.llamacpp
         
-        # Build llama-server command
+        # Build llama-server command. The executable and working directory are
+        # configuration-driven so JAMES never depends on a hard-coded install path.
+        executable = getattr(llamacpp_config, "executable", "llama-server")
+        working_directory = getattr(llamacpp_config, "working_directory", None)
+        auto_start = getattr(llamacpp_config, "auto_start", True)
         args = [
-            "llama-server",
+            executable,
             "-m", llamacpp_config.model_path,
             "-ngl", str(llamacpp_config.n_gpu_layers),
             "-c", str(llamacpp_config.max_context),
