@@ -29,7 +29,7 @@ class AgentSystem:
         self._agents: Dict[str, ReActReasoner] = {}
 
     def get_reasoner(self, agent_id: str = "default", model: str = "llama-3.1-8b-instruct", goal_id: str = "") -> ReActReasoner:
-        key = f"{agent_id}:{model}"
+        key = f"{agent_id}:{model}:{goal_id}"
         if key not in self._agents:
             agent = ReActReasoner(
                 runtime=self.runtime,
@@ -78,6 +78,7 @@ class AgentSystem:
     def status(self) -> Dict[str, Any]:
         return {
             "agents": list(self._agents.keys()),
+            "active_goals": sorted({agent.goal_id for agent in self._agents.values() if agent.goal_id}),
             "tools": [t.name for t in self.tool_registry.list_tools()],
             "memories": self.memory.count(),
         }
