@@ -12,11 +12,6 @@ dependencies = [
     "grpcio>=1.62",
     "grpcio-tools>=1.62",
     "protobuf>=4.25",
-    "vllm>=0.4.0",
-    "llama-cpp-python>=0.2.90",
-    "torch>=2.3",
-    "transformers>=4.40",
-    "accelerate>=0.30",
     "prometheus-client>=0.19",
     "opentelemetry-api>=1.24",
     "opentelemetry-sdk>=1.24",
@@ -24,13 +19,17 @@ dependencies = [
     "structlog>=24.1",
     "pyyaml>=6.0",
     "httpx>=0.27",
-    "sqlite3",
     "psutil>=5.9",
     "GPUtil>=1.4",
 ]
 
 [project.optional-dependencies]
-airllm = ["airllm @ git+https://github.com/cortextorlab/airLLM@main"]
+vllm = ["vllm>=0.4.0", "torch>=2.3", "transformers>=4.40", "accelerate>=0.30"]
+llamacpp = ["llama-cpp-python>=0.2.90"]
+airllm = ["airllm @ git+https://github.com/cortextorlab/airLLM@main", "torch>=2.3", "transformers>=4.40", "accelerate>=0.30"]
+test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+"airllm @ git+https://github.com/cortextorlab/airLLM@main"]
 cuda = ["llama-cpp-python[cu121]"]
 rocm = ["llama-cpp-python[hip]"]
 metal = ["llama-cpp-python[metal]"]
@@ -41,7 +40,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["python/sidecar"]
+where = ["."]
 include = ["james_runtime*"]
 
 [tool.pytest.ini_options]
