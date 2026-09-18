@@ -19,6 +19,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use tokio::sync::Mutex;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::Utc;
@@ -300,6 +302,8 @@ pub struct CapabilityBroker {
     verified_cache: DashMap<String, serde_json::Value>,
     /// Pending interactive approvals, keyed by opaque confirmation id.
     confirmations: DashMap<String, ConfirmationRequest>,
+    /// Serializes confirmation state transitions so approval/consumption is single-use under concurrency.
+    confirmation_lock: Arc<Mutex<()>>,
     resource_admission: Option<Arc<dyn ResourceAdmission>>,
     semantic_verifier: Option<Arc<dyn SemanticVerifier>>,
 }
@@ -314,6 +318,7 @@ impl CapabilityBroker {
             audit_enabled: true,
             verified_cache: DashMap::new(),
             confirmations: DashMap::new(),
+            confirmation_lock: Arc::new(Mutex::new(())),
             resource_admission: None,
             semantic_verifier: None,
         }
@@ -725,7 +730,9 @@ impl CapabilityBroker {
             created_at: now,
             expires_at,
         };
-        self.confirmations.insert(confirmation_id, pending.clone());
+        { let _guard = self.confirmation_lock.lock().await;
+            self.confirmations.insert(confirmation_id, pending.clone());
+        }
         self.audit_v2("audit.capability.confirmation_requested", request, None).await;
         Ok(pending)
     }
@@ -736,32 +743,40 @@ impl CapabilityBroker {
         confirmation_id: &str,
         approver_identity: &str,
     ) -> Result<ConfirmationResult> {
-        let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
-            BrokerError::ConfirmationBindingFailed {
-                capability: "unknown".to_string(),
-                detail: "confirmation not found or already consumed".into(),
+        let pending = {
+            let _guard = self.confirmation_lock.lock().await;
+            let mut entry = self.confirmations.get_mut(confirmation_id).ok_or_else(|| {
+                BrokerError::ConfirmationBindingFailed {
+                    capability: "unknown".to_string(),
+                    detail: "confirmation not found or already consumed".into(),
+                }
+            })?;
+            if approver_identity.trim().is_empty() {
+                return Err(BrokerError::ConfirmationBindingFailed {
+                    capability: entry.capability_id.clone(),
+                    detail: "approver identity missing".into(),
+                }.into());
             }
-        })?;
-        if approver_identity.trim().is_empty() {
-            return Err(BrokerError::ConfirmationBindingFailed {
-                capability: pending.capability_id.clone(),
-                detail: "approver identity missing".into(),
-            }.into());
-        }
-        if pending.expires_at <= Utc::now() {
-            self.audit_confirmation("audit.capability.confirmation_expired", &pending, approver_identity).await;
-            drop(pending);
-            self.confirmations.remove(confirmation_id);
-            return Err(BrokerError::ConfirmationBindingFailed {
-                capability: "expired".to_string(),
-                detail: "confirmation expired".into(),
-            }.into());
-        }
-        let expires_at = pending.expires_at;
-        drop(pending);
-        if let Some(mut entry) = self.confirmations.get_mut(confirmation_id) {
+            if entry.expires_at <= Utc::now() {
+                let expired = entry.clone();
+                drop(entry);
+                self.confirmations.remove(confirmation_id);
+                self.audit_confirmation("audit.capability.confirmation_expired", &expired, approver_identity).await;
+                return Err(BrokerError::ConfirmationBindingFailed {
+                    capability: "expired".to_string(),
+                    detail: "confirmation expired".into(),
+                }.into());
+            }
+            if entry.approved {
+                return Err(BrokerError::ConfirmationBindingFailed {
+                    capability: entry.capability_id.clone(),
+                    detail: "confirmation already approved".into(),
+                }.into());
+            }
             entry.approved = true;
-        }
+            entry.clone()
+        };
+        let expires_at = pending.expires_at;
         self.audit_confirmation("audit.capability.confirmation_approved", &pending, approver_identity).await;
         Ok(ConfirmationResult {
             confirmation_id: confirmation_id.to_string(),
@@ -776,21 +791,26 @@ impl CapabilityBroker {
         confirmation_id: &str,
         approver_identity: &str,
     ) -> Result<()> {
-        let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
-            BrokerError::ConfirmationBindingFailed {
-                capability: "unknown".to_string(),
-                detail: "confirmation not found or already consumed".into(),
+        let pending = {
+            let _guard = self.confirmation_lock.lock().await;
+            let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
+                BrokerError::ConfirmationBindingFailed {
+                    capability: "unknown".to_string(),
+                    detail: "confirmation not found or already consumed".into(),
+                }
+            })?;
+            if approver_identity.trim().is_empty() {
+                return Err(BrokerError::ConfirmationBindingFailed {
+                    capability: pending.capability_id.clone(),
+                    detail: "approver identity missing".into(),
+                }.into());
             }
-        })?;
-        if approver_identity.trim().is_empty() {
-            return Err(BrokerError::ConfirmationBindingFailed {
-                capability: pending.capability_id.clone(),
-                detail: "approver identity missing".into(),
-            }.into());
-        }
+            let pending = pending.clone();
+            drop(pending);
+            let removed = self.confirmations.remove(confirmation_id).map(|(_, value)| value);
+            removed.ok_or_else(|| anyhow::anyhow!("confirmation was consumed concurrently"))?
+        };
         self.audit_confirmation("audit.capability.confirmation_rejected", &pending, approver_identity).await;
-        drop(pending);
-        self.confirmations.remove(confirmation_id);
         Ok(())
     }
 
@@ -850,7 +870,40 @@ impl CapabilityBroker {
         }
 
         let confirmation_id = c.confirmation_id.as_deref().unwrap();
-        let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
+        let pending = {
+            let _guard = self.confirmation_lock.lock().await;
+            let pending = self.confirmations.get(confirmation_id).ok_or_else(|| {
+                BrokerError::ConfirmationBindingFailed {
+                    capability: request.capability_id.clone(),
+                    detail: "confirmation not found, rejected, or already consumed".into(),
+                }
+            })?;
+            if pending.request_id != request.request_id
+                || pending.caller_identity != request.caller_identity
+                || pending.capability_id != request.capability_id
+                || pending.target != request.target
+                || pending.scope != request.scope
+                || !pending.approved {
+                return Err(BrokerError::ConfirmationBindingFailed {
+                    capability: request.capability_id.clone(),
+                    detail: "confirmation binding mismatch or approval missing".into(),
+                }.into());
+            }
+            if pending.expires_at <= Utc::now() {
+                let expired = pending.clone();
+                drop(pending);
+                self.confirmations.remove(confirmation_id);
+                self.audit_confirmation("audit.capability.confirmation_expired", &expired, &request.caller_identity).await;
+                return Err(BrokerError::ConfirmationBindingFailed {
+                    capability: request.capability_id.clone(),
+                    detail: "confirmation expired".into(),
+                }.into());
+            }
+            let pending = pending.clone();
+            drop(pending);
+            self.confirmations.remove(confirmation_id);
+            pending
+        };
             BrokerError::ConfirmationBindingFailed {
                 capability: request.capability_id.clone(),
                 detail: "confirmation not found, rejected, or already consumed".into(),
