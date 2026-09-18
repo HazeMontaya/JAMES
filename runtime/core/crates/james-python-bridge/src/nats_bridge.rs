@@ -68,6 +68,8 @@ pub struct PythonCapabilityInfo {
     pub category: String,
     pub version: String,
     pub description: String,
+    #[serde(default)]
+    pub risk_level: String,
     pub required_permissions: Vec<String>,
     pub input_schema: Option<serde_json::Value>,
     pub output_schema: Option<serde_json::Value>,
