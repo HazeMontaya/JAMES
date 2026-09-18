@@ -1,0 +1,29 @@
+[package]
+name = "james-agents"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "JAMES Agents — typed Agent/Plan/CapabilityRequest model and runtime"
+
+[dependencies]
+james-capabilities = { workspace = true }
+james-capability-broker = { workspace = true }
+james-events = { workspace = true }
+james-identity = { workspace = true }
+james-tasks = { workspace = true }
+james-memory = { path = "../../../modules/james-memory" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+dashmap = { workspace = true }
+async-trait = { workspace = true }
+schemars = { workspace = true }
+indexmap = "2"
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -2,14 +2,12 @@
 //!
 //! Supports Ollama, llama.cpp, and other local inference backends.
 
-use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
-use james_ai::{AiProvider, ChatMessage, FunctionCall, FunctionDef, InferenceRequest, InferenceResponse, MessageRole, Tool, ToolCall, ToolType, Usage};
+use james_ai::{AiProvider, ChatMessage, FunctionCall, InferenceRequest, InferenceResponse, MessageRole, ToolCall, ToolType, Usage};
 use james_models::{ModelCapability, ModelInfo, ModelType};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Ollama API structures
@@ -79,7 +77,6 @@ struct OllamaChatResponse {
 pub struct LocalAiProvider {
     client: Client,
     endpoint: String,
-    model_cache: Vec<ModelInfo>,
 }
 
 impl LocalAiProvider {
@@ -88,7 +85,6 @@ impl LocalAiProvider {
         Self {
             client: Client::new(),
             endpoint,
-            model_cache: Vec::new(),
         }
     }
 

@@ -1,0 +1,18 @@
+[package]
+name = "james-types"
+version = "0.1.0"
+edition = "2021"
+description = "JAMES Shared Types - Common types shared across all JAMES crates"
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+rust_decimal = "1.34"
+thiserror = { workspace = true }
+schemars = { workspace = true }
+
+[lib]
+name = "james_types"

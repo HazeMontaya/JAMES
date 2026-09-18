@@ -24,3 +24,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 semver = "1.0"
 async-trait = { workspace = true }
+libloading = { workspace = true }
+
+[dev-dependencies]
+james-module-host-fixture = { path = "../james-module-host-fixture" }

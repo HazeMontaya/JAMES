@@ -1,0 +1,53 @@
+skill:
+  name: market_research
+  version: "1.0.0"
+  category: business
+  description: "Research a market to validate demand and discover opportunities"
+  purpose: "Discover whether a market opportunity exists for a given topic"
+  status: enabled
+  prerequisites:
+    - web_access
+    - llm_reasoning
+  tags:
+    - business
+    - research
+    - market
+
+  entry_point: james_skills.builtin.market_research.skill:execute
+
+  inputs:
+    - name: topic
+      type: string
+      required: true
+      description: "The market/topic to research"
+
+  outputs:
+    - name: report
+      type: string
+      description: "Structured market research report"
+
+  steps:
+    - id: research
+      type: llm
+      name: "Research Topic"
+      description: "Synthesize a structured market research analysis"
+      inputs:
+        instructions: "Analyze demand, competitors, trends, target audience, and opportunities."
+
+  metrics:
+    - sources_analyzed
+    - confidence_score
+    - opportunities_found
+
+  verification:
+    - type: criteria
+      criteria:
+        - contains:demand
+        - contains:competitor
+        - contains:opportunity
+        - min_length:500
+      min_score: 0.75
+
+  failure_modes:
+    - insufficient_data
+    - contradictory_signals

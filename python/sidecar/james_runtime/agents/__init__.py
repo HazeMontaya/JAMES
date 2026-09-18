@@ -1,0 +1,56 @@
+"""JAMES Agent System - wires runtime, tools, memory and reasoners"""
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from james_runtime.agents.memory import MemoryStore, MemoryTools
+from james_runtime.agents.reasoner import AgentResult, ReActReasoner
+from james_runtime.tools.builtins import default_tools
+from james_runtime.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+class AgentSystem:
+    """Manager for agents, tools and memory across the runtime."""
+
+    def __init__(self, runtime, base_dir: Optional[Path] = None):
+        self.runtime = runtime
+        self.base_dir = base_dir or Path(".james")
+        self.tool_registry = ToolRegistry()
+
+        # Memory
+        self.memory = MemoryStore(self.base_dir / "memory" / "memory.jsonl")
+
+        # Register built-in + memory tools
+        self.tool_registry.register_many(default_tools())
+        MemoryTools(self.memory).register(self.tool_registry)
+
+        self._agents: Dict[str, ReActReasoner] = {}
+
+    def get_reasoner(self, agent_id: str = "default", model: str = "llama-3.1-8b-instruct", goal_id: str = "") -> ReActReasoner:
+        key = f"{agent_id}:{model}"
+        if key not in self._agents:
+            agent = ReActReasoner(
+                runtime=self.runtime,
+                tool_registry=self.tool_registry,
+                model=model,
+                agent_id=agent_id,
+                goal_id=goal_id,
+            )
+            self._agents[key] = agent
+        return self._agents[key]
+
+    async def run(self, query: str, agent_id: str = "default", model: str = "llama-3.1-8b-instruct",
+                  max_steps: int = 6, goal_id: str = "") -> AgentResult:
+        """Run an agent on a query."""
+        agent = self.get_reasoner(agent_id, model, goal_id)
+        agent.max_steps = max_steps
+        return await agent.run(query)
+
+    def status(self) -> Dict[str, Any]:
+        return {
+            "agents": list(self._agents.keys()),
+            "tools": [t.name for t in self.tool_registry.list_tools()],
+            "memories": self.memory.count(),
+        }

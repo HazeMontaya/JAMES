@@ -246,6 +246,7 @@ mod tests {
         
         core.start().await.unwrap();
         assert_eq!(core.status().await, CoreStatus::Running);
+        assert_eq!(core.capability_registry().count(), 0);
         
         core.stop().await.unwrap();
         assert_eq!(core.status().await, CoreStatus::Stopped);

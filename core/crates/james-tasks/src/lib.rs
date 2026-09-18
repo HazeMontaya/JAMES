@@ -305,6 +305,76 @@ impl TaskManager {
         self.active_count() < self.max_concurrent
     }
 
+    // ---- Persistence & recovery ------------------------------------------
+
+    /// Persist all tasks (including queued/running ones) to a JSON file.
+    /// Atomic via tmp-file + rename.
+    pub async fn save(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        let path = path.as_ref();
+        let tasks = self.list_tasks();
+        let json = serde_json::to_string_pretty(&tasks)?;
+
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        let tmp = path.with_extension("json.tmp");
+        tokio::fs::write(&tmp, json.as_bytes()).await?;
+        tokio::fs::rename(&tmp, path).await?;
+
+        info!("task manager saved {} tasks to {}", tasks.len(), path.display());
+        Ok(())
+    }
+
+    /// Load tasks from a JSON file into the manager, rebuilding indexes.
+    /// Running tasks are reset to `Queued` so they can be re-dispatched
+    /// after a restart (crash recovery).
+    pub async fn load(&self, path: impl AsRef<std::path::Path>) -> Result<usize> {
+        let path = path.as_ref();
+        if !path.exists() {
+            return Ok(0);
+        }
+        let raw = tokio::fs::read_to_string(path).await?;
+        let tasks: Vec<Task> = serde_json::from_str(&raw)?;
+
+        let mut recovered = 0;
+        for mut task in tasks {
+            // Duplicate ids are ignored; a re-run would have re-created them.
+            if self.tasks.contains_key(&task.id) {
+                continue;
+            }
+            // Crash recovery: anything still in-flight becomes queuable again.
+            if task.status == TaskStatus::Running {
+                task.status = TaskStatus::Queued;
+                task.started_at = None;
+            }
+            self.tasks.insert(task.id, task.clone());
+            self.by_status.entry(task.status.clone()).or_default().push(task.id);
+            self.by_source.entry(task.source.clone()).or_default().push(task.id);
+
+            // Re-emit so subscribers observe the recovered task.
+            self.emit_task_event(builtin_events::TASK_CREATED, &task).await;
+
+            if task.status != TaskStatus::Running {
+                recovered += 1;
+            }
+        }
+
+        info!("task manager recovered {} tasks from {}", recovered, path.display());
+        Ok(recovered)
+    }
+
+    /// Count of queued tasks that are ready to run (no unresolved deps).
+    pub fn ready_tasks(&self) -> Vec<Task> {
+        self.list_by_status(TaskStatus::Queued)
+            .into_iter()
+            .filter(|t| {
+                t.dependencies
+                    .iter()
+                    .all(|dep| self.tasks.get(dep).map(|d| d.status == TaskStatus::Completed).unwrap_or(false))
+            })
+            .collect()
+    }
+
     pub async fn cancel_task(&self, id: Uuid) -> Result<bool> {
         if let Some(mut task) = self.tasks.get_mut(&id) {
             if task.status == TaskStatus::Queued || task.status == TaskStatus::Running {
@@ -668,5 +738,124 @@ mod tests {
         assert_eq!(manager.active_count(), 0);
         assert_eq!(manager.count_by_status(TaskStatus::Queued), 0);
         assert_eq!(manager.count_by_status(TaskStatus::Cancelled), 1);
+    }
+
+    // ---- Persistence & recovery tests ----
+
+    fn sample_task(id: Uuid, status: TaskStatus) -> Task {
+        Task {
+            id,
+            task_type: "test".to_string(),
+            name: "Persisted Task".to_string(),
+            priority: TaskPriority::Normal,
+            status,
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+            source: "test".to_string(),
+            dependencies: vec![],
+            timeout_secs: 60,
+            retry_policy: RetryPolicy::default(),
+            current_retry: 0,
+            payload: serde_json::json!({"input": "data"}),
+            result: None,
+            error: None,
+            assigned_worker: None,
+            progress: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load_roundtrip() {
+        let manager = TaskManager::new(None);
+        manager.start().await.unwrap();
+
+        let id1 = manager.create_task(sample_task(Uuid::nil(), TaskStatus::Queued)).await.unwrap();
+        let id2 = manager.create_task(sample_task(Uuid::nil(), TaskStatus::Queued)).await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tasks.json");
+        manager.save(&path).await.unwrap();
+
+        // Fresh manager loads both tasks back.
+        let manager2 = TaskManager::new(None);
+        manager2.start().await.unwrap();
+        let loaded = manager2.load(&path).await.unwrap();
+        assert_eq!(loaded, 2);
+        assert_eq!(manager2.count(), 2);
+        assert!(manager2.get_task(id1).is_some());
+        assert!(manager2.get_task(id2).is_some());
+        assert_eq!(manager2.count_by_status(TaskStatus::Queued), 2);
+    }
+
+    #[tokio::test]
+    async fn test_load_resets_running_to_queued() {
+        let manager = TaskManager::new(None);
+        manager.start().await.unwrap();
+
+        let id = manager.create_task(sample_task(Uuid::nil(), TaskStatus::Queued)).await.unwrap();
+        manager.update_status(id, TaskStatus::Running).await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tasks.json");
+        manager.save(&path).await.unwrap();
+
+        // On load, the running task must come back as Queued (recoverable).
+        let manager2 = TaskManager::new(None);
+        manager2.start().await.unwrap();
+        let loaded = manager2.load(&path).await.unwrap();
+        assert_eq!(loaded, 1);
+        let task = manager2.get_task(id).unwrap();
+        assert_eq!(task.status, TaskStatus::Queued);
+        assert_eq!(manager2.active_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_ready_tasks_respects_dependencies() {
+        let manager = TaskManager::new(None);
+        manager.start().await.unwrap();
+
+        let id_a = manager.create_task(sample_task(Uuid::nil(), TaskStatus::Queued)).await.unwrap();
+        let mut task_b = sample_task(Uuid::nil(), TaskStatus::Queued);
+        task_b.dependencies = vec![id_a];
+        let id_b = manager.create_task(task_b).await.unwrap();
+
+        // Only A is ready (B waits on A completing).
+        let ready = manager.ready_tasks();
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].id, id_a);
+
+        manager.update_status(id_a, TaskStatus::Running).await.unwrap();
+        manager.set_result(id_a, serde_json::json!({})).await.unwrap();
+        let ready2 = manager.ready_tasks();
+        assert_eq!(ready2.len(), 1);
+        assert_eq!(ready2[0].id, id_b);
+    }
+
+    #[tokio::test]
+    async fn test_load_missing_file_returns_zero() {
+        let manager = TaskManager::new(None);
+        manager.start().await.unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let n = manager.load(dir.path().join("nope.json")).await.unwrap();
+        assert_eq!(n, 0);
+    }
+
+    #[tokio::test]
+    async fn test_load_skips_duplicates() {
+        let manager = TaskManager::new(None);
+        manager.start().await.unwrap();
+        let id = manager.create_task(sample_task(Uuid::nil(), TaskStatus::Queued)).await.unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tasks.json");
+        manager.save(&path).await.unwrap();
+
+        // Loading into the same manager skips the existing id.
+        let loaded = manager.load(&path).await.unwrap();
+        assert_eq!(loaded, 0);
+        assert_eq!(manager.count(), 1);
+        // But the task is still there.
+        assert!(manager.get_task(id).is_some());
     }
 }

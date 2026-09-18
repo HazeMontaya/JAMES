@@ -173,7 +173,7 @@ impl CoreConfig {
             .build()?;
         let mut loaded: Self = config.try_deserialize().unwrap_or_else(|_| Self::default());
         loaded.version = CONFIG_VERSION;
-        loaded.migrate();
+        loaded.migrate()?;
         Ok(loaded)
     }
 

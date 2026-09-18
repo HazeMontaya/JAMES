@@ -133,8 +133,7 @@ impl CapabilityRegistry {
 
     pub async fn start(&self) -> Result<()> {
         *self.running.write().await = true;
-        self.register_builtin_capabilities().await?;
-        info!("Capability Registry started with {} built-in capabilities", self.capabilities.len());
+        info!("Capability Registry started with {} registered capabilities", self.capabilities.len());
         Ok(())
     }
 
@@ -294,118 +293,6 @@ impl CapabilityRegistry {
         Ok(())
     }
 
-    async fn register_builtin_capabilities(&self) -> Result<()> {
-        let builtins = vec![
-            CapabilityDefinition {
-                id: "system.files.read".to_string(),
-                name: "Read Files".to_string(),
-                category: CapabilityCategory::File,
-                version: "1.0.0".to_string(),
-                provider: "james-core".to_string(),
-                description: "Read files from the local filesystem".to_string(),
-                risk_level: RiskLevel::Low,
-                required_permissions: vec!["filesystem.read".to_string()],
-                dependencies: vec![],
-                input_schema: Some(serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "path": { "type": "string" },
-                        "encoding": { "type": "string", "enum": ["utf-8", "base64", "binary"], "default": "utf-8" }
-                    },
-                    "required": ["path"]
-                })),
-                output_schema: Some(serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "content": { "type": "string" },
-                        "size": { "type": "number" },
-                        "modified_at": { "type": "string", "format": "date-time" }
-                    },
-                    "required": ["content"]
-                })),
-                execution_target: ExecutionTarget::Local,
-                tags: vec!["filesystem".to_string(), "read".to_string()],
-                deprecated: false,
-                experimental: false,
-            },
-            CapabilityDefinition {
-                id: "system.files.write".to_string(),
-                name: "Write Files".to_string(),
-                category: CapabilityCategory::File,
-                version: "1.0.0".to_string(),
-                provider: "james-core".to_string(),
-                description: "Write files to the local filesystem".to_string(),
-                risk_level: RiskLevel::Medium,
-                required_permissions: vec!["filesystem.write".to_string()],
-                dependencies: vec![],
-                input_schema: Some(serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "path": { "type": "string" },
-                        "content": { "type": "string" },
-                        "encoding": { "type": "string", "enum": ["utf-8", "base64", "binary"], "default": "utf-8" },
-                        "create_dirs": { "type": "boolean", "default": true }
-                    },
-                    "required": ["path", "content"]
-                })),
-                output_schema: Some(serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "written": { "type": "boolean" },
-                        "size": { "type": "number" }
-                    },
-                    "required": ["written"]
-                })),
-                execution_target: ExecutionTarget::Local,
-                tags: vec!["filesystem".to_string(), "write".to_string()],
-                deprecated: false,
-                experimental: false,
-            },
-            CapabilityDefinition {
-                id: "system.process.start".to_string(),
-                name: "Start Process".to_string(),
-                category: CapabilityCategory::Process,
-                version: "1.0.0".to_string(),
-                provider: "james-core".to_string(),
-                description: "Start a local process".to_string(),
-                risk_level: RiskLevel::High,
-                required_permissions: vec!["process.execute".to_string()],
-                dependencies: vec![],
-                input_schema: Some(serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "command": { "type": "string" },
-                        "args": { "type": "array", "items": { "type": "string" } },
-                        "working_dir": { "type": "string" },
-                        "env": { "type": "object", "additionalProperties": { "type": "string" } },
-                        "timeout_secs": { "type": "number", "default": 60 }
-                    },
-                    "required": ["command"]
-                })),
-                output_schema: Some(serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "exit_code": { "type": "integer" },
-                        "stdout": { "type": "string" },
-                        "stderr": { "type": "string" },
-                        "duration_ms": { "type": "number" }
-                    },
-                    "required": ["exit_code", "stdout", "stderr"]
-                })),
-                execution_target: ExecutionTarget::Local,
-                tags: vec!["process".to_string(), "execute".to_string()],
-                deprecated: false,
-                experimental: false,
-            },
-        ];
-
-        for cap in builtins {
-            self.register(cap, "james-core").await.ok();
-        }
-
-        Ok(())
-    }
-
     pub fn get_schema(&self, id: &str) -> Option<schemars::schema::RootSchema> {
         if let Some(_cap) = self.capabilities.get(id) {
             Some(schema_for!(CapabilityDefinition))
@@ -491,13 +378,13 @@ mod tests {
         let registry = CapabilityRegistry::new();
         registry.start().await.unwrap();
 
-        // Builtins (see register_builtin_capabilities): File x2 (read/write),
-        // Process x1 (start).
+        // The core starts without concrete capabilities. Providers register
+        // their own capabilities after the zero-module boot gate.
         let file_caps = registry.list_by_category(CapabilityCategory::File);
-        assert!(file_caps.len() >= 2);
+        assert!(file_caps.is_empty());
 
         let process_caps = registry.list_by_category(CapabilityCategory::Process);
-        assert!(process_caps.len() >= 1);
+        assert!(process_caps.is_empty());
     }
 
     #[tokio::test]

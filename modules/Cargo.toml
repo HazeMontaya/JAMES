@@ -20,6 +20,9 @@ members = [
     "james-dashboard",
     "james-assembly",
     "james-system",
+    "james-adapter-kronos",
+    "james-market-data",
+    "james-financial-research",
 ]
 
 [workspace.package]
@@ -36,8 +39,9 @@ james-core = { path = "../core/crates/james-core" }
 james-events = { path = "../core/crates/james-events" }
 james-registry = { path = "../core/crates/james-registry" }
 james-capabilities = { path = "../core/crates/james-capabilities" }
-james-module-host = { path = "../core/crates/james-module-host" }
+james-capability-broker = { path = "../core/crates/james-capability-broker" }
 james-errors = { path = "../core/crates/james-errors" }
+james-module-host = { path = "../core/crates/james-module-host" }
 
 # Module dependencies (intra-workspace)
 james-ai = { path = "james-ai" }
@@ -50,6 +54,11 @@ james-browser = { path = "james-browser" }
 james-stt = { path = "james-stt" }
 james-tts = { path = "james-tts" }
 james-voice = { path = "james-voice" }
+
+# Adapter dependencies
+james-adapter-kronos = { path = "james-adapter-kronos" }
+james-market-data = { path = "james-market-data" }
+james-financial-research = { path = "james-financial-research" }
 
 # External dependencies
 tokio = { version = "1.38", features = ["full"] }

@@ -3,14 +3,12 @@
 //! Provides the `text.input` capability for reading text from stdin or other sources.
 
 use std::sync::Arc;
-use std::time::Duration;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_module_host::{ModuleManifest, ModuleType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
-use tokio::time::interval;
 use tracing::{info};
 use uuid::Uuid;
 
@@ -184,6 +182,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use james_module_host::ModuleManifestValidator;
     use james_events::EventBus;
 
     #[tokio::test]

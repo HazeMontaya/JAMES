@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_module_host::{ModuleManifest, ModuleType};
 use james_stt::SttModule;
 use james_tts::TtsModule;
 use serde::{Deserialize, Serialize};
@@ -122,6 +122,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use james_module_host::ModuleManifestValidator;
     #[tokio::test]
     async fn test_voice_manifest() {
         let m = manifest();

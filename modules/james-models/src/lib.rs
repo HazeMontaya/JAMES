@@ -5,12 +5,11 @@
 use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
-use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_events::EventBus;
+use james_module_host::{ModuleManifest, ModuleType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{info};
-use uuid::Uuid;
 
 /// Model metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +98,15 @@ impl ModelsModule {
 
     pub async fn register_model(&self, model: ModelInfo) -> Result<()> {
         self.models.write().await.push(model);
+        Ok(())
+    }
+
+    /// Replace the whole registry with a freshly discovered model list.
+    /// Keeps the router honest: no stale entries, no duplicates.
+    pub async fn replace_models(&self, models: Vec<ModelInfo>) -> Result<()> {
+        let mut registry = self.models.write().await;
+        registry.clear();
+        registry.extend(models);
         Ok(())
     }
 
@@ -218,6 +226,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 mod tests {
     use super::*;
     use james_events::EventBus;
+    use james_module_host::ModuleManifestValidator;
 
     #[tokio::test]
     async fn test_models_manifest() {

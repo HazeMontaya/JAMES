@@ -2,9 +2,9 @@
 //!
 //! Rules enforced:
 //! R1. Domain crates never reference UI stacks, concrete databases/model
-//!     providers, or the diagnostics bin (cycle guard). Scoped to the
-//!     current domain crates; NEW crates extend CRATES + rules in their
-//!     own tasks (M5 models, S6 storage).
+//!     providers, or other tools (cycle guard). Scoped to the current
+//!     domain crates; NEW crates extend CRATES + rules in their own tasks
+//!     (M5 models, S6 storage).
 //! R2. No secret-looking literals in non-test source.
 //!
 //! Method: plain substring scan over source files. Test-only code is
@@ -27,7 +27,7 @@ const CRATES: &[&str] = &[
     "core/crates/james-core/src",
 ];
 
-/// Extra roots scanned for secrets (including TS + diagnostics bin).
+/// Extra roots scanned for secrets (including TS code).
 const SECRET_ROOTS: &[&str] = &[
     "core/crates/james-events/src",
     "core/crates/james-errors/src",
@@ -38,7 +38,6 @@ const SECRET_ROOTS: &[&str] = &[
     "core/crates/james-scheduler/src",
     "core/crates/james-health/src",
     "core/crates/james-core/src",
-    "tools/diagnostics-bin/src",
     "tools/discovery/src",
 ];
 
@@ -48,8 +47,6 @@ const SECRET_ROOTS: &[&str] = &[
 /// here: field names (`ollama_url`) and docs legitimately mention them.
 /// They are enforced structurally instead (see DEP_CRATES below).
 const FORBIDDEN: &[(&str, &str)] = &[
-    ("james_diagnostics", "core->diagnostics cycle"),
-    ("james-diagnostics", "core->diagnostics cycle"),
     ("void", "Core->Void UI"),
     ("classic", "Core->Classic UI"),
     ("tauri", "Core->desktop shell"),

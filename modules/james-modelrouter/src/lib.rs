@@ -5,13 +5,12 @@
 use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
-use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_events::EventBus;
+use james_module_host::{ModuleManifest, ModuleType};
 use james_models::{ModelCapability, ModelInfo, ModelType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{info, warn};
-use uuid::Uuid;
+use tracing::info;
 
 /// Routing request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,6 +119,11 @@ impl ModelRouterModule {
         self.models_module.stop().await?;
         info!("James-ModelRouter stopped");
         Ok(())
+    }
+
+    /// Replace the router's model registry with a freshly discovered set.
+    pub async fn sync_models(&self, models: Vec<ModelInfo>) -> Result<()> {
+        self.models_module.replace_models(models).await
     }
 
     /// Route a request to the best model
@@ -320,6 +324,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 mod tests {
     use super::*;
     use james_events::EventBus;
+    use james_module_host::ModuleManifestValidator;
 
     #[tokio::test]
     async fn test_router_manifest() {

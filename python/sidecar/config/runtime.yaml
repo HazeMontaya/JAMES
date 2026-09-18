@@ -1,0 +1,72 @@
+# JAMES Runtime Configuration
+# Copy to config/runtime.yaml and customize
+
+# Engine configurations
+vllm:
+  model_path: ".james/models/llama-3.1-8b-instruct"
+  tp_size: 1
+  gpu_mem_util: 0.9
+  dtype: "auto"
+  max_context: 8192
+  quantization: null
+  enforce_eager: false
+  trust_remote_code: true
+  max_num_seqs: 256
+  max_num_batched_tokens: 8192
+
+llamacpp:
+  model_path: ".james/models/llama-3.1-8b-instruct-Q4_K_M.gguf"
+  n_gpu_layers: -1
+  max_context: 8192
+  port: 8080
+  host: "127.0.0.1"
+  parallel: 4
+  flash_attn: true
+  mlock: true
+  n_threads: 0
+  n_batch: 512
+  n_ubatch: 512
+
+airllm:
+  model_path: ".james/models/llama-3.3-70b-instruct"
+  vram_limit_gb: 4.0
+  ram_limit_gb: 32.0
+  max_context: 4096
+  dtype: "float16"
+  offload_buffers: true
+
+# Router configuration
+router:
+  quality_weight: 0.4
+  speed_weight: 0.2
+  cost_weight: 0.2
+  privacy_weight: 0.2
+  default_quality_tier: "balanced"
+  default_privacy: "prefer_local"
+  prefer_local: true
+
+# Budget policy
+budget:
+  daily_ai_budget_usd: 0.0
+  monthly_ai_budget_usd: 0.0
+  max_single_request_usd: 0.01
+  approved_models: []
+  approved_providers: ["local"]
+
+# Hardware settings
+vram_headroom: 0.1
+vram_poll_interval_ms: 5000
+
+# Paths
+models_dir: ".james/models"
+cache_dir: ".james/cache"
+db_path: ".james/runtime.db"
+
+# Server ports
+http_port: 38242
+grpc_port: 38243
+ws_port: 38244
+
+# Logging
+log_level: "INFO"
+log_format: "json"

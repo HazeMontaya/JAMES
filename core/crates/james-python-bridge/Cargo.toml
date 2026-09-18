@@ -1,0 +1,51 @@
+[package]
+name = "james-python-bridge"
+version = { workspace = true }
+edition = "2021"
+license = "MIT"
+description = "JAMES Python Bridge - NATS-based bridge between Rust core and Python services"
+repository = "https://github.com/james-project/james"
+categories = ["bridge", "integration", "async"]
+keywords = ["james", "bridge", "nats", "python"]
+
+[dependencies]
+# Local crates
+james-core = { workspace = true }
+james-errors = { workspace = true }
+james-events = { workspace = true }
+james-capabilities = { workspace = true }
+james-capability-broker = { workspace = true }
+james-registry = { workspace = true }
+
+# NATS
+async-nats = { workspace = true }
+futures = { workspace = true }
+
+# Core deps from workspace
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+
+# Config
+clap = { workspace = true, features = ["derive", "env"] }
+config = { workspace = true, features = ["toml"] }
+toml = { workspace = true }
+
+# Serialization
+bincode = { workspace = true }
+rmp-serde = { workspace = true }
+
+# Additional deps for bridge
+dashmap = { version = "5.5", features = ["rayon"] }
+dirs = "5.0"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio-test = "0.4"

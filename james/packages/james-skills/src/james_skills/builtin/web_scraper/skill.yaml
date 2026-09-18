@@ -1,0 +1,55 @@
+skill:
+  name: web_scraper
+  version: "1.0.0"
+  category: research
+  description: "Scrape and summarize web content from a given URL"
+  purpose: "Extract structured information and summaries from web pages"
+  status: enabled
+  prerequisites:
+    - web_access
+    - llm_reasoning
+  tags:
+    - research
+    - web
+    - scraping
+    - extraction
+
+  entry_point: james_skills.builtin.web_scraper.skill:execute
+
+  inputs:
+    - name: url
+      type: string
+      required: true
+      description: "The URL to scrape"
+    - name: query
+      type: string
+      required: false
+      description: "Optional extraction target / question about the page"
+
+  outputs:
+    - name: content
+      type: string
+      description: "Scraped content summary"
+
+  steps:
+    - id: scrape
+      type: tool
+      name: "Scrape URL"
+      description: "Fetch and extract the page content via the world web_fetch tool"
+      tool_ref: web_fetch
+
+  metrics:
+    - content_length
+    - extraction_confidence
+
+  verification:
+    - type: criteria
+      criteria:
+        - contains:http
+        - min_length:80
+      min_score: 0.6
+
+  failure_modes:
+    - unreachable_url
+    - blocked_by_robots
+    - empty_content

@@ -20,6 +20,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+pub mod abi;
 mod manifest;
 mod lifecycle;
 mod loader;
@@ -511,7 +512,7 @@ let entry = RegistryEntry {
             provider: manifest.id.clone(),
             status: RegistryStatus::Active,
             capabilities: manifest.capabilities.clone(),
-            dependencies: manifest.dependencies.iter().map(|d| Uuid::now_v7()).collect(),
+            dependencies: manifest.dependencies.iter().map(|_| Uuid::now_v7()).collect(),
             metadata: serde_json::to_value(manifest)?,
             registered_at: Utc::now(),
             last_seen: Utc::now(),
@@ -525,10 +526,7 @@ let entry = RegistryEntry {
     /// Check for dependency cycles
 async fn check_dependency_cycles(&self, manifest: &crate::manifest::ModuleManifest) -> Result<()> {
         // Simple cycle detection: check if any dependency transitively depends on this module
-        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut stack: Vec<String> = Vec::new();
-        
-for dep in &manifest.dependencies {
+        for dep in &manifest.dependencies {
             if self.would_create_cycle(&manifest.id, &dep.name).await? {
                 return Err(ModuleHostError::DependencyCycle(
                     format!("Adding module {} would create a dependency cycle", manifest.id)

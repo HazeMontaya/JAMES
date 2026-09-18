@@ -7,10 +7,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_module_host::{ModuleManifest, ModuleType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 use uuid::Uuid;
 
 /// Memory types
@@ -293,6 +293,7 @@ pub fn manifest() -> ModuleManifest {
         module_type: ModuleType::Service,
         entry_point: "james_memory".to_string(),
         capabilities: vec![
+            "memory.read".to_string(),
             "memory.working".to_string(),
             "memory.episodic".to_string(),
             "memory.semantic".to_string(),
@@ -331,6 +332,7 @@ pub fn manifest() -> ModuleManifest {
 /// Capabilities registration
 pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> {
     let caps = vec![
+        ("memory.read", "Read Memory", "Read matching memory entries"),
         ("memory.working", "Working Memory", "Short-term working memory"),
         ("memory.episodic", "Episodic Memory", "Event-based episodic memory"),
         ("memory.semantic", "Semantic Memory", "Fact-based semantic memory"),
@@ -377,12 +379,13 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 mod tests {
     use super::*;
     use james_events::EventBus;
+    use james_module_host::ModuleManifestValidator;
 
     #[tokio::test]
     async fn test_memory_manifest() {
         let manifest = manifest();
         assert_eq!(manifest.id, "james.memory");
-        assert_eq!(manifest.capabilities.len(), 5);
+        assert_eq!(manifest.capabilities.len(), 6);
         assert!(ModuleManifestValidator::validate(&manifest).is_ok());
     }
 }

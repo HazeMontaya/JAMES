@@ -1,0 +1,24 @@
+[package]
+name = "james-platform-services"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+description = "JAMES Platform Services - bridges platform ports into the Capability Broker"
+
+[dependencies]
+james-platform = { workspace = true }
+james-platform-windows = { workspace = true }
+james-capability-broker = { workspace = true }
+james-capabilities = { workspace = true }
+james-events = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+james-platform = { workspace = true }
+tempfile = { workspace = true }

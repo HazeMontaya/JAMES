@@ -16,6 +16,14 @@ members = [
     "crates/james-module-host",
     "crates/james-identity",
     "crates/james-audit",
+    "crates/james-agents",
+    "crates/james-platform",
+    "crates/james-platform-services",
+    "crates/james-platform-windows",
+    "crates/james-ui",
+    "crates/james-runtime-client",
+    "crates/james-python-bridge",
+    "crates/james-module-host-fixture",
 ]
 
 [workspace.package]
@@ -43,6 +51,13 @@ james-app = { path = "crates/james-app" }
 james-module-host = { path = "crates/james-module-host" }
 james-identity = { path = "crates/james-identity" }
 james-audit = { path = "crates/james-audit" }
+james-agents = { path = "crates/james-agents" }
+james-platform = { path = "crates/james-platform" }
+james-platform-services = { path = "crates/james-platform-services" }
+james-platform-windows = { path = "crates/james-platform-windows" }
+james-ui = { path = "crates/james-ui" }
+james-runtime-client = { path = "crates/james-runtime-client" }
+james-python-bridge = { path = "crates/james-python-bridge" }
 
 # Core dependencies
 tokio = { version = "1.38", features = ["full"] }
@@ -57,12 +72,17 @@ anyhow = "1.0"
 parking_lot = "0.12"
 dashmap = "5.5"
 async-trait = "0.1"
+libloading = "0.8"
 once_cell = "1.19"
 toml = "0.8"
 config = { version = "0.14", features = ["toml"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 schemars = { version = "0.8", features = ["chrono", "uuid1"] }
 sha2 = "0.10"
+
+# NATS for Python bridge
+async-nats = { version = "0.36" }
+futures = "0.3"
 
 # Serialization
 bincode = "1.3"

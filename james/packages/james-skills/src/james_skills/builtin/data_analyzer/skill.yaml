@@ -1,0 +1,56 @@
+skill:
+  name: data_analyzer
+  version: "1.0.0"
+  category: analytics
+  description: "Analyze tabular data and produce structured insights"
+  purpose: "Turn raw data (CSV/JSON) into statistical summaries and actionable findings"
+  status: enabled
+  prerequisites:
+    - llm_reasoning
+  tags:
+    - analytics
+    - data
+    - statistics
+    - insights
+
+  entry_point: james_skills.builtin.data_analyzer.skill:execute
+
+  inputs:
+    - name: data
+      type: string
+      required: true
+      description: "CSV or JSON data to analyze"
+    - name: question
+      type: string
+      required: false
+      description: "Optional analytical question to answer"
+
+  outputs:
+    - name: report
+      type: string
+      description: "Structured data analysis report"
+
+  steps:
+    - id: analyze
+      type: llm
+      name: "Analyze Data"
+      description: "Compute statistics and generate insights"
+      inputs:
+        instructions: "Summarize the dataset, compute statistics, and surface actionable insights."
+
+  metrics:
+    - records
+    - fields
+    - insight_count
+
+  verification:
+    - type: criteria
+      criteria:
+        - contains:summary
+        - contains:insight
+        - min_length:200
+      min_score: 0.66
+
+  failure_modes:
+    - unparseable_data
+    - empty_dataset

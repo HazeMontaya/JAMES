@@ -8,8 +8,10 @@
 //! here; the actual signature check happens against the registered public key
 //! material and is run by the caller-supplied verifier.
 
+use std::path::Path;
 use std::sync::Arc;
 
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use james_events::{Event, EventBus};
@@ -209,6 +211,64 @@ impl IdentityRegistry {
         self.identities.iter().map(|e| e.clone()).collect()
     }
 
+    // ---- Persistence ------------------------------------------------------
+
+    /// Save all identities to a JSON file (atomic via temp file + rename).
+    /// A successful save makes the registry restart-safe.
+    pub async fn save(&self, path: impl AsRef<Path>) -> Result<()> {
+        let path = path.as_ref();
+        let identities = self.all();
+        let json = serde_json::to_string_pretty(&identities)
+            .context("failed to serialize identities")?;
+
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .context("failed to create identity directory")?;
+        }
+
+        let tmp = path.with_extension("json.tmp");
+        tokio::fs::write(&tmp, json.as_bytes())
+            .await
+            .context("failed to write identity tmp file")?;
+        tokio::fs::rename(&tmp, path)
+            .await
+            .context("failed to move identity file into place")?;
+
+        info!("identity registry saved: {} identities to {}", identities.len(), path.display());
+        Ok(())
+    }
+
+    /// Load identities from a JSON file, merging into the existing registry.
+    /// Identities that already exist are skipped (first wins).
+    pub async fn load(&self, path: impl AsRef<Path>) -> Result<usize> {
+        let path = path.as_ref();
+        if !path.exists() {
+            return Ok(0);
+        }
+        let raw = tokio::fs::read_to_string(path)
+            .await
+            .context("failed to read identity file")?;
+        let identities: Vec<Identity> = serde_json::from_str(&raw)
+            .context("failed to parse identity file")?;
+
+        let mut loaded = 0;
+        for identity in identities {
+            if self.identities.contains_key(&identity.id) {
+                continue;
+            }
+            self.identities.insert(identity.id.clone(), identity);
+            loaded += 1;
+        }
+        info!("identity registry loaded: {loaded} identities from {}", path.display());
+        Ok(loaded)
+    }
+
+    /// Reset the in-memory registry (used before loading a snapshot).
+    pub fn clear(&self) {
+        self.identities.clear();
+    }
+
     /// Number of registered identities.
     pub fn len(&self) -> usize {
         self.identities.len()
@@ -385,5 +445,76 @@ mod tests {
             .unwrap();
         assert_eq!(envelope.event.event_type, "audit.claim.verified");
         assert_eq!(envelope.event.payload["subject"], "mod1");
+    }
+
+    #[tokio::test]
+    async fn test_save_and_load_roundtrip() {
+        let reg = IdentityRegistry::new();
+        reg.register(Identity::new("mod1", IdentityKind::Module, "m1", b"key1")).unwrap();
+        reg.register(Identity::new("user1", IdentityKind::User, "u1", b"key2")).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("identities.json");
+
+        reg.save(&path).await.unwrap();
+
+        // Fresh registry loads the two identities back.
+        let reg2 = IdentityRegistry::new();
+        let loaded = reg2.load(&path).await.unwrap();
+        assert_eq!(loaded, 2);
+        assert_eq!(reg2.len(), 2);
+        let id = reg2.get("mod1").unwrap();
+        assert_eq!(id.kind, IdentityKind::Module);
+        assert_eq!(id.name, "m1");
+        assert!(id.is_active());
+    }
+
+    #[tokio::test]
+    async fn test_load_skips_duplicates() {
+        let reg = IdentityRegistry::new();
+        reg.register(Identity::new("mod1", IdentityKind::Module, "m1", b"key1")).unwrap();
+        reg.register(Identity::new("mod2", IdentityKind::Module, "m2", b"key3")).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("identities.json");
+        reg.save(&path).await.unwrap();
+
+        // Loading into the same registry skips the existing 'mod1'.
+        let loaded = reg.load(&path).await.unwrap();
+        assert_eq!(loaded, 0); // both already present
+        assert_eq!(reg.len(), 2);
+
+        // Loading into a registry with one existing identity adds the other.
+        let reg3 = IdentityRegistry::new();
+        reg3.register(Identity::new("mod1", IdentityKind::Module, "m1", b"key1")).unwrap();
+        let loaded2 = reg3.load(&path).await.unwrap();
+        assert_eq!(loaded2, 1);
+        assert_eq!(reg3.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_load_missing_file_returns_zero() {
+        let reg = IdentityRegistry::new();
+        let dir = tempfile::tempdir().unwrap();
+        let n = reg.load(dir.path().join("nope.json")).await.unwrap();
+        assert_eq!(n, 0);
+    }
+
+    #[tokio::test]
+    async fn test_load_after_revocation_restores_status() {
+        let reg = IdentityRegistry::new();
+        reg.register(Identity::new("mod1", IdentityKind::Module, "m1", b"key1")).unwrap();
+        assert!(reg.revoke("mod1"));
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("identities.json");
+        reg.save(&path).await.unwrap();
+
+        // Re-load: the revoked status round-trips.
+        let reg2 = IdentityRegistry::new();
+        reg2.load(&path).await.unwrap();
+        let id = reg2.get("mod1").unwrap();
+        assert_eq!(id.status, IdentityStatus::Revoked);
+        assert!(!id.is_active());
     }
 }

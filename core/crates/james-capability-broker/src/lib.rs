@@ -23,7 +23,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chrono::Utc;
 use dashmap::DashMap;
-use james_capabilities::CapabilityRegistry;
+use james_capabilities::{CapabilityRegistry, CapabilityStatus};
 use james_events::{Event, EventBus};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
@@ -227,10 +227,14 @@ impl CapabilityBroker {
         let start = Instant::now();
 
         // 1. Capability must exist and be available.
-        let definition = self
+        let registered = self
             .registry
-            .get_definition(&request.capability_id)
+            .get(&request.capability_id)
             .ok_or_else(|| BrokerError::CapabilityUnavailable(request.capability_id.clone()))?;
+        if registered.status != CapabilityStatus::Available {
+            return Err(BrokerError::CapabilityUnavailable(request.capability_id.clone()).into());
+        }
+        let definition = registered.definition;
 
         // 2. Permission check — every required permission must be granted.
         for perm in &definition.required_permissions {
@@ -281,7 +285,15 @@ impl CapabilityBroker {
                     BrokerError::ConfirmationRequired(request.capability_id.clone()).into()
                 );
             }
-            PolicyDecision::Conditional(_) | PolicyDecision::Allow => {}
+            PolicyDecision::Conditional(condition) => {
+                self.audit("audit.capability.conditional", &request, None).await;
+                return Err(BrokerError::PolicyDenied(
+                    request.capability_id.clone(),
+                    format!("condition not satisfied: {condition}"),
+                )
+                .into());
+            }
+            PolicyDecision::Allow => {}
         }
 
         // 5. Execution boundary — delegate to the executor.
@@ -339,10 +351,14 @@ impl CapabilityBroker {
 
     /// Check-only decision (no execution) — used by UIs to preview permission.
     pub async fn decide(&self, request: &CapabilityRequest) -> Result<PolicyDecision> {
-        let definition = self
+        let registered = self
             .registry
-            .get_definition(&request.capability_id)
+            .get(&request.capability_id)
             .ok_or_else(|| BrokerError::CapabilityUnavailable(request.capability_id.clone()))?;
+        if registered.status != CapabilityStatus::Available {
+            return Err(BrokerError::CapabilityUnavailable(request.capability_id.clone()).into());
+        }
+        let definition = registered.definition;
         for perm in &definition.required_permissions {
             let granted = self
                 .grants
@@ -571,5 +587,60 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("confirmation"), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn test_disabled_capability_cannot_execute_or_decide() {
+        let reg = registry_with(&[("memory.read", vec!["memory.read"])]).await;
+        reg.update_status("memory.read", CapabilityStatus::Disabled).unwrap();
+        let broker = CapabilityBroker::new(reg.clone()).without_audit();
+        broker.grant_capability_permissions("x", "memory.read");
+
+        let err = broker
+            .execute(
+                CapabilityRequest {
+                    caller: "x".to_string(),
+                    capability_id: "memory.read".to_string(),
+                    input: serde_json::json!({}),
+                },
+                &NoopExecutor,
+            )
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("not registered or not available"), "{err:?}");
+
+        let err = broker
+            .decide(&CapabilityRequest {
+                caller: "x".to_string(),
+                capability_id: "memory.read".to_string(),
+                input: serde_json::json!({}),
+            })
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("not registered or not available"), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn test_conditional_policy_does_not_execute_without_evaluation() {
+        let reg = registry_with(&[("process.run", vec!["process.execute"])]).await;
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("x", "process.run");
+        broker.add_policy(PolicyRule {
+            capability_id: "process.run".to_string(),
+            decision: PolicyDecision::Conditional("only during maintenance window".to_string()),
+        });
+
+        let err = broker
+            .execute(
+                CapabilityRequest {
+                    caller: "x".to_string(),
+                    capability_id: "process.run".to_string(),
+                    input: serde_json::json!({}),
+                },
+                &NoopExecutor,
+            )
+            .await
+            .unwrap_err();
+        assert!(err.to_string().contains("condition not satisfied"), "{err:?}");
     }
 }

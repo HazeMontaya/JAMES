@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_module_host::{ModuleManifest, ModuleType};
 use james_chat::ChatModule;
 use james_ai::AiModule;
 use james_memory::{MemoryEntry, MemoryModule, MemoryType};
@@ -43,22 +43,20 @@ pub struct VoidMessage {
 pub struct VoidModule {
     config: VoidConfig,
     event_bus: Arc<EventBus>,
-    capability_registry: Arc<CapabilityRegistry>,
     running: Arc<RwLock<bool>>,
-    chat: Arc<ChatModule>,
     ai: Arc<AiModule>,
     memory: Arc<MemoryModule>,
     tasks: Arc<TasksModule>,
-    web_research: Arc<WebResearchModule>,
     messages: Arc<RwLock<Vec<VoidMessage>>>,
 }
 
 impl VoidModule {
     pub fn new(config: VoidConfig, event_bus: Arc<EventBus>, capability_registry: Arc<CapabilityRegistry>,
-               chat: Arc<ChatModule>, ai: Arc<AiModule>, memory: Arc<MemoryModule>,
-               tasks: Arc<TasksModule>, web_research: Arc<WebResearchModule>) -> Self {
-        Self { config, event_bus, capability_registry, running: Arc::new(RwLock::new(false)),
-               chat, ai, memory, tasks, web_research, messages: Arc::new(RwLock::new(Vec::new())) }
+         _chat: Arc<ChatModule>, ai: Arc<AiModule>, memory: Arc<MemoryModule>,
+         tasks: Arc<TasksModule>, _web_research: Arc<WebResearchModule>) -> Self {
+     let _ = capability_registry;
+     Self { config, event_bus, running: Arc::new(RwLock::new(false)),
+         ai, memory, tasks, messages: Arc::new(RwLock::new(Vec::new())) }
     }
 
     pub async fn start(&self) -> Result<()> {
@@ -244,6 +242,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use james_module_host::ModuleManifestValidator;
     #[tokio::test]
     async fn test_void_manifest() {
         let m = manifest();

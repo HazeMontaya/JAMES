@@ -3,14 +3,15 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
+use tracing::info;
 
-use crate::{ModuleManifest, ModuleMeta, ModuleState, ModuleHostError};
+use crate::abi::{
+    NativeInitFn, NativeLifecycleFn, NativeModuleAbi, JAMES_MODULE_ABI_VERSION,
+};
+use crate::{ModuleHostError, ModuleManifest, ModuleState};
 
 /// Module loader configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,8 +34,15 @@ impl Default for ModuleLoaderConfig {
 /// Loaded module handle
 pub struct LoadedModule {
     pub manifest: ModuleManifest,
-    pub state: std::sync::Arc<tokio::sync::RwLock<crate::ModuleState>>,
+    pub state: std::sync::Arc<tokio::sync::RwLock<ModuleState>>,
     pub handle: ModuleHandle,
+    native: Option<LoadedNativeState>,
+}
+
+/// Keep the dynamic library alive and hold the resolved ABI.
+struct LoadedNativeState {
+    _library: libloading::Library,
+    abi: NativeModuleAbi,
 }
 
 /// Module handle for interaction
@@ -42,18 +50,13 @@ pub struct LoadedModule {
 pub struct ModuleHandle {
     pub id: String,
     pub name: String,
-    // In a real implementation, this would hold:
-    // - Dynamic library handle (for native modules)
-    // - WASM instance (for WASM modules)
-    // - Process handle (for out-of-process modules)
-    // - Communication channels
 }
 
 impl ModuleHandle {
     pub fn id(&self) -> &str {
         &self.id
     }
-    
+
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -72,10 +75,10 @@ impl NativeModuleLoader {
             loaded: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
-    async fn find_module_file(&self, manifest: &crate::ModuleManifest) -> Result<PathBuf, ModuleHostError> {
+
+    /// Locate the shared library backing a manifest entry point.
+    async fn find_module_file(&self, manifest: &ModuleManifest) -> Result<PathBuf, ModuleHostError> {
         for dir in &self.config.module_dirs {
-            // Try various extensions
             let extensions = if cfg!(target_os = "windows") {
                 vec!["dll"]
             } else if cfg!(target_os = "macos") {
@@ -83,55 +86,170 @@ impl NativeModuleLoader {
             } else {
                 vec!["so"]
             };
-            
+
             for ext in extensions {
                 let path = dir.join(format!("{}.{}", manifest.entry_point, ext));
                 if path.exists() {
                     return Ok(path);
                 }
-                
-                // Also try with lib prefix (Unix convention)
+
                 let path = dir.join(format!("lib{}.{}", manifest.entry_point, ext));
                 if path.exists() {
                     return Ok(path);
                 }
             }
         }
-        
+
         Err(ModuleHostError::LoadFailed(
             format!("Module binary not found for {}", manifest.id)
         ))
     }
-    
-    pub async fn load(&self, manifest: &crate::ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
+
+    async fn find_loaded(&self, id: &str) -> Result<NativeModuleAbi, ModuleHostError> {
+        let loaded = self.loaded.read().await;
+        let entry = loaded
+            .get(id)
+            .ok_or_else(|| ModuleHostError::NotFound(id.to_string()))?;
+        entry
+            .native
+            .as_ref()
+            .map(|n| n.abi)
+            .ok_or_else(|| ModuleHostError::InvalidState(format!("{} has no native payload", id)))
+    }
+
+    /// Resolve the exported symbols from an opened library.
+    unsafe fn resolve_abi(library: &libloading::Library) -> Result<NativeModuleAbi, ModuleHostError> {
+        let version: libloading::Symbol<unsafe extern "C" fn() -> u32> = library
+            .get(b"james_module_abi_version\0")
+            .map_err(|_| ModuleHostError::LoadFailed("missing james_module_abi_version".into()))?;
+        let reported = version();
+
+        if reported != JAMES_MODULE_ABI_VERSION {
+            return Err(ModuleHostError::LoadFailed(format!(
+                "unsupported ABI version {} (host expects {})",
+                reported, JAMES_MODULE_ABI_VERSION
+            )));
+        }
+
+        let init: Option<NativeInitFn> = match library.get(b"james_module_init\0") {
+            Ok(sym) => Some(*sym),
+            Err(_) => None,
+        };
+        let start: Option<NativeLifecycleFn> = match library.get(b"james_module_start\0") {
+            Ok(sym) => Some(*sym),
+            Err(_) => None,
+        };
+        let stop: Option<NativeLifecycleFn> = match library.get(b"james_module_stop\0") {
+            Ok(sym) => Some(*sym),
+            Err(_) => None,
+        };
+        let health: Option<NativeLifecycleFn> = match library.get(b"james_module_health_check\0") {
+            Ok(sym) => Some(*sym),
+            Err(_) => None,
+        };
+
+        if init.is_none() {
+            return Err(ModuleHostError::LoadFailed("missing james_module_init".into()));
+        }
+
+        Ok(NativeModuleAbi { init, start, stop, health })
+    }
+
+    pub async fn load(&self, manifest: &ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
         let path = self.find_module_file(manifest).await?;
-        
+
         info!("Loading native module {} from {:?}", manifest.id, path);
-        
-        // In a real implementation, we would:
-        // 1. Load the shared library using libloading or similar
-        // 2. Resolve entry points (init, start, stop, etc.)
-        // 3. Call module_init()
-        // 4. Return a handle
-        
-        // For now, return a mock handle
+
+        let library = unsafe { libloading::Library::new(&path) }
+            .map_err(|e| ModuleHostError::LoadFailed(format!("dlopen failed: {}", e)))?;
+
+        let abi = unsafe { Self::resolve_abi(&library) }?;
+
+        let manifest_json = serde_json::to_string(manifest)
+            .map_err(|e| ModuleHostError::LoadFailed(format!("manifest serialization failed: {}", e)))?;
+        let init_cstr = crate::abi::ManifestCString::new(&manifest_json)
+            .map_err(|e| ModuleHostError::LoadFailed(e.to_string()))?;
+
+        if let Some(init) = abi.init {
+            let status = unsafe { init(init_cstr.as_ptr()) };
+            if status != 0 {
+                return Err(ModuleHostError::LoadFailed(format!(
+                    "james_module_init returned status {}",
+                    status
+                )));
+            }
+        }
+
         let handle = ModuleHandle {
             id: manifest.id.clone(),
             name: manifest.name.clone(),
         };
-        
+
+        let loaded = LoadedModule {
+            manifest: manifest.clone(),
+            state: Arc::new(RwLock::new(ModuleState::Registered)),
+            handle: handle.clone(),
+            native: Some(LoadedNativeState { _library: library, abi }),
+        };
+
+        self.loaded.write().await.insert(handle.id.clone(), loaded);
+
         Ok(handle)
     }
-    
+
     pub async fn unload(&self, handle: &ModuleHandle) -> Result<(), ModuleHostError> {
         info!("Unloading module {}", handle.id);
-        // In real implementation: call module_shutdown(), dlclose(), etc.
+        if let Ok(abi) = self.find_loaded(&handle.id).await {
+            if let Some(stop) = abi.stop {
+                unsafe { stop() };
+            }
+        }
+        self.loaded.write().await.remove(&handle.id);
         Ok(())
     }
-    
+
     pub async fn health_check(&self, handle: &ModuleHandle) -> Result<bool, ModuleHostError> {
-        // In real implementation: call module_health_check()
-        Ok(true)
+        let abi = self.find_loaded(&handle.id).await?;
+        match abi.health {
+            Some(health) => Ok(unsafe { health() } == 1),
+            None => Ok(true),
+        }
+    }
+
+    /// Invoke james_module_start on a loaded module.
+    pub async fn start(&self, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
+        let abi = self.find_loaded(&manifest.id).await?;
+        if let Some(start) = abi.start {
+            let status = unsafe { start() };
+            if status != 0 {
+                return Err(ModuleHostError::LoadFailed(format!(
+                    "james_module_start returned status {}",
+                    status
+                )));
+            }
+        }
+        if let Some(loaded) = self.loaded.write().await.get_mut(&manifest.id) {
+            *loaded.state.write().await = ModuleState::Running;
+        }
+        Ok(())
+    }
+
+    /// Invoke james_module_stop on a loaded module.
+    pub async fn stop(&self, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
+        let abi = self.find_loaded(&manifest.id).await?;
+        if let Some(stop) = abi.stop {
+            let status = unsafe { stop() };
+            if status != 0 {
+                return Err(ModuleHostError::LoadFailed(format!(
+                    "james_module_stop returned status {}",
+                    status
+                )));
+            }
+        }
+        if let Some(loaded) = self.loaded.write().await.get_mut(&manifest.id) {
+            *loaded.state.write().await = ModuleState::Stopped;
+        }
+        Ok(())
     }
 }
 
@@ -148,17 +266,20 @@ impl WasmModuleLoader {
             loaded: Arc::new(RwLock::new(HashMap::new())),
         }
     }
-    
-    pub async fn load(&self, manifest: &crate::ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
-        // WASM loading implementation
-        Err(ModuleHostError::LoadFailed("WASM module loading not yet implemented".to_string()))
+
+    pub async fn load(&self, _manifest: &ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
+        Err(ModuleHostError::LoadFailed(
+            "WASM module loading not yet implemented".to_string()
+        ))
     }
-    
-    pub async fn unload(&self, handle: &ModuleHandle) -> Result<(), ModuleHostError> {
+
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self, _handle: &ModuleHandle) -> Result<(), ModuleHostError> {
         Ok(())
     }
-    
-    pub async fn health_check(&self, handle: &ModuleHandle) -> Result<bool, ModuleHostError> {
+
+    #[allow(clippy::unused_async)]
+    pub async fn health_check(&self, _handle: &ModuleHandle) -> Result<bool, ModuleHostError> {
         Ok(false)
     }
 }
@@ -172,17 +293,20 @@ impl ProcessModuleLoader {
     pub fn new(config: ModuleLoaderConfig) -> Self {
         Self { config }
     }
-    
-    pub async fn load(&self, manifest: &crate::ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
-        // Spawn module as separate process
-        Err(ModuleHostError::LoadFailed("Process module loading not yet implemented".to_string()))
+
+    pub async fn load(&self, _manifest: &ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
+        Err(ModuleHostError::LoadFailed(
+            "Process module loading not yet implemented".to_string()
+        ))
     }
-    
-    pub async fn unload(&self, handle: &ModuleHandle) -> Result<(), ModuleHostError> {
+
+    #[allow(clippy::unused_async)]
+    pub async fn unload(&self, _handle: &ModuleHandle) -> Result<(), ModuleHostError> {
         Ok(())
     }
-    
-    pub async fn health_check(&self, handle: &ModuleHandle) -> Result<bool, ModuleHostError> {
+
+    #[allow(clippy::unused_async)]
+    pub async fn health_check(&self, _handle: &ModuleHandle) -> Result<bool, ModuleHostError> {
         Ok(false)
     }
 }
@@ -200,7 +324,7 @@ impl ModuleLoader {
         let native = NativeModuleLoader::new(config.clone());
         let wasm = WasmModuleLoader::new(config.clone());
         let process = ProcessModuleLoader::new(config.clone());
-        
+
         Self {
             config,
             native,
@@ -208,21 +332,20 @@ impl ModuleLoader {
             process,
         }
     }
-    
+
     /// Discover modules in configured directories
     pub async fn discover(&self) -> Result<Vec<ModuleManifest>, ModuleHostError> {
         let mut manifests = Vec::new();
-        
+
         for dir in &self.config.module_dirs {
             if !dir.exists() {
                 continue;
             }
-            
+
             let entries = std::fs::read_dir(dir)?;
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
-                    // Look for manifest.toml or manifest.json
                     let manifest_path = path.join("manifest.toml");
                     if manifest_path.exists() {
                         if let Ok(content) = std::fs::read_to_string(&manifest_path) {
@@ -231,7 +354,7 @@ impl ModuleLoader {
                             }
                         }
                     }
-                    
+
                     let manifest_path = path.join("manifest.json");
                     if manifest_path.exists() {
                         if let Ok(content) = std::fs::read_to_string(&manifest_path) {
@@ -243,27 +366,27 @@ impl ModuleLoader {
                 }
             }
         }
-        
+
         Ok(manifests)
     }
-    
+
     /// Load a module using the appropriate backend
     pub async fn load(&self, manifest: &ModuleManifest) -> Result<ModuleHandle, ModuleHostError> {
-        // Determine backend based on manifest or config
-        // For now, use native loader
+        // All current module types map to the native (shared-library) backend.
+        // WASM/process backends are reserved for future sandboxed deployments.
+        let _ = &self.wasm;
+        let _ = &self.process;
         self.native.load(manifest).await
     }
-    
+
     /// Unload a module
     pub async fn unload(&self, handle: &ModuleHandle) -> Result<(), ModuleHostError> {
         self.native.unload(handle).await
     }
-    
+
     /// Start a loaded module
-    pub async fn start(&self, handle: &ModuleHandle, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
-        // In real implementation, call module_start()
-        info!("Starting module {}", handle.id);
-        Ok(())
+    pub async fn start(&self, _handle: &ModuleHandle, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
+        self.native.start(manifest).await
     }
 
     /// Load and start a module in one call
@@ -271,19 +394,20 @@ impl ModuleLoader {
         let handle = self.load(manifest).await?;
         self.start(&handle, manifest).await
     }
-    
+
     /// Stop a running module (by manifest only)
     pub async fn stop_by_manifest(&self, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
-        info!("Stopping module {}", manifest.id);
-        // In real implementation, find handle and call module_stop()
-        Ok(())
+        self.native.stop(manifest).await
     }
 
     /// Stop a running module
-    pub async fn stop(&self, handle: &ModuleHandle, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
-        info!("Stopping module {}", handle.id);
-        // In real implementation, call module_stop()
-        Ok(())
+    pub async fn stop(&self, _handle: &ModuleHandle, manifest: &ModuleManifest) -> Result<(), ModuleHostError> {
+        self.native.stop(manifest).await
+    }
+
+    /// Health check a loaded module
+    pub async fn health_check(&self, handle: &ModuleHandle) -> Result<bool, ModuleHostError> {
+        self.native.health_check(handle).await
     }
 
     /// Get all loaded modules
@@ -296,28 +420,18 @@ impl ModuleLoader {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::*;
-    
-    #[tokio::test]
-    async fn test_module_loader_discover() {
-        let config = ModuleLoaderConfig::default();
-        let loader = ModuleLoader::new(config);
-        
-        // Create a temp directory with a mock module
-        let temp_dir = std::env::temp_dir().join("james-test-modules");
-        std::fs::create_dir_all(&temp_dir).unwrap();
-        
-        let module_dir = temp_dir.join("test-module");
-        std::fs::create_dir_all(&module_dir).unwrap();
-        
-        // Create a mock manifest
-        let manifest = crate::ModuleManifest {
-            id: "com.test.module".to_string(),
-            name: "Test Module".to_string(),
+
+    fn test_manifest(id: &str, entry_point: &str) -> ModuleManifest {
+        ModuleManifest {
+            id: id.to_string(),
+            name: id.to_string(),
             version: "1.0.0".to_string(),
             description: "Test".to_string(),
             module_type: crate::ModuleType::Service,
-            entry_point: "test_module".to_string(),
+            entry_point: entry_point.to_string(),
             capabilities: vec![],
             dependencies: vec![],
             permissions: vec![],
@@ -329,31 +443,118 @@ mod tests {
             license: "MIT".to_string(),
             tags: vec![],
             min_core_version: "0.1.0".to_string(),
-            platforms: vec!["windows".to_string()],
-        };
-        
+            platforms: vec!["windows".to_string(), "linux".to_string(), "macos".to_string()],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_module_loader_discover() {
+        let temp_dir = std::env::temp_dir().join("james-test-modules");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let module_dir = temp_dir.join("test-module");
+        std::fs::create_dir_all(&module_dir).unwrap();
+
+        let manifest = test_manifest("com.test.module", "test_module");
+
         let manifest_path = module_dir.join("manifest.toml");
         std::fs::write(&manifest_path, toml::to_string(&manifest).unwrap()).unwrap();
-        
-        // Create a dummy binary
-        #[cfg(target_os = "windows")]
-        let binary_name = "test_module.dll";
-        #[cfg(not(target_os = "windows"))]
-        let binary_name = "libtest_module.so";
-        
-        std::fs::write(module_dir.join(binary_name), b"dummy").unwrap();
-        
-        // Test discovery with custom config
+
         let mut config = ModuleLoaderConfig::default();
         config.module_dirs = vec![temp_dir.clone()];
-        
+
         let loader = ModuleLoader::new(config);
         let manifests = loader.discover().await.unwrap();
-        
+
         assert!(!manifests.is_empty());
         assert_eq!(manifests[0].id, "com.test.module");
-        
-        // Cleanup
-        std::fs::remove_dir_all(temp_dir).ok();
+
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    /// Locate the compiled fixture cdylib next to the running test binary.
+    fn fixture_library_path() -> Option<PathBuf> {
+        let name_stem = "james_module_host_fixture";
+
+        let extensions: &[&str] = if cfg!(target_os = "windows") {
+            &["dll"]
+        } else if cfg!(target_os = "macos") {
+            &["dylib", "so"]
+        } else {
+            &["so"]
+        };
+
+        // The fixture crate is a dev-dependency, so its cdylib artifact is
+        // placed in the same `deps` directory as this test's executable.
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                        if name.starts_with(name_stem)
+                            || name.starts_with(&format!("{}-", name_stem))
+                            || name.starts_with(&format!("lib{}", name_stem))
+                        {
+                            if extensions.iter().any(|e| name.ends_with(e)) {
+                                return Some(p);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    #[tokio::test]
+    async fn test_native_module_lifecycle_via_dlopen() {
+        let Some(lib_path) = fixture_library_path() else {
+            eprintln!("fixture cdylib not found; skipping dynamic loading test");
+            return;
+        };
+
+        let temp_dir = std::env::temp_dir().join("james-native-fixture");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Copy fixture into temp dir under a stable name so find_module_file works.
+        let ext = lib_path.extension().and_then(|e| e.to_str()).unwrap_or("dll");
+        let dest = temp_dir.join(format!("james_module_host_fixture.{}", ext));
+        std::fs::copy(&lib_path, &dest).unwrap();
+
+        let config = ModuleLoaderConfig {
+            module_dirs: vec![temp_dir.clone()],
+            load_timeout: Duration::from_secs(30),
+            allow_unsigned: true,
+        };
+        let loader = ModuleLoader::new(config);
+
+        let manifest = test_manifest("com.james.fixture", "james_module_host_fixture");
+        let handle = loader.load(&manifest).await.expect("load should succeed");
+        assert_eq!(handle.id(), "com.james.fixture");
+
+        // Health before start: fixture reports 0 until started.
+        assert!(!loader.health_check(&handle).await.unwrap());
+
+        loader.start(&handle, &manifest).await.expect("start should succeed");
+        assert!(loader.health_check(&handle).await.unwrap());
+
+        loader.stop_by_manifest(&manifest).await.expect("stop should succeed");
+        assert!(!loader.health_check(&handle).await.unwrap());
+
+        loader.unload(&handle).await.expect("unload should succeed");
+        assert!(loader.loaded_modules().await.is_empty());
+
+        std::fs::remove_dir_all(&temp_dir).ok();
+    }
+
+    #[tokio::test]
+    async fn test_native_module_load_missing_binary_fails() {
+        let config = ModuleLoaderConfig::default();
+        let loader = ModuleLoader::new(config);
+
+        let manifest = test_manifest("com.james.nonexistent", "does_not_exist");
+        let result = loader.load(&manifest).await;
+        assert!(result.is_err());
     }
 }

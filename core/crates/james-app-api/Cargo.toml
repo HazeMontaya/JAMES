@@ -7,6 +7,8 @@ description = "JAMES Application API - localhost REST + WebSocket (v1 seed, prev
 
 [dependencies]
 james-events = { workspace = true }
+james-capability-broker = { workspace = true }
+james-agents = { workspace = true }
 axum = { workspace = true }
 tower-http = { workspace = true }
 tokio = { workspace = true }
@@ -15,6 +17,7 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 uuid = { workspace = true, features = ["v7"] }
 futures-util = "0.3"
 

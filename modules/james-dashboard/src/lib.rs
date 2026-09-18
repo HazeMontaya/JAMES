@@ -4,10 +4,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_module_host::{ModuleManifest, ModuleType};
 use james_ai::AiModule;
 use james_chat::ChatModule;
-use james_memory::{MemoryEntry, MemoryModule, MemoryQuery, MemoryType};
+use james_memory::{MemoryEntry, MemoryModule, MemoryQuery};
 use james_scheduler::SchedulerModule;
 use james_tasks::{Task, TasksModule};
 use james_voice::VoiceModule;
@@ -43,24 +43,19 @@ pub struct DashboardModule {
     event_bus: Arc<EventBus>,
     capability_registry: Arc<CapabilityRegistry>,
     running: Arc<RwLock<bool>>,
-    chat: Arc<ChatModule>,
-    ai: Arc<AiModule>,
     memory: Arc<MemoryModule>,
     tasks: Arc<TasksModule>,
-    web_research: Arc<WebResearchModule>,
-    voice: Arc<VoiceModule>,
-    scheduler: Arc<SchedulerModule>,
     start_time: std::time::Instant,
     event_count: Arc<RwLock<u64>>,
 }
 
 impl DashboardModule {
     pub fn new(config: DashboardConfig, event_bus: Arc<EventBus>, capability_registry: Arc<CapabilityRegistry>,
-               chat: Arc<ChatModule>, ai: Arc<AiModule>, memory: Arc<MemoryModule>,
-               tasks: Arc<TasksModule>, web_research: Arc<WebResearchModule>,
-               voice: Arc<VoiceModule>, scheduler: Arc<SchedulerModule>) -> Self {
+             _chat: Arc<ChatModule>, _ai: Arc<AiModule>, memory: Arc<MemoryModule>,
+             tasks: Arc<TasksModule>, _web_research: Arc<WebResearchModule>,
+             _voice: Arc<VoiceModule>, _scheduler: Arc<SchedulerModule>) -> Self {
         Self { config, event_bus, capability_registry, running: Arc::new(RwLock::new(false)),
-               chat, ai, memory, tasks, web_research, voice, scheduler,
+             memory, tasks,
                start_time: std::time::Instant::now(), event_count: Arc::new(RwLock::new(0)) }
     }
 
@@ -155,6 +150,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use james_module_host::ModuleManifestValidator;
     #[tokio::test]
     async fn test_dashboard_manifest() {
         let m = manifest();

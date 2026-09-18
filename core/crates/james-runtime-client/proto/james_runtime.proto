@@ -1,0 +1,234 @@
+syntax = "proto3";
+
+package james.runtime.v1;
+
+option go_package = "github.com/james/runtime/v1;runtime";
+
+import "google/protobuf/empty.proto";
+
+// ============ Common Types ============
+
+message ChatMessage {
+  string role = 1;
+  string content = 2;
+  string name = 3;
+  repeated ToolCall tool_calls = 4;
+  string tool_call_id = 5;
+}
+
+message ToolCall {
+  string id = 1;
+  string type = 2;
+  Function function = 3;
+}
+
+message Function {
+  string name = 1;
+  string arguments = 2;
+}
+
+message Tool {
+  string type = 1;
+  Function function = 2;
+}
+
+// ============ Completion ============
+
+message CompletionRequest {
+  string model = 1;
+  repeated ChatMessage messages = 2;
+  float temperature = 3;
+  int32 max_tokens = 4;
+  bool stream = 5;
+  repeated Tool tools = 6;
+  string runtime_hint = 7;
+}
+
+message Choice {
+  int32 index = 1;
+  ChatMessage message = 2;
+  string finish_reason = 3;
+}
+
+message CompletionResponse {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  repeated Choice choices = 4;
+  map<string, string> usage = 5;
+}
+
+message Chunk {
+  string id = 1;
+  string model = 2;
+  int64 created = 3;
+  repeated Choice choices = 4;
+}
+
+// ============ Routing ============
+
+enum QualityTier {
+  QUALITY_TIER_UNSPECIFIED = 0;
+  QUALITY_TIER_FAST = 1;
+  QUALITY_TIER_BALANCED = 2;
+  QUALITY_TIER_BEST = 3;
+}
+
+enum PrivacyLevel {
+  PRIVACY_LEVEL_UNSPECIFIED = 0;
+  PRIVACY_LEVEL_LOCAL_ONLY = 1;
+  PRIVACY_LEVEL_PREFER_LOCAL = 2;
+  PRIVACY_LEVEL_ALLOW_CLOUD = 3;
+}
+
+message RoutingRequest {
+  string task = 1;
+  repeated string required_capabilities = 2;
+  QualityTier quality_tier = 3;
+  PrivacyLevel privacy = 4;
+  int64 latency_budget_ms = 5;
+  double cost_budget_per_1k = 6;
+  int32 context_length_needed = 7;
+}
+
+message RoutingDecision {
+  string model_id = 1;
+  string provider = 2;
+  string reasoning = 3;
+  repeated string fallback_chain = 4;
+  double estimated_cost_per_1k = 5;
+  int32 estimated_latency_ms = 6;
+  repeated string required_capabilities = 7;
+}
+
+message RuntimeRequest {
+  string model_id = 1;
+  string quantization = 2;
+  bool offload = 3;
+  int32 max_latency_ms = 4;
+  double max_vram_gb = 5;
+}
+
+enum EngineType {
+  ENGINE_TYPE_UNSPECIFIED = 0;
+  ENGINE_TYPE_VLLM = 1;
+  ENGINE_TYPE_LLAMACPP = 2;
+  ENGINE_TYPE_AIRLLM = 3;
+}
+
+message RuntimeSelection {
+  EngineType engine_type = 1;
+  string model_id = 2;
+  string quantization = 3;
+  bool offload = 4;
+  double estimated_vram_gb = 5;
+  int32 estimated_latency_ms = 6;
+  repeated EngineType fallback_engines = 7;
+}
+
+// ============ Hardware ============
+
+message HardwareProfile {
+  string gpu_name = 1;
+  double vram_gb = 2;
+  string cuda_version = 3;
+  string rocm_version = 4;
+  bool metal_support = 5;
+  int32 cpu_cores = 6;
+  double ram_gb = 7;
+}
+
+// ============ Model Registry ============
+
+message ModelInfo {
+  string id = 1;
+  string name = 2;
+  string provider = 3;
+  int32 parameters_b = 4;
+  int32 max_context = 5;
+  repeated string capabilities = 6;
+  string quality_tier = 7;
+  float quality_score = 8;
+  string quantization = 9;
+  string format = 10;
+}
+
+message ModelRegistry {
+  repeated ModelInfo models = 1;
+}
+
+// ============ Cost ============
+
+message CostReport {
+  double total_cost_usd = 1;
+  map<string, double> cost_by_model = 2;
+  map<string, double> cost_by_engine = 3;
+  map<string, double> cost_by_agent = 4;
+}
+
+message BudgetPolicy {
+  double daily_ai_budget_usd = 1;
+  double monthly_ai_budget_usd = 2;
+  double max_single_request_usd = 3;
+  repeated string approved_models = 4;
+  repeated string approved_providers = 5;
+}
+
+message BudgetStatus {
+  double daily_spent = 1;
+  double daily_limit = 2;
+  double monthly_spent = 3;
+  double monthly_limit = 4;
+  bool daily_exceeded = 5;
+  bool monthly_exceeded = 6;
+}
+
+// ============ Events ============
+
+message RuntimeEvent {
+  string event_type = 1;
+  int64 timestamp = 2;
+  string event_id = 3;
+  string correlation_id = 4;
+  string causation_id = 5;
+  map<string, string> payload = 6;
+  string source = 7;
+  string severity = 8;
+}
+
+message EventFilter {
+  repeated string event_types = 1;
+  string source = 2;
+  string severity = 3;
+}
+
+// ============ Health ============
+
+message HealthStatus {
+  bool healthy = 1;
+  bool model_loaded = 2;
+  double vram_used_gb = 3;
+  double vram_total_gb = 4;
+  double latency_p50_ms = 5;
+  double latency_p99_ms = 6;
+  double error_rate = 7;
+}
+
+message EngineHealth {
+  string engine = 1;
+  HealthStatus status = 2;
+}
+
+// ============ Service ============
+
+service JamesRuntime {
+  rpc Complete(CompletionRequest) returns (CompletionResponse);
+  rpc StreamComplete(CompletionRequest) returns (stream Chunk);
+  rpc RouteModel(RoutingRequest) returns (RoutingDecision);
+  rpc SelectRuntime(RuntimeRequest) returns (RuntimeSelection);
+  rpc GetHardwareProfile(google.protobuf.Empty) returns (HardwareProfile);
+  rpc GetModelRegistry(google.protobuf.Empty) returns (ModelRegistry);
+  rpc GetCostReport(CostReport) returns (CostReport);
+  rpc UpdateBudget(BudgetPolicy) returns (BudgetStatus);
+  rpc StreamEvents(EventFilter) returns (stream RuntimeEvent);
+}

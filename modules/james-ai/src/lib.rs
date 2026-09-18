@@ -6,14 +6,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
-use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_events::EventBus;
+use james_module_host::{ModuleManifest, ModuleType};
 use james_modelrouter::{QualityTier, RoutingDecision, RoutingRequest};
 use james_models::{ModelCapability, ModelInfo, ModelType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{info, warn};
-use uuid::Uuid;
+use tracing::info;
 
 /// Inference request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -329,6 +328,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 mod tests {
     use super::*;
     use james_events::EventBus;
+    use james_module_host::ModuleManifestValidator;
 
     #[tokio::test]
     async fn test_ai_manifest() {

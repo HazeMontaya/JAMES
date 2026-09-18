@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
-use james_module_host::{ModuleManifest, ModuleManifestValidator, ModuleType};
+use james_module_host::{ModuleManifest, ModuleType};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::info;
@@ -138,6 +138,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use james_module_host::ModuleManifestValidator;
     #[tokio::test]
     async fn test_webresearch_manifest() {
         let m = manifest();

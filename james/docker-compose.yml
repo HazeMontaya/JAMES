@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    container_name: james-nats
+    ports:
+      - "4222:4222"   # Client connections
+      - "8222:8222"   # HTTP monitoring
+      - "7422:7422"   # Leafnode connections
+    command: [
+      "-js",
+      "-m", "8222",
+      "--jetstream",
+      "--store_dir", "/data/jetstream"
+    ]
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "nats", "server", "check", "-s", "http://localhost:8222"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  nats-data:
+    driver: local

@@ -1,0 +1,51 @@
+[package]
+name = "james-adapter-kronos"
+version = "0.1.0"
+edition = "2021"
+description = "JAMES Adapter for Kronos Financial Time Series Foundation Model"
+license = "MIT"
+repository = "https://github.com/your-org/james"
+
+[dependencies]
+# JAMES Core (from workspace)
+james-core = { workspace = true }
+james-capabilities = { workspace = true }
+james-registry = { workspace = true }
+james-module-host = { workspace = true }
+james-errors = { workspace = true }
+james-events = { workspace = true }
+
+# Async & Serialization
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+toml = { workspace = true }
+
+# Python bridge for Kronos (PyTorch)
+pyo3 = { version = "0.20", features = ["extension-module"] }
+pyo3-asyncio = { version = "0.20", features = ["tokio"] }
+
+# HTTP client for HuggingFace Hub
+reqwest = { workspace = true }
+
+# Data processing
+ndarray = "0.16"
+csv = "1.3"
+rand = "0.8"
+dirs-next = "2.0"
+
+# Metrics
+metrics = "0.21"
+tracing = { workspace = true }
+
+[build-dependencies]
+pyo3-build-config = "0.22"
+
+[lib]
+name = "james_adapter_kronos"
+crate-type = ["cdylib", "rlib"]

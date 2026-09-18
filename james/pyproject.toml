@@ -1,0 +1,144 @@
+[project]
+name = "james"
+version = "0.1.0"
+description = "JAMES - Autonomous Business Agent System"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "JAMES Team"}]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "packages/james-core",
+    "packages/james-memory",
+    "packages/james-skills",
+    "packages/james-world",
+    "packages/james-voice",
+    "packages/james-face",
+    "packages/james-hands",
+    "packages/james-bootstrap",
+    "packages/james-cli",
+]
+
+[tool.uv.sources]
+james-core = {workspace = true}
+james-memory = {workspace = true}
+james-skills = {workspace = true}
+james-world = {workspace = true}
+james-voice = {workspace = true}
+james-face = {workspace = true}
+james-hands = {workspace = true}
+james-bootstrap = {workspace = true}
+james-cli = {workspace = true}
+
+[build-system]
+requires = ["uv_build>=0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "PT", "RUF", "SIM", "TID", "ARG", "PTH", "ERA", "PL", "TRY"]
+ignore = [
+    "S101",      # assert in tests
+    "TRY003",    # long exception messages
+    "ARG001",    # unused function args in tests
+    "ARG002",    # unused method args
+    "E501",      # line too long - relax for now
+    "TID252",    # relative imports in packages
+    "PLC0415",   # import outside top level
+    "PLR2004",   # magic value comparison
+    "TRY300",    # try-consider-else
+    "TRY400",    # error-instead-of-exception
+    "W291",      # trailing whitespace
+    "W292",      # no newline at end
+    "PLW2901",   # redefined loop name
+    "B904",      # raise without from inside except
+    "F811",      # redefined while unused
+    "F841",      # unused variable
+    "UP035",     # deprecated import
+    "E402",      # module import not at top
+    "C410",      # unnecessary list literal
+    "C416",      # unnecessary comprehension
+    "RUF013",    # implicit optional
+    "PLR0913",   # too many arguments
+    "PLR0917",   # too many positional
+    "PLR0911",   # too many returns
+]
+per-file-ignores = { "tests/*" = ["S101", "ARG001"] }
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict = true
+show_error_codes = true
+pretty = true
+disable_error_code = "syntax"
+exclude = [
+    ".*/site-packages/.*",
+    ".*\\\\site-packages\\\\.*",
+    ".*numpy.*",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "pyautogui",
+    "mediapipe",
+    "sounddevice",
+    "scipy",
+    "scipy.*",
+    "faster_whisper",
+    "faster_whisper.*",
+    "kokoro_onnx",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "numpy"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "numpy._globals"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "numpy._core"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "numpy.__init__"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "e2e: End-to-end tests",
+    "slow: Slow tests",
+]

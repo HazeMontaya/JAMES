@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use dashmap::DashMap;
 
 use james_events::{EventEnvelope, builtin_events, create_system_event, EventBus};
-use james_capabilities::{CapabilityRegistry, CapabilityDefinition, CapabilityCategory, RiskLevel, ExecutionTarget};
+use james_capabilities::CapabilityRegistry;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum RegistryEntryType {

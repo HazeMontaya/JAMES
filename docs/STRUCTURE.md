@@ -9,8 +9,8 @@ existieren, was hineingehört und warum.
 |---------|-----|-------|-----------|
 | `core/` | Quellcode | JAMES Core — das unveränderliche Herz (12 Crates) | selten, nur Git/Cargo |
 | `modules/` | Quellcode | Alle `James-*`-Module (17 Module + Assembly + System) | selten, nur Git/Cargo |
-| `tools/` | Werkzeuge | Entwicklungshilfen: discovery (TS), diagnostics-bin (Rust) | selten |
-| `docs/` | Dokumentation | Einziger Ort zum Lesen: Architektur, BOOTSTRAP, STRUCTURE | **lesen** |
+| `tools/` | Werkzeuge | Entwicklungshilfen: discovery (TS) | selten |
+| `docs/` | Dokumentation | Master-Konzept, Fortsetzungsstand, Architektur, STRUCTURE | **lesen** |
 | `out/` | Build-Artefakte | Einzige Ablagestelle für alles Regenerierbare (Rust `target`), gitignored | nie |
 | `.james/` | Laufzeit | config, logs, state, secrets, inventory — automatisch erzeugt | nie (gitignored) |
 | `.git/` | Git | Versionsverwaltung | nie |
@@ -26,6 +26,20 @@ existieren, was hineingehört und warum.
 Es gibt auf Wurzelebene **keine weiteren Ordner**. Jede neue Fähigkeit ist ein `James-*`-Modul
 unter `modules/` — niemals ein neuer Wurzel-Ordner.
 
+## Projektwissen und Fortsetzung
+
+- `docs/JAMES-MASTER-CONCEPT.md` — verbindliche Leitdefinition und Architekturregeln
+- `docs/PROJECT-CONTINUATION.md` — aktueller Ist-Zustand, offene Grenzen, nächste Arbeitsblöcke und Task-Contract
+- `docs/AUDIT.md` — reproduzierbarer Auditstand des erreichbaren Workspaces
+- `docs/CURRENT-STATE.md` — verifizierte Gates und offene Implementierung
+- `docs/MIGRATION-MATRIX.md` — funktionale Migration aus JARVIS/AUTOMATON
+- `docs/DEPENDENCY-MAP.md` — Workspace-Abhängigkeiten und Grenzen
+- `docs/FUNCTIONAL-GAP-ANALYSIS.md` — verifizierte Nutzbarkeit, fehlende Funktionen und Abnahmegates
+- `docs/architecture/platform-abstraction.md` — PC-first/portable-first Platform- und Datenvertrag
+
+Bei einer neuen Sitzung werden diese drei Dokumente zuerst gelesen. Der Repository-Zustand,
+aktuelle Tests und aktuelle Implementierung haben Vorrang vor älteren Annahmen.
+
 ## Build-Artefakte (alles in `out/`)
 
 **Es gibt nur einen Artefakt-Ordner: `S:\JAMES\out\`** — gitignored, regenerierbar, jederzeit
@@ -33,11 +47,10 @@ löschbar. Nichts Regenerierbares liegt jemals neben Quellcode.
 
 - `out/core/` — Cargo-Target des Core-Workspace
 - `out/modules/` — Cargo-Target des Module-Workspace
-- `out/diagnostics-bin/` — Cargo-Target des Tools `diagnostics-bin`
 - `node_modules/`, `dist/`, `coverage/` (in `tools/discovery`) — entstehen bei `npm install`/`npm test`, gitignored
 
 Die Targets werden per `build.target-dir` in `.cargo/config.toml` jedes Workspaces
-(`core/`, `modules/`, `tools/diagnostics-bin/`) dorthin umgeleitet — ein `cargo build` in diesen
+(`core/`, `modules/`) dorthin umgeleitet — ein `cargo build` in diesen
 Ordnern erzeugt also **nie** ein lokales `target/`, sondern immer `out/`.
 
 ## Laufzeit-Daten (`.james/`)
