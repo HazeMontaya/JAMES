@@ -62,6 +62,8 @@ impl PolicyRule {
             capability_id: capability_id.into(),
             decision: PolicyDecision::Allow,
         }
+    }
+}
 
 
  trait — a module or tool that actually performs a capability.
