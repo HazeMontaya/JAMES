@@ -2,12 +2,12 @@
 
 use async_nats::jetstream;
 use async_nats::Client;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use james_events::{Event, EventBus};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{mpsc, RwLock, Mutex};
+use tokio::sync::{RwLock, Mutex};
 use tracing::{debug, error, info, warn};
 
 use crate::config::BridgeConfig;
@@ -90,7 +90,6 @@ pub struct NatsBridge {
     client: Arc<Mutex<Option<Client>>>,
     jetstream: Option<jetstream::Context>,
     event_bus: Option<Arc<EventBus>>,
-    pending_requests: Arc<RwLock<dashmap::DashMap<String, mpsc::Sender<CapabilityExecuteResponse>>>>,
     python_capabilities: Arc<RwLock<Vec<PythonCapabilityInfo>>>,
     shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
 }
@@ -102,7 +101,6 @@ impl NatsBridge {
             client: Arc::new(Mutex::new(None)),
             jetstream: None,
             event_bus: None,
-            pending_requests: Arc::new(RwLock::new(dashmap::DashMap::new())),
             python_capabilities: Arc::new(RwLock::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),
         }
