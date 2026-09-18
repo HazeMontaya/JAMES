@@ -62,6 +62,18 @@ pub struct VerificationCheck {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvolutionOutcome {
+    pub cycle_id: String,
+    pub proposal_id: String,
+    pub objective: String,
+    pub passed: bool,
+    pub verification: VerificationReport,
+    pub workspace: PathBuf,
+    pub promotion_allowed: bool,
+    pub recorded_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvolutionEvidence {
     pub capability_count: usize,
     pub repository_dirty: bool,
@@ -312,6 +324,7 @@ impl SelfMadeModule {
             "selfmade.observe",
             "selfmade.assess",
             "selfmade.propose",
+            "selfmade.develop",
             "selfmade.verify",
             "selfmade.rollback",
         ];
@@ -545,6 +558,27 @@ impl SelfMadeModule {
         })).await;
 
         let report = self.verify_workspace(&workspace).await?;
+        let outcome = EvolutionOutcome {
+            cycle_id: proposal.mission_id.clone(),
+            proposal_id: proposal.id.clone(),
+            objective: proposal.objective.clone(),
+            passed: report.passed,
+            verification: report.clone(),
+            workspace: workspace.clone(),
+            promotion_allowed: false,
+            recorded_at: Utc::now(),
+        };
+        let outcomes_dir = self.workspace.parent().unwrap().join("outcomes");
+        tokio::fs::create_dir_all(&outcomes_dir).await?;
+        let outcome_path = outcomes_dir.join(format!("{}.json", outcome.proposal_id));
+        tokio::fs::write(&outcome_path, serde_json::to_vec_pretty(&outcome)?).await?;
+        self.emit(if report.passed { "selfmade.verification.passed" } else { "selfmade.verification.failed" },
+            serde_json::json!({
+                "mission_id": proposal.mission_id,
+                "proposal_id": proposal.id,
+                "outcome_file": outcome_path,
+                "promotion_allowed": false
+            })).await;
         if !report.passed {
             let rollback = Command::new("git")
                 .current_dir(&workspace)
@@ -564,6 +598,34 @@ impl SelfMadeModule {
             })).await;
         }
         Ok(report)
+    }
+
+    /// Persist a learning record after every completed evolution attempt.
+    /// This makes success/failure part of the next self-observation instead
+    /// of disappearing into transient logs.
+    pub async fn record_learning(
+        &self,
+        objective: &str,
+        passed: bool,
+        lesson: &str,
+    ) -> Result<PathBuf> {
+        let dir = self.workspace.parent().unwrap().join("learning");
+        tokio::fs::create_dir_all(&dir).await?;
+        let record = serde_json::json!({
+            "id": Uuid::now_v7(),
+            "objective": objective,
+            "passed": passed,
+            "lesson": lesson,
+            "recorded_at": Utc::now(),
+            "promotion_allowed": false
+        });
+        let path = dir.join(format!("{}.json", record["id"].as_str().unwrap_or("learning")));
+        tokio::fs::write(&path, serde_json::to_vec_pretty(&record)?).await?;
+        self.emit("selfmade.learning.recorded", serde_json::json!({
+            "path": path,
+            "passed": passed
+        })).await;
+        Ok(path)
     }
 
     /// Public capability entrypoint for deterministic verification of the isolated worktree.
