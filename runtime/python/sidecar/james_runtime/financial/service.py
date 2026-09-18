@@ -5,6 +5,7 @@ from uuid import uuid4
 from .events import FinancialEvent
 from .router import FinancialRouter
 from .schemas import ForecastRequest, ForecastResult
+from .verification import verify_forecast
 
 EventSink = Callable[[FinancialEvent], Awaitable[None]]
 
@@ -31,6 +32,13 @@ class FinancialCortexService:
             "pred_len": request.pred_len,
         })
         result = await self.router.forecast(request)
+        verification = verify_forecast(result)
+        await self._emit("FORECAST_VERIFIED", correlation_id, {"
+            "request_id": result.request_id, "valid": verification.valid,
+            "checks": verification.checks, "errors": verification.errors,
+        })
+        if not verification.valid:
+            raise ValueError("Financial forecast failed integrity verification")
         await self._emit("KRONOS_FORECAST_READY", correlation_id, {
             "request_id": result.request_id,
             "model_id": result.model_id,
