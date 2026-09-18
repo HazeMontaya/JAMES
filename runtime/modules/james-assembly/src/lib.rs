@@ -513,6 +513,15 @@ impl JamesAssembly {
             executor: selfmade_executor.clone(),
         });
         self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.propose".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.propose".to_string()],
+            health: None,
+            executor: selfmade_executor.clone(),
+        });
+        self.resolver.register(ExecutorCandidate {
             capability_id: "selfmade.assess".to_string(),
             provider: "james-selfmade".to_string(),
             priority: 10,
