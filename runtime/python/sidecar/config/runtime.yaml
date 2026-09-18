@@ -7,31 +7,31 @@ vllm:
   tp_size: 1
   gpu_mem_util: 0.9
   dtype: "auto"
-  max_context: 8192
+  max_context: 4096
   quantization: null
   enforce_eager: false
   trust_remote_code: true
-  max_num_seqs: 256
-  max_num_batched_tokens: 8192
+  max_num_seqs: 1
+  max_num_batched_tokens: 2048
 
 llamacpp:
   model_path: ".james/models/llama-3.1-8b-instruct-Q4_K_M.gguf"
   n_gpu_layers: -1
-  max_context: 8192
+  max_context: 4096
   port: 8080
   host: "127.0.0.1"
-  parallel: 4
+  parallel: 1
   flash_attn: true
-  mlock: true
+  mlock: false
   n_threads: 0
-  n_batch: 512
-  n_ubatch: 512
+  n_batch: 256
+  n_ubatch: 256
 
 airllm:
   model_path: ".james/models/llama-3.3-70b-instruct"
   vram_limit_gb: 4.0
   ram_limit_gb: 32.0
-  max_context: 4096
+  max_context: 2048
   dtype: "float16"
   offload_buffers: true
 
