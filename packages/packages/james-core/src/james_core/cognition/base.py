@@ -42,6 +42,7 @@ class ModelBackend:
         self.config = config
         self._healthy = True
         self._last_health_check = 0.0
+        self.latency_ms: float | None = None
 
     async def generate(self, prompt: str, **kwargs: Any) -> ModelResponse:
         raise NotImplementedError
