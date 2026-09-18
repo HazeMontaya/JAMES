@@ -157,10 +157,26 @@ mod tests {
         assert!(ctx.capabilities.count() >= ids::ALL.len());
         for id in ids::ALL {
             assert!(ctx.capabilities.get(id).is_some(), "missing {id}");
-            let perms = ctx.broker.caller_permissions("user");
+        }
+
+        let perms = ctx.broker.caller_permissions("user");
+        for id in [
+            ids::DESCRIPTOR, ids::FEATURES, ids::SYSTEM_INFO, ids::SYSTEM_UPTIME,
+            ids::POWER_STATUS, ids::PROCESS_LIST, ids::PROCESS_GET, ids::PROCESS_WAIT,
+            ids::FS_READ, ids::FS_READ_TEXT, ids::FS_EXISTS, ids::FS_IS_DIR, ids::FS_STAT,
+            ids::FS_LIST, ids::NET_INTERFACES, ids::NET_ONLINE, ids::NET_REACHABLE,
+            ids::DATA_ROOT, ids::DATA_AREA,
+        ] {
+            assert!(perms.contains(&id.to_string()), "user should be granted {id}");
+        }
+
+        for id in [
+            ids::PROCESS_SPAWN, ids::PROCESS_KILL, ids::FS_WRITE, ids::FS_WRITE_TEXT,
+            ids::FS_APPEND_TEXT, ids::FS_REMOVE, ids::FS_RENAME, ids::DATA_ENSURE,
+        ] {
             assert!(
-                perms.contains(&id.to_string()),
-                "user should be granted {id}"
+                !perms.contains(&id.to_string()),
+                "user must not receive unsafe default grant {id}"
             );
         }
     }
