@@ -5,6 +5,7 @@ import logging
 from abc import ABC
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from james_runtime.core.requests import CompletionRequest
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class GoldenPathWorkflow(Workflow):
         # THINKING / PLANNING
         goal_id = f"gp-{len(self.visited)}"
         route_request = self.runtime._to_routing_request(
-            __import__("james_runtime.core.requests", fromlist=["CompletionRequest"]).CompletionRequest(
+            CompletionRequest(
                 model=model,
                 messages=[{"role": "user", "content": input_text}],
                 max_tokens=256,
