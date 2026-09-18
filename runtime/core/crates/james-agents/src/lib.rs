@@ -199,10 +199,45 @@ impl Agent {
         // Validate plan
         self.validate_plan(&plan).await?;
 
-        // Set state to running
+        // Set state to running and register the execution as a durable TaskManager
+        // task. This makes the agent lifecycle observable through the same task
+        // substrate used by scheduling/recovery instead of maintaining a second
+        // private execution state.
         *self.state.write().await = AgentState::Running;
         *self.current_plan.write().await = Some(plan.clone());
         self.step_results.write().await.clear();
+
+        let task_id = Uuid::now_v7();
+        let task = james_tasks::Task {
+            id: task_id,
+            task_type: "agent.plan".to_string(),
+            name: plan.name.clone(),
+            priority: james_tasks::TaskPriority::Normal,
+            status: james_tasks::TaskStatus::Queued,
+            created_at: Utc::now(),
+            started_at: None,
+            completed_at: None,
+            source: format!("agent:{}", self.config.id),
+            dependencies: Vec::new(),
+            timeout_secs: self.config.timeout_secs,
+            retry_policy: james_tasks::RetryPolicy {
+                max_retries: 0,
+                ..Default::default()
+            },
+            current_retry: 0,
+            payload: serde_json::json!({
+                "agent_id": self.config.id,
+                "plan": plan,
+            }),
+            result: None,
+            error: None,
+            assigned_worker: Some(self.config.id.clone()),
+            progress: Some(0.0),
+        };
+        self.tasks.create_task(task).await
+            .map_err(|e| AgentError::Other(anyhow::anyhow!("failed to create agent task: {e}")))?;
+        self.tasks.update_status(task_id, james_tasks::TaskStatus::Running).await
+            .map_err(|e| AgentError::Other(anyhow::anyhow!("failed to start agent task: {e}")))?;
 
         // Emit plan started event
         self.emit_event(create_system_event(builtin_events::TASK_STARTED, "james-agents")
@@ -271,8 +306,11 @@ impl Agent {
                             "error": e.to_string(),
                         }))).await?;
 
-                    // Check if plan should continue on failure
+                    // Keep the TaskManager state synchronized with the real
+                    // execution. A failed step is terminal for the plan unless the
+                    // plan explicitly permits continuation.
                     if !step.continue_on_failure {
+                        let _ = self.tasks.set_error(task_id, e.to_string()).await;
                         break;
                     }
                 }
@@ -289,6 +327,28 @@ impl Agent {
             metrics.plans_executed += 1;
             metrics.total_execution_time_ms += total_duration;
         }
+
+        // Persist the terminal task state through the shared TaskManager.
+        // Step-level retries have already been exhausted/classified before we
+        // arrive here.
+        if all_success {
+            self.tasks.set_result(task_id, serde_json::json!({
+                "plan_id": plan.id,
+                "success": true,
+                "steps_completed": step_results.iter().filter(|r| r.success).count(),
+                "duration_ms": total_duration,
+            })).await
+                .map_err(|e| AgentError::Other(anyhow::anyhow!("failed to complete agent task: {e}")))?;
+        } else if self.tasks.get_task(task_id)
+            .map(|task| task.status != james_tasks::TaskStatus::Failed)
+            .unwrap_or(true)
+        {
+            let _ = self.tasks.set_error(
+                task_id,
+                "agent plan failed after step execution".to_string(),
+            ).await;
+        }
+        let _ = self.tasks.update_progress(task_id, 1.0);
 
         // Emit plan completed event
         self.emit_event(create_system_event(if all_success { builtin_events::TASK_COMPLETED } else { builtin_events::TASK_FAILED }, "james-agents")
