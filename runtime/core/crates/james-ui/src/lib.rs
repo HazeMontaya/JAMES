@@ -145,7 +145,7 @@ impl Projection {
         let ev = &envelope.event;
         let now = ev.timestamp;
         self.last_event_at = Some(now);
-        self.last_event_id = Some(envelope.id);
+        self.last_event_id = Some(ev.event_id);
         self.events_seen += 1;
 
         match ev.severity {
