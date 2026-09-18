@@ -61,6 +61,38 @@ pub struct VerificationCheck {
     pub passed: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvolutionEvidence {
+    pub capability_count: usize,
+    pub repository_dirty: bool,
+    pub git_head: Option<String>,
+    pub missing_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvolutionProposal {
+    pub id: String,
+    pub mission_id: String,
+    pub objective: String,
+    pub strategy: String,
+    pub evidence: EvolutionEvidence,
+    pub source_provenance: Vec<String>,
+    pub risk_class: String,
+    pub promotion_allowed: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvolutionCycle {
+    pub id: String,
+    pub objective: String,
+    pub started_at: DateTime<Utc>,
+    pub mission: DevelopmentMission,
+    pub evidence: EvolutionEvidence,
+    pub proposal: EvolutionProposal,
+    pub next_action: String,
+}
+
 pub struct SelfMadeModule {
     event_bus: Arc<EventBus>,
     capability_registry: Arc<CapabilityRegistry>,
@@ -238,6 +270,99 @@ impl SelfMadeModule {
         Ok(mission)
     }
 
+    /// Execute one complete, bounded evolution planning cycle.
+    ///
+    /// This is intentionally safe by construction: the cycle may inspect JAMES,
+    /// identify gaps and create a machine-readable proposal, but it cannot
+    /// promote code to the canonical checkout. Source mutation remains confined
+    /// to the isolated worktree and must pass verification before any future
+    /// policy-controlled promotion.
+    pub async fn run_evolution_cycle(&self, objective: impl Into<String>) -> Result<EvolutionCycle> {
+        let objective = objective.into();
+        let cycle_id = Uuid::now_v7().to_string();
+        let started_at = Utc::now();
+        self.emit("selfmade.cycle.started", serde_json::json!({
+            "cycle_id": cycle_id,
+            "objective": objective
+        })).await;
+
+        let self_state = self.observe_self().await?;
+        let capabilities = self_state["runtime"]["capabilities"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let known_ids = capabilities.iter()
+            .filter_map(|v| v.get("id").and_then(|v| v.as_str()))
+            .map(str::to_string)
+            .collect::<std::collections::HashSet<_>>();
+
+        let expected = [
+            "selfmade.observe",
+            "selfmade.assess",
+            "selfmade.propose",
+            "selfmade.verify",
+            "selfmade.rollback",
+        ];
+        let missing_capabilities = expected.iter()
+            .filter(|id| !known_ids.contains(**id))
+            .map(|id| (*id).to_string())
+            .collect::<Vec<_>>();
+
+        let evidence = EvolutionEvidence {
+            capability_count: capabilities.len(),
+            repository_dirty: self_state["repository"]["git_status"]
+                .as_array().map(|v| !v.is_empty()).unwrap_or(false),
+            git_head: self_state["repository"]["git_head"].as_str().map(str::to_string),
+            missing_capabilities,
+        };
+        self.emit("selfmade.gap.detected", serde_json::to_value(&evidence)?).await;
+
+        let mission = self.assess_evolution(&objective).await?;
+        let proposal = EvolutionProposal {
+            id: Uuid::now_v7().to_string(),
+            mission_id: mission.id.clone(),
+            objective: objective.clone(),
+            strategy: "observe -> gap-detect -> research/reuse -> propose -> sandbox -> verify -> compare -> policy-gate".into(),
+            evidence: evidence.clone(),
+            source_provenance: vec!["canonical JAMES repository state".into()],
+            risk_class: "medium".into(),
+            promotion_allowed: false,
+            created_at: Utc::now(),
+        };
+
+        let proposals_dir = self.workspace.parent().unwrap().join("proposals");
+        tokio::fs::create_dir_all(&proposals_dir).await?;
+        let proposal_path = proposals_dir.join(format!("{}.json", proposal.id));
+        tokio::fs::write(&proposal_path, serde_json::to_vec_pretty(&proposal)?).await?;
+        self.emit("selfmade.proposal.created", serde_json::json!({
+            "cycle_id": cycle_id,
+            "proposal_id": proposal.id,
+            "mission_id": mission.id,
+            "proposal_file": proposal_path,
+            "promotion_allowed": false
+        })).await;
+
+        let cycle = EvolutionCycle {
+            id: cycle_id,
+            objective,
+            started_at,
+            mission,
+            evidence,
+            proposal,
+            next_action: "development_agent_may_prepare_an_isolated_patch".into(),
+        };
+        let cycles_dir = self.workspace.parent().unwrap().join("cycles");
+        tokio::fs::create_dir_all(&cycles_dir).await?;
+        let cycle_path = cycles_dir.join(format!("{}.json", cycle.id));
+        tokio::fs::write(&cycle_path, serde_json::to_vec_pretty(&cycle)?).await?;
+        self.emit("selfmade.cycle.ready", serde_json::json!({
+            "cycle_id": cycle.id,
+            "next_action": cycle.next_action,
+            "cycle_file": cycle_path
+        })).await;
+        Ok(cycle)
+    }
+
     pub fn new_mission(&self, objective: impl Into<String>) -> DevelopmentMission {
         DevelopmentMission {
             id: Uuid::now_v7().to_string(),
@@ -383,6 +508,7 @@ pub fn manifest() -> ModuleManifest {
         entry_point: "james_selfmade".into(),
         capabilities: vec![
             "selfmade.observe".into(),
+            "selfmade.assess".into(),
             "selfmade.propose".into(),
             "selfmade.verify".into(),
             "selfmade.rollback".into(),
