@@ -501,6 +501,35 @@ impl SelfMadeModule {
         Ok(report)
     }
 
+    /// Public capability entrypoint for deterministic verification of the isolated worktree.
+    pub async fn verify_workspace_public(&self, workspace: &Path) -> Result<VerificationReport> {
+        self.verify_workspace(workspace).await
+    }
+
+    /// Roll back only the isolated SelfMade worktree. The canonical checkout is never touched.
+    pub async fn rollback_workspace(&self) -> Result<serde_json::Value> {
+        if !self.is_running().await {
+            bail!("selfmade module is not running");
+        }
+        let workspace = self.ensure_workspace().await?;
+        let output = Command::new("git")
+            .current_dir(&workspace)
+            .args(["reset", "--hard", "HEAD"])
+            .output()
+            .await?;
+        if !output.status.success() {
+            bail!("selfmade workspace rollback failed: {}", String::from_utf8_lossy(&output.stderr));
+        }
+        self.emit("selfmade.rollback.completed", serde_json::json!({
+            "workspace": workspace,
+            "stdout": String::from_utf8_lossy(&output.stdout)
+        })).await;
+        Ok(serde_json::json!({
+            "rolled_back": true,
+            "workspace": workspace
+        }))
+    }
+
     /// Cheap, deterministic verification first. Promotion to the canonical
     /// checkout is intentionally a separate policy-controlled operation.
     async fn verify_workspace(&self, workspace: &Path) -> Result<VerificationReport> {
