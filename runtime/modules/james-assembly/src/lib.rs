@@ -40,7 +40,7 @@ use james_tts::TtsModule;
 use james_void::VoidModule;
 use james_voice::VoiceModule;
 use james_webresearch::WebResearchModule;
-use james_selfmade::SelfMadeModule;
+use james_selfmade::{DevelopmentAgent, SelfMadeModule};
 
 /// Fully assembled JAMES system: core + all first-party modules.
 pub struct JamesAssembly {
@@ -137,13 +137,76 @@ impl CapabilityExecutor for MemoryCapabilityExecutor {
 
 struct SelfMadeCapabilityExecutor {
     selfmade: Arc<SelfMadeModule>,
+    ai: Arc<AiModule>,
 }
+
+struct AssemblyDevelopmentAgent {
+    ai: Arc<AiModule>,
+}
+
+#[async_trait]
+impl DevelopmentAgent for AssemblyDevelopmentAgent {
+    async fn propose(&self, context: &str) -> Result<james_selfmade::EvolutionProposal> {
+        let prompt = format!(r#"You are JAMES's bounded software-development agent.
+Return ONLY valid JSON matching this schema:
+{{
+  "id": "uuid",
+  "mission_id": "string",
+  "objective": "string",
+  "strategy": "string",
+  "evidence": {{
+    "capability_count": 0,
+    "repository_dirty": false,
+    "git_head": null,
+    "missing_capabilities": []
+  }},
+  "source_provenance": ["..."],
+  "risk_class": "low|medium|high",
+  "promotion_allowed": false,
+  "created_at": "RFC3339 timestamp"
+}}
+Do not claim tests, files, patches, research or sources that are not present in the supplied context.
+Never set promotion_allowed to true.
+Context:
+{context}"#);
+        let response = self.ai.infer(InferenceRequest {
+            model_id: None,
+            messages: vec![
+                ChatMessage { role: MessageRole::System, content: "You produce conservative machine-readable development proposals.".into(), name: None, tool_calls: None, tool_call_id: None },
+                ChatMessage { role: MessageRole::User, content: prompt, name: None, tool_calls: None, tool_call_id: None },
+            ],
+            temperature: Some(0.1),
+            max_tokens: Some(2048),
+            stream: false,
+            response_format: None,
+            tools: None,
+        }).await?;
+        let raw = response.choices.first()
+            .map(|c| c.message.content.trim().to_string())
+            .ok_or_else(|| anyhow::anyhow!("development agent returned no proposal"))?;
+        let proposal: james_selfmade::EvolutionProposal = serde_json::from_str(&raw)
+            .map_err(|e| anyhow::anyhow!("development agent returned invalid proposal JSON: {e}"))?;
+        Ok(proposal)
+    }
+}
+
+
 
 #[async_trait]
 impl CapabilityExecutor for SelfMadeCapabilityExecutor {
     async fn execute(&self, capability_id: &str, _input: serde_json::Value) -> Result<serde_json::Value> {
         match capability_id {
             "selfmade.observe" => self.selfmade.observe_self().await,
+            "selfmade.propose" => {
+                let objective = _input
+                    .get("objective")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("identify the highest-value safe improvement for JAMES");
+                let cycle = self.selfmade.run_evolution_cycle(objective).await?;
+                let agent = AssemblyDevelopmentAgent { ai: self.ai.clone() };
+                let proposal = self.selfmade.create_agent_proposal(&cycle, &agent).await?;
+                serde_json::to_value(proposal).map_err(Into::into)
+            }
             "selfmade.assess" => {
                 let objective = _input
                     .get("objective")
