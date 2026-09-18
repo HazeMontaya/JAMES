@@ -43,10 +43,37 @@ class AgentSystem:
 
     async def run(self, query: str, agent_id: str = "default", model: str = "llama-3.1-8b-instruct",
                   max_steps: int = 6, goal_id: str = "") -> AgentResult:
-        """Run an agent on a query."""
+        """Run an agent with persistent memory context and automatic interaction capture."""
         agent = self.get_reasoner(agent_id, model, goal_id)
         agent.max_steps = max_steps
-        return await agent.run(query)
+
+        # Inject only a small, relevant memory window so long-running sessions
+        # do not grow the model context without bound.
+        memories = self.memory.recall(query=query, namespace=agent_id, limit=5)
+        history = (
+            [{
+                "role": "system",
+                "content": "Relevant persistent memories:\\n"
+                + "\\n".join(f"- {m['content']}" for m in reversed(memories)),
+            }]
+            if memories
+            else []
+        )
+
+        result = await agent.run(query, conversation_history=history)
+
+        if result.success:
+            # Persist a compact interaction record. The full ReAct trace stays
+            # in the returned result rather than being duplicated in memory.
+            answer = result.answer.strip()
+            if answer:
+                self.memory.remember(
+                    f"User: {query[:1000]}\\nJAMES: {answer[:2000]}",
+                    namespace=agent_id,
+                    key=goal_id or None,
+                )
+
+        return result
 
     def status(self) -> Dict[str, Any]:
         return {
