@@ -968,6 +968,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_v2_critical_risk_denied_by_default() {
+        let mut def = test_definition("python_exec", vec!["process.python"]);
+        def.risk_level = RiskLevel::Critical;
+        let reg = registry_with(&[]).await;
+        reg.register(def, "test").await.unwrap();
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("agent:test", "python_exec");
+
+        let decision = broker.decide_v2(&CapabilityRequestV2::new(
+            "agent:test",
+            "python_exec",
+            serde_json::json!({}),
+        )).await.unwrap();
+
+        assert!(matches!(decision, PolicyDecision::Deny(reason) if reason.contains("critical-risk")));
+    }
+
+    #[tokio::test]
+    async fn test_v2_high_risk_requires_confirmation_by_default() {
+        let mut def = test_definition("file.write", vec!["file.write"]);
+        def.risk_level = RiskLevel::High;
+        let reg = registry_with(&[]).await;
+        reg.register(def, "test").await.unwrap();
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("agent:test", "file.write");
+
+        let decision = broker.decide_v2(&CapabilityRequestV2::new(
+            "agent:test",
+            "file.write",
+            serde_json::json!({}),
+        )).await.unwrap();
+
+        assert_eq!(decision, PolicyDecision::Ask);
+    }
+
+    #[tokio::test]
     async fn test_ask_requires_confirmation() {
         let reg = registry_with(&[("process.run", vec!["process.execute"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
