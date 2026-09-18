@@ -328,7 +328,7 @@ impl Agent {
         // resource admission, semantic verification, deadlines/timeouts and
         // the v2 audit trail instead of falling back to the legacy path.
         let request = CapabilityRequestV2 {
-            requested_effect: requested_effect_for(&step.capability_id),
+            requested_effect: Self::requested_effect_for(&step.capability_id),
             timeout_ms: Some(self.config.timeout_secs.saturating_mul(1000)),
             ..CapabilityRequestV2::new(caller, step.capability_id.clone(), input)
         };
@@ -339,16 +339,16 @@ impl Agent {
         let mut attempt = 0u32;
         loop {
             match self.broker.execute_v2(request.clone(), executor.as_ref()).await {
-                Ok(outcome) => return Ok(legacy_outcome(outcome)),
+                Ok(outcome) => return Ok(Self::legacy_outcome(outcome)),
                 Err(error) => {
                     let message = error.to_string();
-                    let should_retry = retry_condition_matches(&message, &step.retry_policy);
+                    let should_retry = Self::retry_condition_matches(&message, &step.retry_policy);
                     if !should_retry || attempt >= step.retry_policy.max_retries {
                         return Err(AgentError::BrokerError(message));
                     }
 
                     attempt += 1;
-                    let delay = retry_backoff(&step.retry_policy, attempt);
+                    let delay = Self::retry_backoff(&step.retry_policy, attempt);
                     self.emit_event(create_system_event("agent.step.retrying", "james-agents")
                         .with_payload(serde_json::json!({
                             "agent_id": self.config.id,
@@ -821,15 +821,15 @@ mod tests {
     #[test]
     fn test_retry_condition_does_not_retry_permission_denial() {
         let policy = RetryPolicy::default();
-        assert!(!retry_condition_matches("permission denied: missing permission", &policy));
-        assert!(!retry_condition_matches("policy denied: unsafe operation", &policy));
+        assert!(!Agent::retry_condition_matches("permission denied: missing permission", &policy));
+        assert!(!Agent::retry_condition_matches("policy denied: unsafe operation", &policy));
     }
 
     #[test]
     fn test_retry_condition_matches_timeout_and_unavailable() {
         let policy = RetryPolicy::default();
-        assert!(retry_condition_matches("request timeout exceeded", &policy));
-        assert!(retry_condition_matches("service unavailable", &policy));
+        assert!(Agent::retry_condition_matches("request timeout exceeded", &policy));
+        assert!(Agent::retry_condition_matches("service unavailable", &policy));
     }
 
     #[test]
@@ -841,8 +841,8 @@ mod tests {
             exponential_base: 2.0,
             retry_on: vec![RetryCondition::TransientError],
         };
-        assert_eq!(retry_backoff(&policy, 1).as_millis(), 20);
-        assert_eq!(retry_backoff(&policy, 5).as_millis(), 25);
+        assert_eq!(Agent::retry_backoff(&policy, 1).as_millis(), 20);
+        assert_eq!(Agent::retry_backoff(&policy, 5).as_millis(), 25);
     }
 
     #[tokio::test]
