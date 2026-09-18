@@ -41,7 +41,7 @@ class RuntimeRouter:
         health = health or {}
 
         def usable(engine_type: EngineType) -> bool:
-            if not usable(engine_type):
+            if not self.engine_registry.has_engine(engine_type.value):
                 return False
             if constraints.preferred_engine and constraints.preferred_engine != engine_type.value:
                 return False
@@ -51,7 +51,7 @@ class RuntimeRouter:
         # 1. Try vLLM first (highest performance)
         if usable(EngineType.VLLM):
             fit = self.vram.can_fit(model, EngineType.VLLM)
-            if fit.fits:
+            if fit.fits and self._meets_constraints(fit, constraints):
                 return self._create_selection(fit, model)
         
         # 2. Try llama.cpp (broadest hardware support)
@@ -73,6 +73,14 @@ class RuntimeRouter:
             f"Required: {self._estimate_required_vram(model):.1f}GB"
         )
     
+    @staticmethod
+    def _meets_constraints(fit: FitResult, constraints: RoutingConstraints) -> bool:
+        if constraints.max_vram_gb is not None and fit.required_vram_gb > constraints.max_vram_gb:
+            return False
+        if constraints.max_latency_ms is not None and fit.estimated_latency_ms > constraints.max_latency_ms:
+            return False
+        return True
+
     def _create_selection(self, fit: FitResult, model) -> EngineSelection:
         return EngineSelection(
             engine_type=fit.engine,
