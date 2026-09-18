@@ -9,12 +9,20 @@ class FakeHealth:
         self.healthy = healthy
 
 
+class FakeEngine:
+    def supports_model(self, model):
+        return True
+
+
 class FakeRegistry:
     def __init__(self):
-        self.engines = {e.value: object() for e in EngineType}
+        self.engines = {e.value: FakeEngine() for e in EngineType}
 
     def has_engine(self, name):
         return name in self.engines
+
+    def get(self, name):
+        return self.engines.get(name)
 
     async def check_all_health(self):
         return {
