@@ -23,3 +23,9 @@ def test_execute_subject_contract():
     bridge = NatsCapabilityBridge.__new__(NatsCapabilityBridge)
     bridge.subject_prefix = "james.bridge"
     assert bridge.execute_subject == "james.bridge.capability.execute.*"
+
+
+def test_list_subject_contract():
+    bridge = NatsCapabilityBridge.__new__(NatsCapabilityBridge)
+    bridge.subject_prefix = "james.bridge"
+    assert bridge.list_subject == "james.bridge.capability.list"
