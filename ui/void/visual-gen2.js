@@ -47,9 +47,10 @@
     return Number.isFinite(v)?v:fallback;
   }
   function activeState(){return stateEl?.textContent?.trim().toUpperCase()||"OFFLINE"}
+  function rgba(stroke,alpha){return stroke.replace(/rgba\\(([^)]+)\\)/,"rgba("+RegExp.$1.split(",").slice(0,3).join(",")+","+alpha+")")}
   function drawRing(cx,cy,r,start,end,width,stroke,alpha=1){
     ctx.beginPath();ctx.arc(cx,cy,r,start,end);ctx.lineWidth=width;
-    ctx.strokeStyle=stroke.replace(")",","+alpha+")");ctx.stroke();
+    ctx.strokeStyle=rgba(stroke,alpha);ctx.stroke();
   }
   function draw(){
     const state=activeState(), reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -94,7 +95,7 @@
     });
     const coreR=base*.42*breath;
     const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,coreR*2.8);
-    grad.addColorStop(0,focusColor.replace(")",",.18)"));
+    grad.addColorStop(0,rgba(focusColor,.18));
     grad.addColorStop(1,"rgba(0,0,0,0)");
     ctx.fillStyle=grad;ctx.beginPath();ctx.arc(cx,cy,coreR*2.8,0,TAU);ctx.fill();
     ctx.beginPath();ctx.arc(cx,cy,coreR,0,TAU);
