@@ -51,8 +51,19 @@ pub fn build_platform() -> Arc<dyn Platform> {
 
 /// Bootstrap the full platform runtime.
 pub async fn bootstrap(event_bus: Option<Arc<EventBus>>) -> Result<PlatformContext> {
+    bootstrap_with_registry(event_bus, Arc::new(CapabilityRegistry::new())).await
+}
+
+/// Bootstrap the platform runtime on a caller-owned capability registry.
+///
+/// Sharing the registry lets the application compose platform, Python and
+/// future module capabilities behind one broker instead of maintaining
+/// isolated capability universes.
+pub async fn bootstrap_with_registry(
+    event_bus: Option<Arc<EventBus>>,
+    capabilities: Arc<CapabilityRegistry>,
+) -> Result<PlatformContext> {
     let platform = build_platform();
-    let capabilities = Arc::new(CapabilityRegistry::new());
     crate::register_capabilities(&capabilities, "platform").await;
 
     let broker = {
