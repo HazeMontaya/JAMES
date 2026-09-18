@@ -138,65 +138,37 @@ impl NatsBridge {
     }
 
     async fn subscribe_capability_execute(&self) -> anyhow::Result<()> {
+        // Execution requests are sent with NATS request/reply by execute_capability().
+        // This subscription is intentionally limited to the reply wildcard so the
+        // bridge never consumes Python execution requests itself.
         let client = {
             let guard = self.client.lock().await;
-            guard.as_ref()
+            guard
+                .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("NATS client not connected"))?
                 .clone()
         };
-        let subject = subjects::capability_execute_prefix(&self.config);
+        let subject = subjects::capability_execute_reply(&self.config);
         let mut subscriber = client.subscribe(subject).await?;
 
         let pending = self.pending_requests.clone();
-        let config = self.config.clone();
-        let python_caps = self.python_capabilities.clone();
 
         tokio::spawn(async move {
             while let Some(msg) = subscriber.next().await {
-                let payload = msg.payload;
-                if let Ok(request) = serde_json::from_slice::<CapabilityExecuteRequest>(&payload) {
-                    debug!("Received capability execute request: {} for {}", request.request_id, request.capability_id);
+                let Ok(response) = serde_json::from_slice::<CapabilityExecuteResponse>(&msg.payload) else {
+                    warn!("Ignoring malformed Python capability response");
+                    continue;
+                };
 
-                    // Check if we have a pending response channel for this request
+                let sender = {
                     let pending_guard = pending.read().await;
-                    if pending_guard.contains_key(&request.request_id) {
-                        warn!("Unexpected execute request with existing pending channel: {}", request.request_id);
-                    }
-                    drop(pending_guard);
+                    pending_guard.get(&response.request_id).map(|entry| entry.value().clone())
+                };
 
-                    // In a real implementation, we would forward to Python and wait for response
-                    // For now, we'll simulate by looking up the capability
-                    let caps = python_caps.read().await;
-                    let cap = caps.iter().find(|c| c.id == request.capability_id);
-
-                    let response = if let Some(_cap) = cap {
-                        // Forward to Python via NATS request/reply
-                        // This is handled by the Python side subscribing to execute subjects
-                        // We publish to a specific subject for this capability
-                        let _execute_subject = format!("{}.{}", subjects::capability_execute_prefix(&config), request.capability_id);
-                        CapabilityExecuteResponse {
-                            request_id: request.request_id.clone(),
-                            success: false,
-                            output: None,
-                            error: Some("Python bridge not fully implemented".to_string()),
-                            duration_ms: 0,
-                        }
-                    } else {
-                        CapabilityExecuteResponse {
-                            request_id: request.request_id.clone(),
-                            success: false,
-                            output: None,
-                            error: Some(format!("Capability not found: {}", request.capability_id)),
-                            duration_ms: 0,
-                        }
-                    };
-
-                    // Send response back via reply subject if present
-                    if let Some(reply) = msg.reply {
-                        if let Ok(bytes) = serde_json::to_vec(&response) {
-                            let _ = client.publish(reply, bytes.into()).await;
-                        }
-                    }
+                if let Some(sender) = sender {
+                    let _ = sender.send(response).await;
+                } else {
+                    debug!("No pending request for capability response {}", response.request_id);
                 }
             }
         });
@@ -373,23 +345,25 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
 
         let subject = format!("{}.{}", subjects::capability_execute_prefix(&self.config), capability_id);
 
-        // Create a oneshot channel for the response
+        // Register a pending channel for the response subscriber.
         let (tx, mut rx) = mpsc::channel(1);
         {
             let mut pending = self.pending_requests.write().await;
             pending.insert(request_id.clone(), tx);
         }
 
-        // Publish request
-        client.publish(subject, serde_json::to_vec(&request)?.into()).await?;
+        let payload = serde_json::to_vec(&request)?;
+        if let Err(error) = client.publish(subject, payload.into()).await {
+            let mut pending = self.pending_requests.write().await;
+            pending.remove(&request_id);
+            return Err(error.into());
+        }
 
-        // Wait for response with timeout
         let response = tokio::time::timeout(
             Duration::from_secs(self.config.request_timeout_secs),
             rx.recv(),
         ).await;
 
-        // Clean up pending request
         {
             let mut pending = self.pending_requests.write().await;
             pending.remove(&request_id);
