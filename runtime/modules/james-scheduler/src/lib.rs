@@ -108,7 +108,9 @@ impl SchedulerModule {
         let path = Path::new(&self.config.database_path);
         if path.exists() {
             let raw = tokio::fs::read_to_string(path).await?;
-            *self.jobs.write().await = serde_json::from_str(&raw)?;
+            if !raw.trim().is_empty() {
+                *self.jobs.write().await = serde_json::from_str(&raw)?;
+            }
         }
         Ok(())
     }
