@@ -443,6 +443,9 @@ impl Agent {
                 Ok(outcome) => {
                     if let Some(provider) = selected_provider.as_deref() {
                         self.resolver.set_provider_health(provider, ProviderHealth::Available);
+                        if let Some(shared) = &self.shared_resolver {
+                            shared.set_provider_health(provider, ProviderHealth::Available);
+                        }
                     }
                     return Ok(Self::legacy_outcome(outcome));
                 }
@@ -455,6 +458,9 @@ impl Agent {
                             ProviderHealth::Degraded
                         };
                         self.resolver.set_provider_health(provider, health);
+                        if let Some(shared) = &self.shared_resolver {
+                            shared.set_provider_health(provider, health);
+                        }
                     }
 
                     let should_retry = Self::retry_condition_matches(&message, &step.retry_policy);
