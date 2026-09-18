@@ -239,3 +239,216 @@ Windows JAMES Instance
 ```
 
 Dieser Meilenstein muss ohne Void und Dashboard technisch funktionieren und einen kontrollierten Chat-/Capability-Pfad nachweisen.
+
+ 
+## 15. Finalized implementation contract — 2026-09-18
+
+This section supersedes earlier planning where it conflicts with the current repository layout or executable contracts.
+
+### 15.1 Source of truth
+
+GitHub `main` is the canonical source. Local `S:\JAMES` is a downstream runtime checkout only.
+
+- Never use local runtime state, generated artifacts, caches, models, databases or logs as architecture authority.
+- Source and contracts are changed in GitHub first.
+- Local verification pulls from GitHub.
+- Mutable runtime data stays outside versioned source.
+
+### 15.2 Canonical repository domains
+
+```text
+runtime/core/       portable core crates, API, agents, broker, platform contracts
+runtime/modules/    first-party implementations and system assembly
+runtime/python/     Python sidecars and inference adapters
+runtime/tools/      discovery and operational tooling
+ui/                 Void UI and protocol assets
+ops/                setup, startup and deployment automation
+packages/           Python ecosystem packages
+docs/               architecture, contracts, audits and acceptance evidence
+.james/             runtime-local state only
+```
+
+No new source may be introduced into the former top-level `core/`, `modules/`, `python/`, `tools/`, `interfaces/` or `scripts/` trees.
+
+### 15.3 Runtime truth
+
+JAMES is complete only when the following executable chain works on a fresh Windows installation:
+
+```text
+Windows environment
+ -> discovery
+ -> environment snapshot
+ -> capability reconciliation
+ -> module/provider selection
+ -> permission/policy
+ -> execution broker
+ -> concrete executor
+ -> output verification
+ -> durable audit/state
+ -> AI/agent result
+ -> Void/CLI/API projection
+```
+
+A UI that displays a state without the corresponding runtime event/state is not considered implemented.
+
+### 15.4 CapabilityRequest v2
+
+The broker contract must evolve from the current minimal request to a structured request containing at least:
+
+- caller identity
+- capability id + version
+- target
+- scope
+- input
+- data classification
+- correlation id
+- causation id
+- requested effect
+- risk class
+- deadline/timeout
+- policy context
+- confirmation context
+
+Backward-compatible construction may exist temporarily, but all production paths must normalize into this structure before policy evaluation.
+
+### 15.5 Mandatory execution spine
+
+Every external or state-changing action follows:
+
+```text
+REQUEST
+ -> capability existence/status
+ -> candidate resolution
+ -> input schema
+ -> identity
+ -> permission
+ -> policy
+ -> confirmation when required
+ -> resource admission
+ -> execution boundary
+ -> output schema
+ -> semantic verification
+ -> state/event persistence
+ -> tamper-evident audit
+ -> result
+```
+
+Direct module calls from API, UI, agent, scheduler or model code are prohibited for production actions.
+
+### 15.6 AI runtime contract
+
+AI is a provider behind stable JAMES capabilities.
+
+```text
+ai.inference
+ -> Model Registry
+ -> Model Router
+ -> Runtime Router
+ -> Engine Adapter
+ -> VRAM/RAM admission
+ -> inference
+ -> usage accounting
+ -> health/fallback
+```
+
+Supported adapters are replaceable:
+
+- Ollama
+- llama.cpp
+- vLLM
+- AirLLM
+- Transformers/PyTorch where required
+
+The router distinguishes `discovered`, `available`, `selected`, `loaded`, `healthy` and `degraded`. No provider is mandatory for Core boot.
+
+### 15.7 Agent contract
+
+```text
+USER INTENT
+ -> parse
+ -> plan
+ -> capability resolution
+ -> policy/permission
+ -> broker
+ -> executor
+ -> verification
+ -> memory
+ -> task/event/audit
+ -> response
+```
+
+The LLM proposes plans; it never becomes the authorization boundary.
+
+### 15.8 Durable runtime
+
+The following must survive restart:
+
+- instance identity
+- configuration
+- module state
+- capability/provider inventory
+- memory
+- tasks
+- schedules
+- resumable agent execution
+- audit records
+- recovery markers
+
+Recovery must explicitly classify work as resumable, retryable, failed, cancelled, confirmation-required or irrecoverable.
+
+### 15.9 Void contract
+
+Void is a projection of real runtime state.
+
+```text
+runtime state/events
+ -> context
+ -> relevance
+ -> priority
+ -> UiIntent
+ -> motion parameters
+ -> renderer
+```
+
+The renderer cannot invent state. Dashboard and Void consume the same state model. Brain motion is causal and semantic.
+
+### 15.10 Security baseline
+
+Production defaults:
+
+- loopback or explicitly authorized network bind only
+- API authentication enabled
+- secrets outside Git
+- no raw shell/filesystem/network authority for models
+- external data treated as untrusted
+- fail-closed policy
+- confirmation bound to identity, target, scope and expiry
+- audit integrity protected
+- security root and kill controls unavailable to SelfMade agents
+
+### 15.11 SelfMade boundary
+
+James-SelfMade is the final orchestration layer, not the foundation.
+
+Initial implementation is bounded observation/planning/recommendation. Any future self-modification requires isolated workspace, separate identity, budget, verification, rollback, review and external kill controls. SelfMade cannot modify its own security root or disable its kill controls.
+
+### 15.12 Definition of done
+
+A component is `VERIFIED` only when implementation, registry, resolver, permissions, policy, concrete execution, validation, verification, audit, tests, restart behavior and documentation agree.
+
+The project is `RELEASE-READY` only when:
+
+1. clean Windows checkout builds from GitHub;
+2. one-command setup provisions dependencies;
+3. discovery produces a real environment snapshot;
+4. JAMES starts without UI dependencies;
+5. API/CLI authentication is enforced;
+6. local AI can be discovered and routed;
+7. chat reaches a real provider;
+8. agent plans execute through the broker;
+9. memory and tasks survive restart;
+10. Void displays real state and executes brokered UI actions;
+11. failures and recovery are observable;
+12. acceptance tests pass from a clean machine.
+
+No placeholder, mock, static count, fake success response or unverified claim satisfies this gate.
