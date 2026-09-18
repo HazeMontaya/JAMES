@@ -506,6 +506,8 @@ async fn main() -> Result<()> {
     info!("{} Shutdown signal received", log.prefix());
     void_handle.abort();
     dashboard_handle.abort();
+    _python_sync_task.abort();
+    python_nats.shutdown().await;
     core.stop().await?;
 
     info!("{} JAMES Core stopped", log.prefix());
