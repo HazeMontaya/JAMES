@@ -70,13 +70,30 @@ class NatsCapabilityBridge:
 
     @staticmethod
     def _capability_info(tool: Any) -> dict[str, Any]:
+        name = tool.name
+        if name == "python_exec":
+            risk_level = "critical"
+            permissions = ["process.execute", "process.python"]
+        elif name in {"file_write", "file_read"} or name.startswith("file_"):
+            risk_level = "high" if name in {"file_write", "file_remove", "file_rename"} else "medium"
+            permissions = [f"file.{name.removeprefix('file_')}"]
+        elif name == "http_get":
+            risk_level = "medium"
+            permissions = ["network.http"]
+        elif name.startswith("memory_"):
+            risk_level = "medium"
+            permissions = [f"memory.{name.removeprefix('memory_')}"]
+        else:
+            risk_level = "low"
+            permissions = []
         return {
             "id": tool.name,
             "name": tool.name.replace("_", " ").title(),
             "category": NatsCapabilityBridge._category(tool.name),
             "version": "1.0.0",
             "description": tool.description,
-            "required_permissions": [],
+            "risk_level": risk_level,
+            "required_permissions": permissions,
             "input_schema": {"type": "object", "properties": tool.parameters},
             "output_schema": None,
         }
