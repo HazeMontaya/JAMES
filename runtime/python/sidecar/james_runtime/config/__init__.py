@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 from pydantic import BaseModel, Field
 import os
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "runtime.yaml"
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "runtime.yaml"
 
 
 class QualityTier(str, Enum):
