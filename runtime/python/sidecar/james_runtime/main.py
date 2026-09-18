@@ -9,6 +9,7 @@ from james_runtime.config import get_settings, load_settings_from_yaml
 from james_runtime.core.runtime import JamesRuntime
 from james_runtime.server.fastapi_app import app
 from james_runtime.server.grpc import start_grpc_server
+from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
 
 logger = logging.getLogger(__name__)
 
