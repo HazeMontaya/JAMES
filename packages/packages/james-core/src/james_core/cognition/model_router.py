@@ -124,10 +124,13 @@ class ModelRouter:
         req = requirements or ModelRequirements()
         candidates = [b for b in self._backends.values() if b.healthy]
         candidates = [b for b in candidates if b.config.max_tokens >= req.min_context_tokens]
+        # timeout is a request deadline, not observed latency. Use latency
+        # constraints only when a backend exposes an observed latency metric.
         if req.max_latency_ms is not None:
             candidates = [
                 b for b in candidates
-                if b.config.timeout * 1000 <= req.max_latency_ms
+                if getattr(b, "latency_ms", None) is not None
+                and b.latency_ms <= req.max_latency_ms
             ]
         if not candidates:
             return None
@@ -164,8 +167,13 @@ class ModelRouter:
         for backend in sorted(self._backends.values(), key=lambda b: b.config.priority, reverse=True):
             if not backend.healthy:
                 continue
-            if requirements is not None and backend.config.max_tokens < requirements.min_context_tokens:
-                continue
+            if requirements is not None:
+                if backend.config.max_tokens < requirements.min_context_tokens:
+                    continue
+                if requirements.max_latency_ms is not None:
+                    observed = getattr(backend, "latency_ms", None)
+                    if observed is None or observed > requirements.max_latency_ms:
+                        continue
             try:
                 return await backend.generate(prompt, **kwargs)
             except Exception:
