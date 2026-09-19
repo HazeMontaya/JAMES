@@ -219,6 +219,7 @@ impl NatsBridge {
                     status: "healthy".to_string(),
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     capabilities: caps.iter().map(|c| c.id.clone()).collect(),
+                    capability_health: std::collections::HashMap::new(),
                 };
                 if let Some(reply) = msg.reply {
                     if let Ok(bytes) = serde_json::to_vec(&health) {
