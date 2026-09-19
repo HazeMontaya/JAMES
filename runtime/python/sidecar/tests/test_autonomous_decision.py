@@ -16,3 +16,20 @@ def test_decision_loop_prioritizes_failures(tmp_path):
     decision = AutonomousDecisionLoop(log, heartbeat).tick()
     assert decision.action == "inspect_failure"
     assert decision.priority == 100
+
+def test_decision_loop_prioritizes_selfmade_regression(tmp_path):
+    log = EventLog(tmp_path / "events.jsonl")
+    heartbeat = DurableHeartbeat(tmp_path / "heartbeat.json")
+    log.append("selfmade.evaluation.completed", {"passed": False})
+    decision = AutonomousDecisionLoop(log, heartbeat).tick()
+    assert decision.action == "inspect_selfmade_regression"
+    assert decision.priority == 85
+
+def test_decision_loop_detects_sustained_selfmade_success(tmp_path):
+    log = EventLog(tmp_path / "events.jsonl")
+    heartbeat = DurableHeartbeat(tmp_path / "heartbeat.json")
+    for _ in range(3):
+        log.append("selfmade.evaluation.completed", {"passed": True})
+    decision = AutonomousDecisionLoop(log, heartbeat).tick()
+    assert decision.action == "inspect_selfmade_opportunity"
+    assert decision.priority == 60
