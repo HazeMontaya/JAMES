@@ -7,7 +7,7 @@ at construction time and never persisted in JAMES events.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Callable
 
 from james_runtime.integration.ecosystem import EcosystemRegistry
 from james_runtime.integration.http_adapters import (
@@ -21,6 +21,7 @@ def configure_ecosystems(
     tool_registry: ToolRegistry,
     *,
     env: dict[str, str] | None = None,
+    event_sink: Callable[..., Any] | None = None,
 ) -> EcosystemRegistry:
     values = env if env is not None else os.environ
     registry = EcosystemRegistry()
@@ -39,5 +40,5 @@ def configure_ecosystems(
         api_key = values.get(key_key)
         registry.register(provider, adapter_cls(base_url=base_url, api_key=api_key))
 
-    tool_registry.register_many(ecosystem_tools(registry))
+    tool_registry.register_many(ecosystem_tools(registry, event_sink=event_sink))
     return registry
