@@ -356,16 +356,15 @@ if modules.contains_key(&manifest.id) {
             meta.manifest.clone()
         };
         
-        // Re-establish module-scoped broker grants on every start. Stop/disable
-        // revokes them, so a restarted module must pass through this gate again.
+        // Load and start the module before granting execution permissions.
+        // A failed start must never leave a stopped provider authorized.
+        self.module_loader.load_and_start(&manifest).await?;
+
         if let Some(broker) = self.broker().await {
             for cap_id in &manifest.capabilities {
                 broker.grant_capability_permissions(id, cap_id);
             }
         }
-
-        // Load and start the module
-        self.module_loader.load_and_start(&manifest).await?;
         
         let mut modules = self.modules.write().await;
         if let Some(meta) = modules.get_mut(id) {
@@ -401,15 +400,15 @@ if modules.contains_key(&manifest.id) {
             meta.manifest.clone()
         };
         
-        // Stop the module first; permissions are revoked below even when
-        // the module remains installed so a stopped provider cannot execute.
-        self.module_loader.stop_by_manifest(&manifest).await?;
-
+        // Revoke execution permissions before stopping the provider. If the
+        // loader fails, the stopped/stopping module is still not authorized.
         if let Some(broker) = self.broker().await {
             for cap_id in &manifest.capabilities {
                 broker.revoke_capability_permissions(id, cap_id);
             }
         }
+
+        self.module_loader.stop_by_manifest(&manifest).await?;
         
         let mut modules = self.modules.write().await;
         if let Some(meta) = modules.get_mut(id) {
