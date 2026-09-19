@@ -196,6 +196,12 @@ impl PlanExecutor {
                     tokio::time::sleep(backoff_delay(&step.retry_policy, attempt)).await;
                 }
                 Err(e) => {
+                    // Interactive confirmation is a control-flow boundary, not
+                    // a transient execution failure. Retrying would spam the
+                    // broker and create duplicate approval requests.
+                    if e.to_string().contains("confirmation") {
+                        return Err(e);
+                    }
                     if !retryable(&step.retry_policy) || attempt >= max {
                         return Err(e);
                     }
