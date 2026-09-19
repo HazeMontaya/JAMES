@@ -71,3 +71,16 @@ def test_mission_layer_persists_and_restores(tmp_path):
     asyncio.run(restored.restore())
     assert mission is not None
     assert restored.missions[mission.mission_id].result["value"] == 42
+
+
+def test_mission_layer_rejects_unregistered_action(tmp_path):
+    import asyncio
+    from james_runtime.autonomy.mission import AutonomousMissionManager
+    from james_runtime.autonomy.decision import AutonomousDecision
+    log = EventLog(tmp_path / "events.jsonl")
+    manager = AutonomousMissionManager(log, tmp_path / "missions.json")
+    mission = asyncio.run(manager.dispatch(AutonomousDecision("privileged_unknown", 100, "test", {})))
+    assert mission is not None
+    assert mission.status == "failed"
+    assert "no handler registered" in (mission.error or "")
+    assert any(e.event_type == "MISSION_FAILED" for e in log.tail(10))
