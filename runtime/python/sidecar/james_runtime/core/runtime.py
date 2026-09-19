@@ -166,9 +166,9 @@ class JamesRuntime:
                     "status": mission.status,
                     "attempts": mission.attempts,
                     "error": mission.error,
-                    "correlation_id": mission.correlation_id,
-                    "causation_id": mission.causation_id,
                 },
+                correlation_id=mission.correlation_id,
+                causation_id=mission.causation_id,
             )
 
     async def _mission_health_sweep(self, mission: AutonomousMission) -> dict[str, Any]:
@@ -626,7 +626,7 @@ class JamesRuntime:
                 safe[f"{key}_length"] = len(value) if isinstance(value, str) else None
         return safe
 
-    def _emit_event(self, event_type: str, payload: Dict[str, Any]):
+    def _emit_event(self, event_type: str, payload: Dict[str, Any], *, correlation_id: str | None = None, causation_id: str | None = None):
         from james_runtime.core.events import RuntimeEvent
         from datetime import datetime
         from uuid import uuid4
@@ -635,6 +635,8 @@ class JamesRuntime:
             event_type=event_type,
             payload=payload,
             timestamp=datetime.utcnow(),
+            correlation_id=correlation_id,
+            causation_id=causation_id,
         )
         try:
             safe_payload = self._redact_persistent_event(event_type, payload)
@@ -643,6 +645,7 @@ class JamesRuntime:
                 safe_payload,
                 source="james-runtime",
                 correlation_id=getattr(event, "correlation_id", None),
+                causation_id=getattr(event, "causation_id", None),
             )
         except Exception as e:
             logger.warning(f"Persistent event log error: {e}")
