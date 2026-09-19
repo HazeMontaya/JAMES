@@ -32,6 +32,7 @@ james-browser = { path = "../james-browser" }
 james-webresearch = { path = "../james-webresearch" }
 james-void = { path = "../james-void" }
 james-dashboard = { path = "../james-dashboard" }
+james-selfmade = { path = "../james-selfmade" }
 tokio = { version = "1.38", features = ["full"] }
 anyhow = "1.0"
 tracing = "0.1"
