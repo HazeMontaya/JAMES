@@ -131,6 +131,7 @@ class AutonomousMissionManager:
                 {"action": decision.action, "reason": "active mission limit reached"},
                 source="james-autonomy",
                 correlation_id=correlation_id,
+                causation_id=causation_id,
             )
             return None
 
@@ -156,6 +157,7 @@ class AutonomousMissionManager:
             },
             source="james-autonomy",
             correlation_id=mission.correlation_id,
+            causation_id=mission.causation_id,
         )
         return mission
 
@@ -187,6 +189,7 @@ class AutonomousMissionManager:
             {"mission_id": mission.mission_id, "action": mission.action, "attempt": mission.attempts},
             source="james-autonomy",
             correlation_id=mission.correlation_id,
+            causation_id=mission.causation_id,
         )
         try:
             mission.result = await handler(mission)
