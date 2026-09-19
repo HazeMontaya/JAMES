@@ -946,6 +946,7 @@ pub fn manifest() -> ModuleManifest {
             "selfmade.propose".into(),
             "selfmade.develop".into(),
             "selfmade.verify".into(),
+            "selfmade.evaluate".into(),
             "selfmade.rollback".into(),
         ],
         dependencies: vec![],
@@ -977,6 +978,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
         ("selfmade.propose", "SelfMade Propose", "Create a bounded source change proposal", RiskLevel::Medium),
         ("selfmade.develop", "SelfMade Develop", "Generate, apply and verify a bounded source change in the isolated workspace", RiskLevel::High),
         ("selfmade.verify", "SelfMade Verify", "Run deterministic verification in isolated workspace", RiskLevel::Medium),
+        ("selfmade.evaluate", "SelfMade Evaluate", "Evaluate a verified candidate before any promotion decision", RiskLevel::High),
         ("selfmade.rollback", "SelfMade Rollback", "Discard an unpromoted self-development workspace change", RiskLevel::High),
     ] {
         registry.register(CapabilityDefinition {
