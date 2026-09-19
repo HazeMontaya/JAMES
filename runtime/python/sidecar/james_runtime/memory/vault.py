@@ -19,7 +19,16 @@ class MemoryNote:
     updated_at: str
 
 class MemoryVault:
-    """Markdown remains authoritative; SQLite is a disposable derived index."""
+    """Sidecar memory projection; Rust MemoryModule remains runtime authority.
+
+    Markdown is durable within this sidecar projection and SQLite is only a derived
+    retrieval index. This store must not be treated as the canonical JAMES memory
+    authority; synchronization with Rust belongs at an explicit bridge boundary.
+    """
+
+    authority = "sidecar_projection"
+    canonical_authority = "rust_memory_module"
+
     def __init__(self, root: str | Path) -> None:
         self.root = Path(root).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
