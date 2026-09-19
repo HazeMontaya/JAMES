@@ -1172,6 +1172,26 @@ impl CapabilityExecutor for NoopExecutor {
 }
 
 #[cfg(test)]
+mod correlation_builder_contract_tests {
+    use super::*;
+
+    #[test]
+    fn correlation_builder_replaces_trace_context_without_touching_identity() {
+        let request = CapabilityRequestV2::new(
+            "agent:test",
+            "web.search",
+            serde_json::json!({"query":"x"}),
+        )
+        .with_correlation("plan-42", Some("intent-7".to_string()));
+
+        assert_eq!(request.caller_identity, "agent:test");
+        assert_eq!(request.capability_id, "web.search");
+        assert_eq!(request.correlation_id, "plan-42");
+        assert_eq!(request.causation_id.as_deref(), Some("intent-7"));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use james_capabilities::{CapabilityDefinition, CapabilityCategory, ExecutionTarget, RiskLevel};
