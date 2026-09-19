@@ -54,7 +54,7 @@ name: {self.name}
         def section(header):
             m=re.search(rf"^## {re.escape(header)}\n(.*?)(?=^## |\Z)",content,re.MULTILINE|re.DOTALL)
             return [x[2:].strip() for x in m.group(1).splitlines() if x.startswith("- ")] if m else []
-        description_match=re.search(rf"^# {re.escape(name)}\\n\\n(.*?)(?=^## |\\Z)",content,re.MULTILINE|re.DOTALL)
+        description_match=re.search(rf"^# {re.escape(name)}\n\n(.*?)(?=^## |\Z)",content,re.MULTILINE|re.DOTALL)
         description=description_match.group(1).strip() if description_match else ""
         return cls(name=name,description=description,triggers=section("Triggers"),inputs=section("Inputs"),outputs=section("Outputs"),
                    procedure=section("Procedure"),quality_checks=section("Quality Checks"),permissions=section("Permissions"),lessons=section("Lessons"))
