@@ -152,6 +152,7 @@ class JamesRuntime:
     async def shutdown(self) -> None:
         """Graceful shutdown"""
         logger.info("Shutting down JAMES Runtime...")
+        self.heartbeat.stop()
         
         if self._health_check_task:
             self._health_check_task.cancel()
