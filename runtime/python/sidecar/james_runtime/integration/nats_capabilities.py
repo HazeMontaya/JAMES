@@ -46,6 +46,8 @@ class NatsCapabilityBridge:
                 pass
         self.client = NATS()
         self._subscriptions: list[Any] = []
+        # Per-capability health is observational only; Rust authorization remains the execution authority.
+        self._capability_health: dict[str, bool] = {}
 
     @property
     def execute_subject(self) -> str:
@@ -189,6 +191,7 @@ class NatsCapabilityBridge:
             )
             result = await self.registry.execute(capability_id, args)
             success = bool(result.get("success"))
+            self._capability_health[capability_id] = success
             return {
                 "request_id": request_id,
                 "success": success,
@@ -201,6 +204,8 @@ class NatsCapabilityBridge:
         except Exception as exc:
             # Never return exception text to the caller: tool errors can contain
             # user input, provider payloads, credentials or filesystem details.
+            if capability_id:
+                self._capability_health[capability_id] = False
             logger.exception("Python capability execution failed")
             return {
                 "request_id": request_id,
@@ -226,11 +231,16 @@ class NatsCapabilityBridge:
     async def _handle_health(self, msg: Any) -> None:
         if not msg.reply:
             return
+        capability_health = {
+            tool.name: self._capability_health.get(tool.name, True)
+            for tool in self.registry.list_tools()
+        }
         payload = {
             "service": self.service_name,
-            "status": "healthy",
+            "status": "healthy" if all(capability_health.values()) else "degraded",
             "timestamp": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
-            "capabilities": [tool.name for tool in self.registry.list_tools()],
+            "capabilities": list(capability_health),
+            "capability_health": capability_health,
         }
         await self.client.publish(msg.reply, json.dumps(payload).encode("utf-8"))
 
