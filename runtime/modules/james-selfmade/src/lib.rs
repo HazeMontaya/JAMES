@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::future::Future;
+use std::pin::Pin;
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -105,15 +107,14 @@ pub struct EvolutionCycle {
     pub next_action: String,
 }
 
-#[async_trait::async_trait]
 pub trait DevelopmentAgent: Send + Sync {
-    async fn propose(&self, context: &str) -> Result<EvolutionProposal>;
+    fn propose(&self, context: &str) -> Pin<Box<dyn Future<Output = Result<EvolutionProposal>> + Send + '_>>;
 
     /// Generate a unified diff for the isolated workspace. The runtime still
     /// validates, applies, tests and rolls back the patch; the agent has no
     /// canonical-repository authority.
-    async fn generate_patch(&self, _context: &str) -> Result<String> {
-        bail!("development agent does not implement patch generation")
+    fn generate_patch(&self, _context: &str) -> Pin<Box<dyn Future<Output = Result<String>> + Send + '_>> {
+        Box::pin(async { bail!("development agent does not implement patch generation") })
     }
 }
 
@@ -764,7 +765,7 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
             tags: vec!["selfmade".into(), "development".into()],
             deprecated: false,
             experimental: true,
-        }, "james.selfmade".into()).await?;
+        }, "james.selfmade").await?;
     }
     Ok(())
 }
