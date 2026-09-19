@@ -80,6 +80,15 @@ class NatsCapabilityBridge:
         elif name == "http_get":
             risk_level = "medium"
             permissions = ["network.http"]
+        elif name in {"web_search", "web_scrape"}:
+            risk_level = "medium"
+            permissions = ["network.public_web"]
+        elif name == "dify_agent":
+            risk_level = "high"
+            permissions = ["integration.dify.execute"]
+        elif name == "n8n_webhook":
+            risk_level = "high"
+            permissions = ["integration.n8n.execute", "integration.n8n.communicate"]
         elif name.startswith("memory_"):
             risk_level = "medium"
             permissions = [f"memory.{name.removeprefix('memory_')}"]
