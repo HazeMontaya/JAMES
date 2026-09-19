@@ -23,6 +23,21 @@ async def test_heartbeat_timeout_is_recorded():
     assert not result[0].success
     assert hb.failures("slow") == 1
 
+
+async def test_heartbeat_state_survives_restart(tmp_path):
+    calls = []
+    async def work():
+        calls.append("ok")
+    state = tmp_path / "heartbeat.json"
+    hb = DurableHeartbeat(state)
+    hb.register(HeartbeatTask("health", 60, work))
+    await hb.tick()
+    restored = DurableHeartbeat(state)
+    await restored.restore()
+    restored.register(HeartbeatTask("health", 60, work))
+    assert restored.due(now=restored._last_run["health"] + 1) == []
+    assert calls == ["ok"]
+
 def test_survival_budget_degrades_background_work():
     assert budget_for("critical").max_parallel_tasks == 0
     assert allowed_tasks("low_compute", 4) == 1
