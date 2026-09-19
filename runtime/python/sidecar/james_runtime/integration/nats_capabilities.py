@@ -154,6 +154,8 @@ class NatsCapabilityBridge:
     async def _execute_request(self, payload: bytes) -> dict[str, Any]:
         started = time.perf_counter()
         request_id = ""
+        correlation_id = ""
+        causation_id = None
         try:
             request = json.loads(payload.decode("utf-8"))
             request_id = str(request.get("request_id", ""))
