@@ -21,6 +21,11 @@ pub struct BridgeConfig {
     #[serde(default = "default_subject_prefix")]
     pub subject_prefix: String,
 
+    /// Shared secret required for capability execution over NATS.
+    /// Empty disables remote execution until configured explicitly.
+    #[serde(default)]
+    pub bridge_token: String,
+
     /// Whether to auto-register Python skills as capabilities
     #[serde(default = "default_true")]
     pub auto_register_skills: bool,
@@ -80,6 +85,7 @@ impl Default for BridgeConfig {
             service_name: default_service_name(),
             python_service_name: default_python_service_name(),
             subject_prefix: default_subject_prefix(),
+            bridge_token: String::new(),
             auto_register_skills: default_true(),
             skills_path: default_skills_path(),
             health_check_interval_secs: default_health_interval(),
@@ -115,6 +121,9 @@ impl BridgeConfig {
         }
         if let Ok(prefix) = std::env::var("JAMES_BRIDGE_SUBJECT_PREFIX") {
             config.subject_prefix = prefix;
+        }
+        if let Ok(token) = std::env::var("JAMES_BRIDGE_TOKEN") {
+            config.bridge_token = token;
         }
         if let Ok(auto) = std::env::var("JAMES_BRIDGE_AUTO_REGISTER") {
             config.auto_register_skills = auto.parse().unwrap_or(true);
