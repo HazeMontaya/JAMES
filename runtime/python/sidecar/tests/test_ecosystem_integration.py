@@ -27,3 +27,19 @@ def test_registry_exposes_capability_matrix():
     assert registry.enabled() == ("firecrawl",)
     assert "search" in registry.capability_matrix()["firecrawl"]
     assert registry.profiles["livekit"].domain is IntegrationDomain.REALTIME_VOICE
+
+
+def test_ecosystem_capability_provider_mapping_and_health():
+    from james_runtime.integration.ecosystem import EcosystemRegistry
+
+    registry = EcosystemRegistry()
+    registry.register("firecrawl", object())
+    registry.register("dify", object())
+
+    assert registry.provider_for("search") == ("firecrawl",)
+    assert registry.provider_for("agent_runs") == ("dify",)
+    assert registry.capability_providers()["search"] == ("firecrawl",)
+
+    registry.mark_health("firecrawl", False, "offline")
+    assert registry.health("firecrawl")["healthy"] is False
+    assert registry.health("firecrawl")["error"] == "offline"
