@@ -258,6 +258,52 @@ impl SelfMadeModule {
             .map(|o| String::from_utf8_lossy(&o.stdout).lines().map(str::to_string).collect::<Vec<_>>())
             .unwrap_or_default();
 
+        let mut top_level = Vec::new();
+        let mut entries = tokio::fs::read_dir(&self.root).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name == ".git" || name == ".james" || name == "target" {
+                continue;
+            }
+            let kind = entry.file_type().await?;
+            top_level.push(serde_json::json!({
+                "name": name,
+                "kind": if kind.is_dir() { "directory" } else { "file" }
+            }));
+        }
+        top_level.sort_by(|a, b| {
+            a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or(""))
+        });
+
+        let workspace_manifests = [
+            "runtime/core/Cargo.toml",
+            "runtime/modules/Cargo.toml",
+            "runtime/python/sidecar/pyproject.toml",
+            "runtime/tools/discovery/package.json",
+        ];
+        let manifests = workspace_manifests.iter()
+            .map(|relative| serde_json::json!({
+                "path": relative,
+                "exists": self.root.join(relative).exists()
+            }))
+            .collect::<Vec<_>>();
+
+        let repository_model = serde_json::json!({
+            "schema_version": 1,
+            "top_level": top_level,
+            "workspace_manifests": manifests,
+            "protected_roots": [
+                "runtime/core/crates/james-capability-broker/",
+                "runtime/core/crates/james-core/",
+                "runtime/modules/james-system/src/main.rs",
+                "ops/scripts/start-james.ps1"
+            ],
+            "generated_at": Utc::now()
+        });
+        let model_file = self.workspace.parent().unwrap().join("repository-model.json");
+        tokio::fs::create_dir_all(self.workspace.parent().unwrap()).await?;
+        tokio::fs::write(&model_file, serde_json::to_vec_pretty(&repository_model)?).await?;
+
         let snapshot = serde_json::json!({
             "identity": {
                 "name": "JAMES",
@@ -271,6 +317,8 @@ impl SelfMadeModule {
                 "workspace": self.workspace,
                 "git_head": git_head,
                 "git_status": git_status,
+                "model_file": model_file,
+                "model": repository_model,
             },
             "runtime": {
                 "selfmade_running": self.is_running().await,
