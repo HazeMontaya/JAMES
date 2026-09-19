@@ -31,7 +31,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["JAMES Project"]
-repository = "https://github.com/james-project/james"
+repository = "https://github.com/HazeMontaya/JAMES"
 description = "JAMES Core - Local Agent & Automation Platform"
 
 [workspace.dependencies]
