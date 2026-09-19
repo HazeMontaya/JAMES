@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Mapping
+from urllib.parse import urlparse
 
 import httpx
 
@@ -24,6 +25,9 @@ class HttpIntegrationError(RuntimeError):
 
 class _HttpAdapter:
     def __init__(self, *, base_url: str, api_key: str | None = None, timeout: float = 30.0) -> None:
+        parsed = urlparse(base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("base_url must be an absolute http(s) URL")
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
@@ -63,9 +67,19 @@ class FirecrawlAdapter(_HttpAdapter):
         return results if isinstance(results, list) else []
 
     async def scrape(self, url: str) -> dict[str, Any]:
+        self._validate_target_url(url)
         return await self._request("POST", "/v2/scrape", json={"url": url})
 
+    @staticmethod
+    def _validate_target_url(url: str) -> None:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("target URL must be absolute http(s)")
+        if parsed.username or parsed.password:
+            raise ValueError("target URL must not contain credentials")
+
     async def crawl(self, url: str, *, limit: int = 10) -> dict[str, Any]:
+        self._validate_target_url(url)
         return await self._request("POST", "/v2/crawl", json={"url": url, "limit": limit})
 
 
