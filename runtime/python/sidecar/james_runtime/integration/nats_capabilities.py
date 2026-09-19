@@ -208,6 +208,19 @@ class NatsCapabilityBridge:
                 "correlation_id": correlation_id or None,
                 "causation_id": causation_id,
             }
+        except (ValueError, TypeError, KeyError, PermissionError) as exc:
+            if capability_id and hasattr(self, "_capability_health"):
+                self._capability_health[capability_id] = False
+            logger.warning("Python capability request rejected: %s", exc)
+            return {
+                "request_id": request_id,
+                "success": False,
+                "output": None,
+                "error": str(exc),
+                "duration_ms": int((time.perf_counter() - started) * 1000),
+                "correlation_id": correlation_id or None,
+                "causation_id": causation_id,
+            }
         except Exception as exc:
             # Never return exception text to the caller: tool errors can contain
             # user input, provider payloads, credentials or filesystem details.
