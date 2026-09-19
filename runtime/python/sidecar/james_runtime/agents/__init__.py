@@ -36,7 +36,7 @@ class AgentSystem:
         MemoryTools(self.memory).register(self.tool_registry)
         # External ecosystems are opt-in via explicit environment URLs.
         # The registry is retained for health/routing introspection.
-        self.ecosystems = configure_ecosystems(self.tool_registry)
+        self.ecosystems = configure_ecosystems(self.tool_registry, event_sink=self.runtime._emit_event)
 
         self._agents: Dict[str, ReActReasoner] = {}
 
