@@ -1,9 +1,8 @@
 """Persistent EMA preference learning for sampling parameters."""
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 import json
-import math
 
 @dataclass
 class FeedbackSample:
@@ -39,24 +38,36 @@ class FeedbackStore:
             raise ValueError("rating must be -1 or 1")
         key = context or "unknown"
         entry = self._state.setdefault(key, {"count": 0, "ema": {}})
-        # Positive feedback moves toward observed values; negative feedback moves away
-        # from the observed vector and toward the configured target.
-        direction = 1.0 if rating > 0 else -1.0
         ema = entry.setdefault("ema", {})
-        keys = set(observed) | set(target)
-        for name in keys:
-            current = float(ema.get(name, target.get(name, observed.get(name, 0.0))))
-            obs = float(observed.get(name, current))
+
+        # A first observation is the current behavior, not the configured target.
+        # This avoids inventing a midpoint before JAMES has seen feedback.
+        for name in set(observed) | set(target):
+            obs = float(observed.get(name, target.get(name, 0.0)))
             tgt = float(target.get(name, obs))
-            desired = obs if direction > 0 else (2.0 * tgt - obs)
+            current = float(ema.get(name, obs))
+
+            if rating > 0:
+                desired = obs
+            else:
+                # Negative feedback moves away from the observed value toward
+                # the supplied target, while remaining bounded by that reflection.
+                desired = 2.0 * tgt - obs
+
             ema[name] = current + self.alpha * (desired - current)
+
         entry["count"] = int(entry.get("count", 0)) + 1
         self._save()
         return {k: float(v) for k, v in ema.items()}
 
     def get(self, context: str) -> dict[str, float]:
-        return {k: float(v) for k, v in self._state.get(context, {}).get("ema", {}).items()}
+        return {
+            k: float(v)
+            for k, v in self._state.get(context, {}).get("ema", {}).items()
+        }
 
     def stats(self) -> dict:
-        return {k: {"count": v.get("count", 0), "ema": dict(v.get("ema", {}))}
-                for k, v in self._state.items()}
+        return {
+            k: {"count": v.get("count", 0), "ema": dict(v.get("ema", {}))}
+            for k, v in self._state.items()
+        }
