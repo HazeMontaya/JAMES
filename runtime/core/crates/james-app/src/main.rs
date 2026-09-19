@@ -400,6 +400,19 @@ async fn main() -> Result<()> {
         log.prefix(),
         python_caps.len()
     );
+    // Explicit operator allowlist: Python capabilities are never granted to
+    // the user caller merely because they are discovered. High-risk integrations
+    // therefore remain unavailable until an operator explicitly enables them.
+    if let Ok(raw) = std::env::var("JAMES_USER_CAPABILITIES") {
+        for capability_id in raw.split(',').map(str::trim).filter(|id| !id.is_empty()) {
+            if capability_registry.get(capability_id).is_some() {
+                platform_ctx.broker.grant_capability_permissions("user", capability_id);
+                info!("{} granted user capability: {}", log.prefix(), capability_id);
+            } else {
+                warn!("{} requested unknown user capability: {}", log.prefix(), capability_id);
+            }
+        }
+    }
 
     // Agent service for intent execution
     let agent_service = Arc::new(AgentService::new(platform_ctx.broker.clone()));
