@@ -150,10 +150,14 @@ impl PlanExecutor {
                     Ok(Ok(o)) => o,
                     Ok(Err(e)) => {
                         tracing::error!("PlanExecutor: broker error for step '{}': {}", step.id, e);
+                        if e.to_string().contains("executor error") {
+                            self.resolver.set_provider_health(&provider, ProviderHealth::Unavailable);
+                        }
                         return Err(AgentError::BrokerError(e.to_string()));
                     }
                     Err(_) => {
                         tracing::error!("PlanExecutor: step '{}' timed out after {}ms", step.id, ms);
+                        self.resolver.set_provider_health(&provider, ProviderHealth::Unavailable);
                         return Err(AgentError::BrokerError(format!(
                             "step '{}' timed out after {}ms",
                             step.id, ms
@@ -165,6 +169,9 @@ impl PlanExecutor {
                 .await
                 .map_err(|e| {
                     tracing::error!("PlanExecutor: broker error for step '{}': {}", step.id, e);
+                    if e.to_string().contains("executor error") {
+                        self.resolver.set_provider_health(&provider, ProviderHealth::Unavailable);
+                    }
                     AgentError::BrokerError(e.to_string())
                 })?,
         };
