@@ -242,7 +242,7 @@ impl AgentService {
     }
 
     fn register_python_executor(&self, capability_id: impl Into<String>, executor: Arc<dyn james_capability_broker::CapabilityExecutor>) {
-        self.executor.register_executor(capability_id, executor);
+        self.executor.register_executor_with_provider(capability_id, "python", executor);
     }
     
     async fn execute_intent(&self, intent: UserIntent) -> Result<PlanExecutionResult> {
