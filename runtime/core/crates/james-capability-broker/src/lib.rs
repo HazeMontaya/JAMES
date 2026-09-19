@@ -77,6 +77,15 @@ pub trait CapabilityExecutor: Send + Sync {
         capability_id: &str,
         input: serde_json::Value,
     ) -> Result<serde_json::Value>;
+
+    /// Optional request-aware execution hook for transport executors.
+    /// Local executors inherit the legacy behavior automatically.
+    async fn execute_with_request(
+        &self,
+        request: &CapabilityRequestV2,
+    ) -> Result<serde_json::Value> {
+        self.execute(&request.capability_id, request.input.clone()).await
+    }
 }
 
 /// Classification of the data carried by a capability request.
@@ -655,7 +664,7 @@ impl CapabilityBroker {
             }
         }
 
-        let execution = executor.execute(&request.capability_id, request.input.clone());
+        let execution = executor.execute_with_request(&request);
         let output = match request.effective_timeout() {
             Some(timeout) => match tokio::time::timeout(timeout, execution).await {
                 Ok(Ok(output)) => output,
