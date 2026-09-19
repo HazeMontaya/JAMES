@@ -28,3 +28,18 @@ def test_skill_lessons(tmp_path: Path):
     store.save(SkillDefinition(name="research-repo",description="Inspect a repository.",triggers=["analyze repository"],procedure=["inspect tree","read files"],quality_checks=["verify"]))
     store.add_lesson("research-repo","Do not infer implementation from README alone.")
     assert store.load("research-repo").lessons==["Do not infer implementation from README alone."]
+
+
+def test_event_log_persists_correlation_and_causation(tmp_path: Path):
+    log = EventLog(tmp_path/"events.jsonl")
+    event = log.append(
+        "CAPABILITY_EXECUTION_FAILED",
+        {"capability": "web.search", "provider": "python"},
+        source="james-bridge",
+        correlation_id="plan-42",
+        causation_id="step-1",
+    )
+    restored = log.tail(1)[0]
+    assert restored.event_id == event.event_id
+    assert restored.correlation_id == "plan-42"
+    assert restored.causation_id == "step-1"
