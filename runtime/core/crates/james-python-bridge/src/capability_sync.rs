@@ -144,3 +144,101 @@ pub async fn start_capability_sync_task(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cap(id: &str, permission: &str) -> PythonCapabilityInfo {
+        PythonCapabilityInfo {
+            id: id.to_string(),
+            name: id.to_string(),
+            category: "network".to_string(),
+            version: "1.0.0".to_string(),
+            description: "test capability".to_string(),
+            risk_level: "medium".to_string(),
+            required_permissions: vec![permission.to_string()],
+            input_schema: None,
+            output_schema: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn sync_registers_and_updates_python_contract() {
+        let registry = Arc::new(CapabilityRegistry::new());
+        let sync = CapabilitySync::new(registry.clone());
+
+        sync.sync_one(&cap("demo.call", "network.one")).await.unwrap();
+        assert_eq!(
+            registry.get_definition("demo.call").unwrap().required_permissions,
+            vec!["network.one".to_string()]
+        );
+
+        sync.sync_one(&cap("demo.call", "network.two")).await.unwrap();
+        let definition = registry.get_definition("demo.call").unwrap();
+        assert_eq!(definition.required_permissions, vec!["network.two".to_string()]);
+        assert_eq!(definition.provider, "python");
+    }
+
+    #[tokio::test]
+    async fn sync_removes_stale_python_capabilities_but_keeps_core_owner() {
+        let registry = Arc::new(CapabilityRegistry::new());
+        let sync = CapabilitySync::new(registry.clone());
+
+        sync.sync_one(&cap("stale.python", "network.one")).await.unwrap();
+
+        let core_definition = CapabilityDefinition {
+            id: "core.owned".to_string(),
+            name: "Core owned".to_string(),
+            category: CapabilityCategory::System,
+            version: "1.0.0".to_string(),
+            provider: "core".to_string(),
+            description: "core capability".to_string(),
+            risk_level: RiskLevel::Low,
+            required_permissions: vec![],
+            dependencies: vec![],
+            input_schema: None,
+            output_schema: None,
+            execution_target: ExecutionTarget::Local,
+            tags: vec![],
+            deprecated: false,
+            experimental: false,
+        };
+        registry.register(core_definition, "test").await.unwrap();
+
+        sync.sync_all(&[]).await.unwrap();
+
+        assert!(registry.get("stale.python").is_none());
+        assert!(registry.get("core.owned").is_some());
+    }
+
+    #[tokio::test]
+    async fn sync_does_not_overwrite_non_python_owner() {
+        let registry = Arc::new(CapabilityRegistry::new());
+        let sync = CapabilitySync::new(registry.clone());
+
+        let definition = CapabilityDefinition {
+            id: "owned.call".to_string(),
+            name: "Owned".to_string(),
+            category: CapabilityCategory::System,
+            version: "1.0.0".to_string(),
+            provider: "core".to_string(),
+            description: "core capability".to_string(),
+            risk_level: RiskLevel::Low,
+            required_permissions: vec![],
+            dependencies: vec![],
+            input_schema: None,
+            output_schema: None,
+            execution_target: ExecutionTarget::Local,
+            tags: vec![],
+            deprecated: false,
+            experimental: false,
+        };
+        registry.register(definition, "test").await.unwrap();
+
+        sync.sync_one(&cap("owned.call", "network.one")).await.unwrap();
+
+        assert_eq!(registry.get_definition("owned.call").unwrap().provider, "core");
+        assert!(registry.get_definition("owned.call").unwrap().required_permissions.is_empty());
+    }
+}
