@@ -6,7 +6,6 @@ import time
 import re
 from typing import Any, Awaitable, Callable
 
-
 @dataclass(frozen=True)
 class RaceResult:
     model: str
@@ -15,7 +14,6 @@ class RaceResult:
     duration_ms: int
     success: bool
     error: str | None = None
-
 
 def response_text(response: Any) -> str:
     """Extract assistant text from common OpenAI-compatible response shapes."""
@@ -27,21 +25,33 @@ def response_text(response: Any) -> str:
     first = choices[0]
     message = first.get("message", {}) if isinstance(first, dict) else getattr(first, "message", {})
     content = message.get("content", "") if isinstance(message, dict) else getattr(message, "content", "")
+    if isinstance(content, list):
+        parts=[]
+        for item in content:
+            if isinstance(item, dict):
+                text=item.get("text")
+                if text:
+                    parts.append(str(text))
+            else:
+                text=getattr(item,"text",None)
+                if text:
+                    parts.append(str(text))
+        return "".join(parts)
     return content if isinstance(content, str) else ("" if content is None else str(content))
 
-
 def score_response(text: str) -> float:
-    """Quality heuristic: structure + substance + directness, bounded to 100."""
+    """Deterministic heuristic favoring usable substance, structure and lexical diversity."""
     if not text.strip():
         return 0.0
     words = re.findall(r"\b\w+\b", text)
+    if not words:
+        return 0.0
     sentences = max(1, len(re.findall(r"[.!?]+", text)))
     unique = len(set(w.lower() for w in words))
-    structure = min(30.0, sentences * 2.5 + (10.0 if "\n" in text else 0.0))
-    substance = min(45.0, len(words) / 8.0)
-    diversity = min(25.0, unique / max(1, len(words)) * 100.0)
+    structure = min(25.0, sentences * 2.5 + (10.0 if "\n" in text else 0.0))
+    substance = min(55.0, len(words) * 1.5)
+    diversity = min(20.0, unique / len(words) * 20.0)
     return round(min(100.0, structure + substance + diversity), 2)
-
 
 async def race_models(model_ids: list[str], generate: Callable[[str], Awaitable[Any]]) -> list[RaceResult]:
     """Run independent model calls concurrently and return ranked results."""
@@ -56,7 +66,6 @@ async def race_models(model_ids: list[str], generate: Callable[[str], Awaitable[
                               int((time.perf_counter() - started) * 1000), False, str(exc))
     results = await asyncio.gather(*(one(m) for m in model_ids))
     return sorted(results, key=lambda x: (-x.score, x.duration_ms, x.model))
-
 
 def best_result(results: list[RaceResult]) -> RaceResult | None:
     return results[0] if results else None
