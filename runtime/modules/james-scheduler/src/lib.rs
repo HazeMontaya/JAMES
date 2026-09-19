@@ -4,6 +4,7 @@
 //! james-tasks. This module only provides persistence/manifest/API adaptation.
 
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
