@@ -48,7 +48,6 @@ impl Default for SchedulerConfig {
     }
 }
 
-mod persistence;
 
 pub struct SchedulerModule {
     config: SchedulerConfig,
