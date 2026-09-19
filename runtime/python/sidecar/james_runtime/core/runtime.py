@@ -39,6 +39,7 @@ from james_runtime.telemetry.metrics import MetricsCollector
 from james_runtime.memory import EventLog
 from james_runtime.autonomy.heartbeat import DurableHeartbeat, HeartbeatTask
 from james_runtime.autonomy.decision import AutonomousDecisionLoop
+from james_runtime.autonomy.mission import AutonomousMissionManager, AutonomousMission
 from james_runtime.steering.liquid import liquid_race
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class JamesRuntime:
         self.event_log = EventLog(Path(".james") / "events.jsonl")
         self.heartbeat = DurableHeartbeat(Path(".james") / "heartbeat.json")
         self.autonomy = AutonomousDecisionLoop(self.event_log, self.heartbeat)
+        self.missions = AutonomousMissionManager(self.event_log, Path(".james") / "missions.json")
 
         # Agent system (lazy)
         self._agent_system = None
@@ -125,8 +127,10 @@ class JamesRuntime:
         self.cost_tracker = CostTracker(str(self.settings.db_path))
         self.budget_enforcer = BudgetEnforcer(self.settings.budget, self.cost_tracker)
         
-        # 6. Restore autonomous scheduler state and start background tasks.
+        # 6. Restore durable autonomy state and register bounded handlers.
         await self.heartbeat.restore()
+        await self.missions.restore()
+        self._register_autonomous_missions()
         self.heartbeat.register(HeartbeatTask("runtime.engine_health", 30.0, self._heartbeat_engine_health, timeout_seconds=15.0))
         self.heartbeat.register(HeartbeatTask("autonomy.decision", 60.0, self._heartbeat_autonomy_decision, timeout_seconds=5.0))
         self._health_check_task = asyncio.create_task(self._health_check_loop(), name="james-health")
@@ -135,18 +139,64 @@ class JamesRuntime:
         self._initialized = True
         logger.info("JAMES Runtime initialized successfully")
     
+    def _register_autonomous_missions(self) -> None:
+        """Register read-only mission handlers; registration is the policy boundary."""
+        self.missions.register("run_health_sweep", self._mission_health_sweep)
+        self.missions.register("inspect_failure", self._mission_inspect_failure)
+        self.missions.register("inspect_inference_reliability", self._mission_inspect_inference)
+        self.missions.register("inspect_repository", self._mission_inspect_repository)
+        self.missions.register("inspect_selfmade_regression", self._mission_inspect_selfmade_regression)
+        self.missions.register("inspect_selfmade_opportunity", self._mission_inspect_selfmade_opportunity)
+
     async def _heartbeat_autonomy_decision(self) -> None:
         decision = self.autonomy.tick()
-        # Decision generation is intentionally separated from action execution.
-        # Only bounded, read-only observations are dispatched automatically.
-        if decision.action == "run_health_sweep":
-            await self._heartbeat_engine_health()
-        self._emit_event("AUTONOMOUS_DECISION", {
-            "action": decision.action,
-            "priority": decision.priority,
-            "reason": decision.reason,
-            "evidence": decision.evidence,
+        mission = await self.missions.dispatch(decision)
+        if mission is not None:
+            self._emit_event("AUTONOMY_MISSION_RESULT", {
+                "mission_id": mission.mission_id,
+                "action": mission.action,
+                "status": mission.status,
+                "attempts": mission.attempts,
+                "error": mission.error,
+            })
+
+    async def _mission_health_sweep(self, mission: AutonomousMission) -> dict[str, Any]:
+        await self._heartbeat_engine_health()
+        return {"observation": "engine_health", "mission_id": mission.mission_id}
+
+    async def _mission_inspect_failure(self, mission: AutonomousMission) -> dict[str, Any]:
+        failures = {name: self.heartbeat.failures(name) for name in ("runtime.engine_health", "autonomy.decision")}
+        self._emit_event("AUTONOMY_FAILURE_INSPECTION", {"mission_id": mission.mission_id, "failures": failures})
+        return {"failures": failures}
+
+    async def _mission_inspect_inference(self, mission: AutonomousMission) -> dict[str, Any]:
+        events = self.event_log.tail(250)
+        relevant = [e.event_type for e in events if e.event_type in {"INFERENCE_ERROR", "MODEL_FALLBACK", "ENGINE_ERROR"}][-10:]
+        self._emit_event("AUTONOMY_INFERENCE_INSPECTION", {"mission_id": mission.mission_id, "events": relevant})
+        return {"reliability_events": relevant}
+
+    async def _mission_inspect_repository(self, mission: AutonomousMission) -> dict[str, Any]:
+        self._emit_event("AUTONOMY_REPOSITORY_INSPECTION", {"mission_id": mission.mission_id})
+        return {"observation": "repository_state_recorded"}
+
+    async def _mission_inspect_selfmade_regression(self, mission: AutonomousMission) -> dict[str, Any]:
+        events = self.event_log.tail(250)
+        failures = [e for e in events if e.event_type in {"selfmade.evaluation.completed", "selfmade.change.failed"} and e.payload.get("passed") is False]
+        latest = failures[-1] if failures else None
+        self._emit_event("AUTONOMY_SELFMADE_REGRESSION_INSPECTION", {
+            "mission_id": mission.mission_id,
+            "event_id": latest.event_id if latest else None,
         })
+        return {"failed_evaluations": len(failures), "latest_event_id": latest.event_id if latest else None}
+
+    async def _mission_inspect_selfmade_opportunity(self, mission: AutonomousMission) -> dict[str, Any]:
+        events = self.event_log.tail(250)
+        successful = [e for e in events if e.event_type == "selfmade.evaluation.completed" and e.payload.get("passed") is True]
+        self._emit_event("AUTONOMY_SELFMADE_OPPORTUNITY_INSPECTION", {
+            "mission_id": mission.mission_id,
+            "successful_evaluations": len(successful),
+        })
+        return {"successful_evaluations": len(successful), "next_action": "operator_review"}
 
     async def _initialize_engines(self) -> None:
         """Initialize all available engines"""
