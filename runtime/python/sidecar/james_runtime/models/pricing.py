@@ -14,6 +14,7 @@ class ModelPricing:
 class PricingRegistry:
     def __init__(self):
         self._pricing: Dict[str, ModelPricing] = {}
+        self.load_defaults()
 
     def load_defaults(self) -> None:
         # Local inference is zero-cost from the API perspective.
@@ -23,10 +24,7 @@ class PricingRegistry:
             "qwen2.5-3b-instruct", "mistral-7b-instruct",
             "llama-3.3-70b-instruct", "deepseek-r1-distill-qwen-7b",
         ):
-            self._pricing[model_id] = ModelPricing(model_id)
-
-        # Reference cloud entries are retained for routing tests and future
-        # provider adapters. They are not enabled by the default local-only budget.
+            self._pricing.setdefault(model_id, ModelPricing(model_id))
         self._pricing.setdefault(
             "gpt-4o",
             ModelPricing("gpt-4o", Decimal("0.005"), Decimal("0.015")),
