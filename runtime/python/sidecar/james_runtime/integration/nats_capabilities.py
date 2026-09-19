@@ -228,21 +228,26 @@ class NatsCapabilityBridge:
         payload = {"capabilities": [self._capability_info(tool) for tool in self.registry.list_tools()]}
         await self.client.publish(msg.reply, json.dumps(payload).encode("utf-8"))
 
-    async def _handle_health(self, msg: Any) -> None:
-        if not msg.reply:
-            return
+    def _health_payload(self) -> dict[str, Any]:
         capability_health = {
             tool.name: self._capability_health.get(tool.name, True)
             for tool in self.registry.list_tools()
         }
-        payload = {
+        return {
             "service": self.service_name,
             "status": "healthy" if all(capability_health.values()) else "degraded",
             "timestamp": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
             "capabilities": list(capability_health),
             "capability_health": capability_health,
         }
-        await self.client.publish(msg.reply, json.dumps(payload).encode("utf-8"))
+
+    async def _handle_health(self, msg: Any) -> None:
+        if not msg.reply:
+            return
+        await self.client.publish(
+            msg.reply,
+            json.dumps(self._health_payload()).encode("utf-8"),
+        )
 
     async def close(self) -> None:
         if self.client.is_connected:
