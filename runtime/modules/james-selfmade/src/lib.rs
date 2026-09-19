@@ -65,6 +65,17 @@ pub struct VerificationCheck {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvaluationReport {
+    pub passed: bool,
+    pub baseline_head: Option<String>,
+    pub candidate_head: Option<String>,
+    pub changed_files: Vec<String>,
+    pub verification_passed: bool,
+    pub regressions: Vec<String>,
+    pub evaluated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvolutionOutcome {
     pub cycle_id: String,
     pub proposal_id: String,
@@ -658,6 +669,68 @@ impl SelfMadeModule {
         self.verify_workspace(workspace).await
     }
 
+    /// Evaluate a verified candidate against the canonical baseline before promotion.
+    /// Evaluation is deterministic and records the exact candidate delta.
+    pub async fn evaluate_workspace(&self) -> Result<EvaluationReport> {
+        let workspace = self.ensure_workspace().await?;
+        let baseline_head = Command::new("git")
+            .current_dir(&self.root)
+            .args(["rev-parse", "HEAD"])
+            .output().await?
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+        let candidate_head = Command::new("git")
+            .current_dir(&workspace)
+            .args(["rev-parse", "HEAD"])
+            .output().await?
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+        let diff = Command::new("git")
+            .current_dir(&workspace)
+            .args(["diff", "--cached", "--name-only"])
+            .output().await?;
+        if !diff.status.success() {
+            bail!("could not inspect candidate changes");
+        }
+        let changed_files = String::from_utf8_lossy(&diff.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+
+        let verification = self.verify_workspace(&workspace).await?;
+        let regressions = if verification.passed { Vec::new() } else {
+            verification.checks.iter()
+                .filter(|check| !check.passed)
+                .map(|check| check.name.clone())
+                .collect()
+        };
+        let report = EvaluationReport {
+            passed: verification.passed && !changed_files.is_empty(),
+            baseline_head,
+            candidate_head,
+            changed_files,
+            verification_passed: verification.passed,
+            regressions,
+            evaluated_at: Utc::now(),
+        };
+        let dir = self.workspace.parent().unwrap().join("evaluations");
+        tokio::fs::create_dir_all(&dir).await?;
+        let path = dir.join(format!("{}.json", Uuid::now_v7()));
+        tokio::fs::write(&path, serde_json::to_vec_pretty(&report)?).await?;
+        self.emit("selfmade.evaluation.completed", serde_json::json!({
+            "path": path,
+            "passed": report.passed,
+            "changed_files": report.changed_files,
+            "verification_passed": report.verification_passed
+        })).await;
+        Ok(report)
+    }
+
     /// Promote a verified candidate into the canonical checkout only when the
     /// explicit local policy gate is enabled. This is never model-controlled.
     pub async fn promote_workspace(&self) -> Result<serde_json::Value> {
@@ -680,9 +753,9 @@ impl SelfMadeModule {
         }
 
         let workspace = self.ensure_workspace().await?;
-        let verification = self.verify_workspace(&workspace).await?;
-        if !verification.passed {
-            bail!("candidate must pass verification before promotion");
+        let evaluation = self.evaluate_workspace().await?;
+        if !evaluation.passed {
+            bail!("candidate must pass behavioral/deterministic evaluation before promotion");
         }
 
         let diff = Command::new("git")
@@ -868,6 +941,15 @@ pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> 
 mod tests {
     use super::*;
     use james_events::EventBus;
+
+    #[tokio::test]
+    async fn evaluation_rejects_clean_candidate_without_changes() {
+        let bus = Arc::new(EventBus::new(32));
+        let registry = Arc::new(CapabilityRegistry::new());
+        let module = SelfMadeModule::new(std::env::temp_dir().join(format!("james-selfmade-test-{}", Uuid::now_v7())), bus, registry);
+        let report = module.evaluate_workspace().await;
+        assert!(report.is_err() || !report.unwrap().passed);
+    }
 
     #[tokio::test]
     async fn mission_starts_in_observe_state() {
