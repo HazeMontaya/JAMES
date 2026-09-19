@@ -424,6 +424,7 @@ impl Agent {
         let request = CapabilityRequestV2 {
             requested_effect: Self::requested_effect_for(&step.capability_id),
             timeout_ms: Some(self.config.timeout_secs.saturating_mul(1000)),
+            reason: Some(if step.description.trim().is_empty() { step.name.clone() } else { step.description.clone() }),
             ..CapabilityRequestV2::new(caller, step.capability_id.clone(), input)
         };
 
