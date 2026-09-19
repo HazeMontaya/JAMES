@@ -7,6 +7,7 @@
 **/.james/tasks.json
 **/.james/scheduler.json
 **/.james/inventory/
+**/.james/bridge-token
 
 # Local AI models
 models/
