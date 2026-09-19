@@ -48,5 +48,10 @@ class ToolRegistry:
         tool = self._tools.get(name)
         if not tool:
             return {"success": False, "output": "", "error": f"Unknown tool: {name}"}
-        result = await tool.run(**args)
+        tool_args = dict(args)
+        if correlation_id is not None:
+            tool_args.setdefault("correlation_id", correlation_id)
+        if causation_id is not None:
+            tool_args.setdefault("causation_id", causation_id)
+        result = await tool.run(**tool_args)
         return result.to_dict()
