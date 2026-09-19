@@ -130,24 +130,25 @@ fn validate_patch_paths(patch: &str) -> Result<()> {
     ];
     let mut seen = 0usize;
     for line in patch.lines() {
-        let raw = if line.starts_with("diff --git ") {
-            line.split_whitespace().nth(2).or_else(|| line.split_whitespace().nth(3))
+        let paths: Vec<&str> = if line.starts_with("diff --git ") {
+            line.split_whitespace().skip(2).take(2).collect()
         } else if line.starts_with("--- ") || line.starts_with("+++ ") {
-            line.split_whitespace().nth(1)
+            line.split_whitespace().skip(1).take(1).collect()
         } else {
-            None
+            Vec::new()
         };
-        let Some(raw) = raw else { continue };
-        if raw == "/dev/null" { continue; }
-        let normalized = raw.trim_start_matches("a/").trim_start_matches("b/").replace('\\', "/");
-        if normalized.starts_with('/')
-            || normalized.split('/').any(|component| component == "..")
-            || normalized.contains(':')
-            || PROTECTED.iter().any(|prefix| normalized == *prefix || normalized.starts_with(prefix))
-        {
-            bail!("selfmade patch targets unsafe or protected path: {normalized}");
+        for raw in paths {
+            if raw == "/dev/null" { continue; }
+            let normalized = raw.trim_start_matches("a/").trim_start_matches("b/").replace('\\', "/");
+            if normalized.starts_with('/')
+                || normalized.split('/').any(|component| component == "..")
+                || normalized.contains(':')
+                || PROTECTED.iter().any(|prefix| normalized == *prefix || normalized.starts_with(prefix))
+            {
+                bail!("selfmade patch targets unsafe or protected path: {normalized}");
+            }
+            seen += 1;
         }
-        seen += 1;
     }
     if seen == 0 {
         bail!("selfmade patch contains no file paths");
