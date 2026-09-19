@@ -36,7 +36,6 @@ async def main():
     nats_bridge = NatsCapabilityBridge(runtime.agent_system.tool_registry)
     try:
         await nats_bridge.start()
-        runtime.agent_system.set_capability_executor(nats_bridge.execute_capability)
         logger.info(
             "Python capability bridge started with %d tools; agent execution routed through NATS",
             len(runtime.agent_system.tool_registry.list_tools()),
