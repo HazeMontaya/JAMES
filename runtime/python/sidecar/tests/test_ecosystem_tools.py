@@ -1,5 +1,23 @@
 import pytest
 
+class FakeFirecrawl:
+    async def search(self, query: str, *, limit: int = 10):
+        return [{"query": query, "limit": limit}]
+
+    async def scrape(self, url: str):
+        return {"url": url}
+
+
+class FakeDify:
+    async def run_agent(self, query: str, **kwargs):
+        return {"query": query}
+
+
+class FakeN8n:
+    async def trigger_webhook(self, webhook_path: str, payload):
+        return {"webhook_path": webhook_path, "payload": payload}
+
+
 def test_ecosystem_capability_metadata_has_explicit_risk_permissions():
     from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
 
