@@ -224,6 +224,7 @@ Context:
             anyhow::bail!("development agent returned content that is not a unified git diff");
         }
         Ok(raw)
+        })
     }
 }
 
