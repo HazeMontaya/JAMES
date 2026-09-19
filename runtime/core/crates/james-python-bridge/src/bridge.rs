@@ -85,7 +85,7 @@ impl PythonBridge {
 
         // Create capability sync
         let registry = capability_registry.clone();
-        self.capability_sync = Some(CapabilitySync::new(self.config.clone(), registry, Some(event_bus.clone())));
+        self.capability_sync = Some(CapabilitySync::new(registry));
 
         // Create Python executor
         self.python_executor = Some(Arc::new(PythonExecutor::new(nats_bridge_arc.clone())));
