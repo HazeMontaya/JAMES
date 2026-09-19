@@ -3,7 +3,6 @@
 //! Scheduling authority and task creation live in core james-scheduler and
 //! james-tasks. This module only provides persistence/manifest/API adaptation.
 
-use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use anyhow::Result;
@@ -12,7 +11,7 @@ use cron::Schedule;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
 use james_module_host::{ModuleManifest, ModuleType};
-use james_tasks::{Task, TaskPriority, RetryPolicy, TaskStatus};
+use james_tasks::{Task, RetryPolicy};
 use james_tasks_core::TaskManager;
 use james_scheduler_core::{Scheduler as CoreScheduler, ScheduledTask as CoreScheduledTask, ScheduleType, TaskTemplate};
 use serde::{Deserialize, Serialize};
@@ -49,10 +48,11 @@ impl Default for SchedulerConfig {
     }
 }
 
+mod persistence;
+
 pub struct SchedulerModule {
     config: SchedulerConfig,
     event_bus: Arc<EventBus>,
-    capability_registry: Arc<CapabilityRegistry>,
     running: Arc<RwLock<bool>>,
     jobs: Arc<RwLock<Vec<ScheduledJob>>>,
     scheduler: Arc<CoreScheduler>,
@@ -63,7 +63,7 @@ impl SchedulerModule {
     pub fn new(
         config: SchedulerConfig,
         event_bus: Arc<EventBus>,
-        capability_registry: Arc<CapabilityRegistry>,
+        _capability_registry: Arc<CapabilityRegistry>,
         task_manager: Arc<TaskManager>,
     ) -> Self {
         let scheduler = Arc::new(CoreScheduler::new(task_manager).with_event_bus(event_bus.clone()));
@@ -73,7 +73,7 @@ impl SchedulerModule {
     pub fn scheduler(&self) -> Arc<CoreScheduler> { self.scheduler.clone() }
 
     pub async fn start(&self) -> Result<()> {
-        self.load().await?;
+        *self.jobs.write().await = persistence::load(&self.config).await?;
         for job in self.jobs.read().await.clone() {
             if let Ok(core_job) = to_core(&job) {
                 let _ = self.scheduler.schedule(core_job);
@@ -101,7 +101,7 @@ impl SchedulerModule {
         if let Some(handle) = self.scheduler_handle.write().await.take() { handle.abort(); }
         self.sync_from_core().await;
         self.scheduler.stop().await?;
-        self.save().await?;
+        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
         self.event_bus.publish(Event::new("module.scheduler.stopped", "james-scheduler")).await?;
         Ok(())
     }
@@ -149,23 +149,6 @@ impl SchedulerModule {
         Ok(())
     }
 
-    async fn load(&self) -> Result<()> {
-        let path = Path::new(&self.config.database_path);
-        if path.exists() {
-            let raw = tokio::fs::read_to_string(path).await?;
-            if !raw.trim().is_empty() { *self.jobs.write().await = serde_json::from_str(&raw)?; }
-        }
-        Ok(())
-    }
-
-    async fn save(&self) -> Result<()> {
-        let path = Path::new(&self.config.database_path);
-        if let Some(parent) = path.parent() { if !parent.as_os_str().is_empty() { tokio::fs::create_dir_all(parent).await?; } }
-        let jobs = self.jobs.read().await.clone();
-        tokio::fs::write(path, serde_json::to_string_pretty(&jobs)?).await?;
-        Ok(())
-    }
-
     async fn sync_from_core(&self) {
         let core_jobs = self.scheduler.list_all();
         let mut jobs = self.jobs.write().await;
@@ -184,7 +167,7 @@ impl SchedulerModule {
 
 impl Clone for SchedulerModule {
     fn clone(&self) -> Self {
-        Self { config:self.config.clone(), event_bus:self.event_bus.clone(), capability_registry:self.capability_registry.clone(), running:self.running.clone(), jobs:self.jobs.clone(), scheduler:self.scheduler.clone(), scheduler_handle:self.scheduler_handle.clone() }
+        Self { config:self.config.clone(), event_bus:self.event_bus.clone(), running:self.running.clone(), jobs:self.jobs.clone(), scheduler:self.scheduler.clone(), scheduler_handle:self.scheduler_handle.clone() }
     }
 }
 
