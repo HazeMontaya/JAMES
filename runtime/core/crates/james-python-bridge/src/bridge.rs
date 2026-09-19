@@ -1,6 +1,6 @@
 //! Main Python Bridge - ties together NATS, capability sync, and execution
 
-use james_capability_broker::{CapabilityBroker, CapabilityExecutor};
+use james_capability_broker::CapabilityBroker;
 use james_capabilities::CapabilityRegistry;
 use james_core::JamesCore;
 use james_events::EventBus;
@@ -123,9 +123,6 @@ impl PythonBridge {
         caller: &str,
         input: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
-        let executor = self.python_executor.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Python executor not initialized"))?;
-
         let nats_bridge = self.nats_bridge.read().await
             .as_ref()
             .cloned()
