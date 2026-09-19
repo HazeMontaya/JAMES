@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import time
 from typing import Any
 
@@ -35,6 +36,7 @@ class NatsCapabilityBridge:
         self.nats_url = nats_url or os.getenv("JAMES_BRIDGE_NATS_URL", "nats://localhost:4222")
         self.subject_prefix = subject_prefix or os.getenv("JAMES_BRIDGE_SUBJECT_PREFIX", "james.bridge")
         self.service_name = service_name or os.getenv("JAMES_BRIDGE_PYTHON_SERVICE", "james-python")
+        self.bridge_token = os.getenv("JAMES_BRIDGE_TOKEN", "")
         self.client = NATS()
         self._subscriptions: list[Any] = []
 
@@ -149,6 +151,12 @@ class NatsCapabilityBridge:
             request = json.loads(payload.decode("utf-8"))
             request_id = str(request.get("request_id", ""))
             capability_id = str(request.get("capability_id", ""))
+            supplied_token = str(request.get("bridge_token", ""))
+
+            if not self.bridge_token:
+                raise PermissionError("Python capability execution is disabled: JAMES_BRIDGE_TOKEN is not configured")
+            if not secrets.compare_digest(supplied_token, self.bridge_token):
+                raise PermissionError("invalid Python bridge authentication token")
             caller = str(request.get("caller", "unknown"))
             args = request.get("input", {})
 
