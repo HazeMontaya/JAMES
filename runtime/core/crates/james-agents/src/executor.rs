@@ -636,6 +636,23 @@ mod tests {
     }
 
     #[test]
+    fn test_unregister_executor_removes_stale_provider_route() {
+        let registry = Arc::new(james_capabilities::CapabilityRegistry::new());
+        let broker = Arc::new(CapabilityBroker::new(registry));
+        let executor = PlanExecutor::new(broker);
+        executor.register_executor_with_provider(
+            "stale.python",
+            "python",
+            Arc::new(james_capability_broker::NoopExecutor),
+        );
+        assert!(executor.provider_executor_ids("python").contains(&"stale.python".to_string()));
+
+        assert!(executor.unregister_executor("stale.python").is_some());
+        assert!(!executor.provider_executor_ids("python").contains(&"stale.python".to_string()));
+        assert!(!executor.has_executor("stale.python"));
+    }
+
+    #[test]
     fn test_executor_registry_seeds_resolver() {
         let reg = crate::ExecutorRegistry::with_provider("platform");
         let ex: Arc<dyn CapabilityExecutor> = Arc::new(james_capability_broker::NoopExecutor);
