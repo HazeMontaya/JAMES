@@ -1,7 +1,7 @@
 //! Python capability executor implementation
 
 use async_trait::async_trait;
-use james_capability_broker::CapabilityExecutor;
+use james_capability_broker::{CapabilityExecutor, CapabilityRequestV2};
 use serde_json::Value;
 use std::sync::Arc;
 use tracing::debug;
@@ -53,6 +53,21 @@ impl CapabilityExecutor for PythonExecutor {
         }
 
         response.output.ok_or_else(|| anyhow::anyhow!("No output from Python capability '{}'", capability_id))
+    }
+
+    async fn execute_with_request(&self, request: &CapabilityRequestV2) -> anyhow::Result<Value> {
+        debug!(
+            "PythonExecutor: request {} capability {} correlation_id={}",
+            request.request_id, request.capability_id, request.correlation_id
+        );
+        let response = self.nats_bridge.execute_capability_with_request(request).await?;
+        if response.request_id.is_empty() || response.request_id != request.request_id {
+            return Err(anyhow::anyhow!("Python capability '{}' returned an invalid request correlation", request.capability_id));
+        }
+        if !response.success {
+            return Err(anyhow::anyhow!("Python capability '{}' execution failed", request.capability_id));
+        }
+        response.output.ok_or_else(|| anyhow::anyhow!("No output from Python capability '{}'", request.capability_id))
     }
 }
 
