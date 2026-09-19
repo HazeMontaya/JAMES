@@ -106,6 +106,8 @@ pub struct ConfirmationRequest {
     pub request_id: String,
     pub caller_identity: String,
     pub capability_id: String,
+    #[serde(default)]
+    pub risk_level: String,
     pub target: Option<String>,
     pub scope: Option<String>,
     pub reason: String,
@@ -723,6 +725,7 @@ impl CapabilityBroker {
             request_id: request.request_id.clone(),
             caller_identity: request.caller_identity.clone(),
             capability_id: request.capability_id.clone(),
+            risk_level: request.risk_class.clone(),
             target: request.target.clone(),
             scope: request.scope.clone(),
             reason: request.reason.clone().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| format!("interactive approval required for {}", request.capability_id)),
