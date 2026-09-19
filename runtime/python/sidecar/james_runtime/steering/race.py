@@ -6,6 +6,7 @@ import time
 import re
 from typing import Any, Awaitable, Callable
 
+
 @dataclass(frozen=True)
 class RaceResult:
     model: str
@@ -14,6 +15,20 @@ class RaceResult:
     duration_ms: int
     success: bool
     error: str | None = None
+
+
+def response_text(response: Any) -> str:
+    """Extract assistant text from common OpenAI-compatible response shapes."""
+    if isinstance(response, str):
+        return response
+    choices = response.get("choices") if isinstance(response, dict) else getattr(response, "choices", None)
+    if not choices:
+        return ""
+    first = choices[0]
+    message = first.get("message", {}) if isinstance(first, dict) else getattr(first, "message", {})
+    content = message.get("content", "") if isinstance(message, dict) else getattr(message, "content", "")
+    return content if isinstance(content, str) else ("" if content is None else str(content))
+
 
 def score_response(text: str) -> float:
     """Quality heuristic: structure + substance + directness, bounded to 100."""
@@ -27,26 +42,21 @@ def score_response(text: str) -> float:
     diversity = min(25.0, unique / max(1, len(words)) * 100.0)
     return round(min(100.0, structure + substance + diversity), 2)
 
-async def race_models(
-    model_ids: list[str],
-    generate: Callable[[str], Awaitable[Any]],
-) -> list[RaceResult]:
+
+async def race_models(model_ids: list[str], generate: Callable[[str], Awaitable[Any]]) -> list[RaceResult]:
     """Run independent model calls concurrently and return ranked results."""
     async def one(model: str) -> RaceResult:
         started = time.perf_counter()
         try:
             response = await generate(model)
-            text = ""
-            if hasattr(response, "choices") and response.choices:
-                message = response.choices[0].get("message", {})
-                text = message.get("content", "") if isinstance(message, dict) else ""
-            elif isinstance(response, str):
-                text = response
-            return RaceResult(model, response, score_response(text), int((time.perf_counter()-started)*1000), True)
+            return RaceResult(model, response, score_response(response_text(response)),
+                              int((time.perf_counter() - started) * 1000), True)
         except Exception as exc:
-            return RaceResult(model, None, 0.0, int((time.perf_counter()-started)*1000), False, str(exc))
+            return RaceResult(model, None, 0.0,
+                              int((time.perf_counter() - started) * 1000), False, str(exc))
     results = await asyncio.gather(*(one(m) for m in model_ids))
     return sorted(results, key=lambda x: (-x.score, x.duration_ms, x.model))
+
 
 def best_result(results: list[RaceResult]) -> RaceResult | None:
     return results[0] if results else None
