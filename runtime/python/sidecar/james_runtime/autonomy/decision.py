@@ -35,6 +35,13 @@ class AutonomousDecisionLoop:
                 "no autonomous health sweep has been recorded yet",
                 {"recent_events": len(events)})
         selfmade = [e for e in events if e.event_type.startswith("selfmade.")]
+        completed = [e for e in selfmade if e.event_type == "selfmade.evaluation.completed"]
+        if len(completed) >= 3 and all(e.payload.get("passed") is True for e in completed[-3:]):
+            return AutonomousDecision(
+                "inspect_selfmade_opportunity", 60,
+                "recent SelfMade evaluations are consistently passing; inspect for the next bounded improvement",
+                {"successful_evaluations": len(completed), "window": 3},
+            )
         failed_selfmade = [
             e for e in selfmade
             if e.event_type in {"selfmade.evaluation.completed", "selfmade.change.failed"}
