@@ -213,6 +213,7 @@ class AutonomousMissionManager:
                 {"mission_id": mission.mission_id, "action": mission.action, "error": mission.error},
                 source="james-autonomy",
                 correlation_id=mission.correlation_id,
+                causation_id=mission.causation_id,
             )
         return mission
 
