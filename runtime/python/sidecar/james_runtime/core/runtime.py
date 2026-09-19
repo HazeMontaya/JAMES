@@ -36,6 +36,7 @@ from james_runtime.policies.cost import CostTracker, BudgetEnforcer
 from james_runtime.models.registry import ModelRegistry
 from james_runtime.models.pricing import PricingRegistry
 from james_runtime.telemetry.metrics import MetricsCollector
+from james_runtime.memory import EventLog
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,9 @@ class JamesRuntime:
         # Telemetry
         self.metrics = MetricsCollector()
         self.event_handlers: List[callable] = []
+        # Durable event history mirrors Jared-style session continuity while
+        # keeping runtime events machine-replayable. The log is outside source code.
+        self.event_log = EventLog(Path(".james") / "events.jsonl")
 
         # Agent system (lazy)
         self._agent_system = None
@@ -472,6 +476,16 @@ class JamesRuntime:
             payload=payload,
             timestamp=datetime.utcnow(),
         )
+        try:
+            self.event_log.append(
+                event_type,
+                payload,
+                source="james-runtime",
+                correlation_id=getattr(event, "correlation_id", None),
+            )
+        except Exception as e:
+            logger.warning(f"Persistent event log error: {e}")
+
         for handler in self.event_handlers:
             try:
                 handler(event)
