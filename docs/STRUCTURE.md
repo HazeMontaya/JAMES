@@ -1,62 +1,44 @@
-# JAMES — Repository-Struktur
+# JAMES — Canonical Repository Structure
 
-Dieses Dokument ist das Ordnungsmanifest des Repos. Es beschreibt, welche Verzeichnisse
-existieren, was hineingehört und warum.
+This file is the structural source of truth. The repository has one implementation path per runtime responsibility.
 
-## Wurzel (`S:\JAMES`)
+## Top level
 
-| Eintrag | Art | Zweck | Anschauen? |
-|---------|-----|-------|-----------|
-| `core/` | Quellcode | JAMES Core — das unveränderliche Herz (12 Crates) | selten, nur Git/Cargo |
-| `modules/` | Quellcode | Alle `James-*`-Module (17 Module + Assembly + System) | selten, nur Git/Cargo |
-| `tools/` | Werkzeuge | Entwicklungshilfen: discovery (TS) | selten |
-| `docs/` | Dokumentation | Master-Konzept, Fortsetzungsstand, Architektur, STRUCTURE | **lesen** |
-| `out/` | Build-Artefakte | Einzige Ablagestelle für alles Regenerierbare (Rust `target`), gitignored | nie |
-| `.james/` | Laufzeit | config, logs, state, secrets, inventory — automatisch erzeugt | nie (gitignored) |
-| `.git/` | Git | Versionsverwaltung | nie |
-| `opencode.json` | Config | opencode-Konfiguration | selten |
-| `.env.example` | Template | Umgebungsvariablen-Vorlage (Secrets gehören nie ins Repo) | selten |
-| `.gitignore` | Git | Ignorier-Regeln | selten |
+| Path | Responsibility | Status |
+|---|---|---|
+| `.github/` | CI/CD | canonical |
+| `docs/` | architecture, state, audits, migration and operational documentation | canonical |
+| `ops/` | operational startup/preflight scripts | canonical |
+| `runtime/core/` | Rust core workspace | canonical |
+| `runtime/modules/` | first-party Rust module workspace | canonical |
+| `runtime/python/sidecar/` | Python runtime/AI sidecar | canonical |
+| `runtime/tools/discovery/` | TypeScript environment discovery | canonical |
+| `ui/` | protocol + Void UI | canonical |
+| `scripts/` | bootstrap/development scripts | canonical |
+| `.james/` | generated local state | runtime-only, gitignored |
+| `out/` | generated build artifacts | build-only, gitignored |
 
-## Regel
+## Removed parallel implementations
 
-> Was du nie ansehen musst: `core/`, `modules/`, `tools/` (Quellcode), `.james/` (Daten) und `out/` (Artefakte).
-> Was du lesen sollst: nur `docs/`.
+The old `packages/` workspace duplicated cognition, memory, skills, world, voice, face, hands, bootstrap and CLI responsibilities already represented by the current runtime/module architecture. It is retired rather than maintained as a second implementation.
 
-Es gibt auf Wurzelebene **keine weiteren Ordner**. Jede neue Fähigkeit ist ein `James-*`-Modul
-unter `modules/` — niemals ein neuer Wurzel-Ordner.
+The old root `james/` package and root `pyproject.toml` were only a minimal status CLI/runtime stub and are also retired. The executable runtime is under `runtime/python/sidecar/`, while Rust owns system orchestration.
 
-## Projektwissen und Fortsetzung
+## Invariants
 
-- `docs/JAMES-MASTER-CONCEPT.md` — verbindliche Leitdefinition und Architekturregeln
-- `docs/PROJECT-CONTINUATION.md` — aktueller Ist-Zustand, offene Grenzen, nächste Arbeitsblöcke und Task-Contract
-- `docs/AUDIT.md` — reproduzierbarer Auditstand des erreichbaren Workspaces
-- `docs/CURRENT-STATE.md` — verifizierte Gates und offene Implementierung
-- `docs/MIGRATION-MATRIX.md` — funktionale Migration aus JARVIS/AUTOMATON
-- `docs/DEPENDENCY-MAP.md` — Workspace-Abhängigkeiten und Grenzen
-- `docs/FUNCTIONAL-GAP-ANALYSIS.md` — verifizierte Nutzbarkeit, fehlende Funktionen und Abnahmegates
-- `docs/architecture/platform-abstraction.md` — PC-first/portable-first Platform- und Datenvertrag
+1. Rust core code lives under `runtime/core/` only.
+2. First-party Rust capabilities live under `runtime/modules/` only.
+3. Python runtime code lives under `runtime/python/sidecar/` only.
+4. Environment discovery lives under `runtime/tools/discovery/` only.
+5. UI source lives under `ui/` only.
+6. Generated state never becomes source code.
+7. Documentation describes the current tree; it must not advertise retired paths.
+8. A capability must have one authoritative implementation and one registration path.
 
-Bei einer neuen Sitzung werden diese drei Dokumente zuerst gelesen. Der Repository-Zustand,
-aktuelle Tests und aktuelle Implementierung haben Vorrang vor älteren Annahmen.
+## Build artifacts
 
-## Build-Artefakte (alles in `out/`)
+Rust targets are redirected to `out/core/` and `out/modules/`. Discovery's generated dependencies and build output remain local and ignored.
 
-**Es gibt nur einen Artefakt-Ordner: `S:\JAMES\out\`** — gitignored, regenerierbar, jederzeit
-löschbar. Nichts Regenerierbares liegt jemals neben Quellcode.
+## Runtime state
 
-- `out/core/` — Cargo-Target des Core-Workspace
-- `out/modules/` — Cargo-Target des Module-Workspace
-- `node_modules/`, `dist/`, `coverage/` (in `tools/discovery`) — entstehen bei `npm install`/`npm test`, gitignored
-
-Die Targets werden per `build.target-dir` in `.cargo/config.toml` jedes Workspaces
-(`core/`, `modules/`) dorthin umgeleitet — ein `cargo build` in diesen
-Ordnern erzeugt also **nie** ein lokales `target/`, sondern immer `out/`.
-
-## Laufzeit-Daten (`.james/`)
-
-- `config/` — james.toml
-- `state/` — health.json, core-status.json
-- `logs/` — audit.jsonl, james-core.log
-- `secrets/` — verschlüsselte Geheimnisse (Phase 4+; immer leer im Repo)
-- `inventory/` — Discovery-Ergebnisse (JSONs + REPORT.md); Snapshots/current.json sind gitignored
+`.james/` contains local configuration, durable event/mission state, model files, bridge credentials and other instance data. Secrets and instance state never belong in source control.
