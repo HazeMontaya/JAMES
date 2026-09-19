@@ -102,6 +102,24 @@ struct CapabilityRequestContext {
     request_id: Option<String>,
 }
 
+fn validate_response_correlation(
+    response: &CapabilityExecuteResponse,
+    request_id: &str,
+    correlation_id: &str,
+    causation_id: &Option<String>,
+) -> anyhow::Result<()> {
+    if response.request_id != request_id {
+        return Err(anyhow::anyhow!("Python capability response correlation mismatch"));
+    }
+    if response.correlation_id.as_deref() != Some(correlation_id) {
+        return Err(anyhow::anyhow!("Python capability response correlation id mismatch"));
+    }
+    if &response.causation_id != causation_id {
+        return Err(anyhow::anyhow!("Python capability response causation id mismatch"));
+    }
+    Ok(())
+}
+
 /// NATS Bridge - manages NATS connection and message routing
 pub struct NatsBridge {
     config: BridgeConfig,
@@ -334,18 +352,7 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
         let response: CapabilityExecuteResponse = serde_json::from_slice(&response_message.payload)
             .map_err(|e| anyhow::anyhow!("Invalid Python capability response: {}", e))?;
 
-        if response.request_id != request_id {
-            return Err(anyhow::anyhow!(
-                "Python capability response correlation mismatch: expected {}, got {}",
-                request_id, response.request_id
-            ));
-        }
-        if response.correlation_id.as_deref() != Some(request.correlation_id.as_str()) {
-            return Err(anyhow::anyhow!("Python capability response correlation id mismatch"));
-        }
-        if response.causation_id != request.causation_id {
-            return Err(anyhow::anyhow!("Python capability response causation id mismatch"));
-        }
+        validate_response_correlation(&response, &request_id, &request.correlation_id, &request.causation_id)?;
         Ok(response)
     }
 
@@ -386,5 +393,41 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
         if let Some(mut client) = self.client.lock().await.take() {
             let _ = client.close().await;
         }
+    }
+}
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    fn response() -> CapabilityExecuteResponse {
+        CapabilityExecuteResponse {
+            request_id: "req-1".into(), success: true, output: Some(serde_json::json!({"ok":true})),
+            error: None, duration_ms: 1, correlation_id: Some("corr-1".into()),
+            causation_id: Some("cause-1".into()),
+        }
+    }
+
+    #[test]
+    fn response_correlation_accepts_matching_context() {
+        let r = response();
+        assert!(validate_response_correlation(&r, "req-1", "corr-1", &Some("cause-1".into())).is_ok());
+    }
+
+    #[test]
+    fn response_correlation_rejects_request_mismatch() {
+        let r = response();
+        assert!(validate_response_correlation(&r, "req-2", "corr-1", &Some("cause-1".into())).is_err());
+    }
+
+    #[test]
+    fn response_correlation_rejects_correlation_mismatch() {
+        let r = response();
+        assert!(validate_response_correlation(&r, "req-1", "corr-2", &Some("cause-1".into())).is_err());
+    }
+
+    #[test]
+    fn response_correlation_rejects_causation_mismatch() {
+        let r = response();
+        assert!(validate_response_correlation(&r, "req-1", "corr-1", &Some("cause-2".into())).is_err());
     }
 }
