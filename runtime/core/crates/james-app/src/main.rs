@@ -443,12 +443,24 @@ async fn main() -> Result<()> {
                 sync_service.register_python_executor(cap.id.clone(), sync_executor.clone());
             }
             match sync_nats.health_check().await {
-                Ok(health) if health.status == "healthy" => {
-                    sync_service.executor.resolver().set_provider_health("python", ProviderHealth::Available);
-                }
                 Ok(health) => {
-                    tracing::warn!("Python bridge health is {}", health.status);
-                    sync_service.executor.resolver().set_provider_health("python", ProviderHealth::Unavailable);
+                    let provider_health = match health.status.as_str() {
+                        "healthy" => ProviderHealth::Available,
+                        "degraded" => ProviderHealth::Degraded,
+                        _ => ProviderHealth::Unavailable,
+                    };
+                    sync_service.executor.resolver().set_provider_health("python", provider_health);
+                    for (capability_id, healthy) in &health.capability_health {
+                        sync_service.executor.resolver().set_capability_health(
+                            capability_id,
+                            "python",
+                            if *healthy {
+                                ProviderHealth::Available
+                            } else {
+                                ProviderHealth::Unavailable
+                            },
+                        );
+                    }
                 }
                 Err(error) => {
                     tracing::warn!("Python bridge health check failed: {}", error);
