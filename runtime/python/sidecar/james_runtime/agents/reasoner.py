@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from james_runtime.core.requests import CompletionRequest
+from james_runtime.steering.autotune import compute_autotune
 from james_runtime.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -155,10 +156,14 @@ class ReActReasoner:
                 "prompt_preview": messages[-1]["content"][-400:] if messages else "",
             })
 
+            tune = compute_autotune(query, history=[m.get("content", "") for m in messages[-4:]])
             response = await self.runtime.generate(CompletionRequest(
                 model=self.model,
                 messages=messages,
-                temperature=0.2,
+                temperature=tune.profile.temperature,
+                top_p=tune.profile.top_p,
+                frequency_penalty=tune.profile.frequency_penalty,
+                presence_penalty=tune.profile.presence_penalty,
                 max_tokens=256,
                 stream=False,
             ))
