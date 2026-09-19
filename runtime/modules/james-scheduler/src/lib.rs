@@ -54,7 +54,6 @@ pub struct SchedulerModule {
     config: SchedulerConfig,
     event_bus: Arc<EventBus>,
     running: Arc<RwLock<bool>>,
-    jobs: Arc<RwLock<Vec<ScheduledJob>>>,
     scheduler: Arc<CoreScheduler>,
     scheduler_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
@@ -67,18 +66,13 @@ impl SchedulerModule {
         task_manager: Arc<TaskManager>,
     ) -> Self {
         let scheduler = Arc::new(CoreScheduler::new(task_manager).with_event_bus(event_bus.clone()));
-        Self { config, event_bus, running: Arc::new(RwLock::new(false)), jobs: Arc::new(RwLock::new(Vec::new())), scheduler, scheduler_handle: Arc::new(RwLock::new(None)) }
+        Self { config, event_bus, running: Arc::new(RwLock::new(false)), scheduler, scheduler_handle: Arc::new(RwLock::new(None)) }
     }
 
     pub fn scheduler(&self) -> Arc<CoreScheduler> { self.scheduler.clone() }
 
     pub async fn start(&self) -> Result<()> {
-        *self.jobs.write().await = persistence::load(&self.config).await?;
-        for job in self.jobs.read().await.clone() {
-            if let Ok(core_job) = to_core(&job) {
-                let _ = self.scheduler.schedule(core_job);
-            }
-        }
+        self.scheduler.load(&self.config.database_path).await?;
         self.scheduler.start().await?;
         *self.running.write().await = true;
         let this = self.clone();
@@ -99,9 +93,8 @@ impl SchedulerModule {
     pub async fn stop(&self) -> Result<()> {
         *self.running.write().await = false;
         if let Some(handle) = self.scheduler_handle.write().await.take() { handle.abort(); }
-        self.sync_from_core().await;
         self.scheduler.stop().await?;
-        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
+        self.scheduler.save(&self.config.database_path).await?;
         self.event_bus.publish(Event::new("module.scheduler.stopped", "james-scheduler")).await?;
         Ok(())
     }
@@ -114,52 +107,35 @@ impl SchedulerModule {
         job.next_run = Schedule::from_str(&job.cron_expression).ok().and_then(|s| s.upcoming(Utc).next());
         let core_job = to_core(&job)?;
         self.scheduler.schedule(core_job)?;
-        self.jobs.write().await.push(job.clone());
-        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
+        self.scheduler.save(&self.config.database_path).await?;
         self.event_bus.publish(Event::new("scheduler.job.added", "james-scheduler")
             .with_payload(serde_json::json!({"job_id":job.id,"name":job.name}))).await?;
         Ok(job.id)
     }
 
     pub async fn get_job(&self, id: &str) -> Result<Option<ScheduledJob>> {
-        self.sync_from_core().await;
-        Ok(self.jobs.read().await.iter().find(|j| j.id == id).cloned())
+        let id = Uuid::parse_str(id)?;
+        Ok(self.scheduler.get(id).map(from_core))
     }
 
     pub async fn set_job_enabled(&self, id: &str, enabled: bool) -> Result<()> {
-        self.sync_from_core().await;
-        let job = self.jobs.read().await.iter().find(|j| j.id == id).cloned().ok_or_else(|| anyhow::anyhow!("job not found"))?;
-        let uid = Uuid::parse_str(&job.id)?;
+        let uid = Uuid::parse_str(id)?;
+        if self.scheduler.get(uid).is_none() { return Err(anyhow::anyhow!("job not found")); }
         if enabled { self.scheduler.enable(uid)?; } else { self.scheduler.disable(uid)?; }
-        if let Some(j) = self.jobs.write().await.iter_mut().find(|j| j.id == id) { j.enabled = enabled; j.updated_at = Utc::now(); }
-        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
+        self.scheduler.save(&self.config.database_path).await?;
         Ok(())
     }
 
     pub async fn list_jobs(&self, enabled_only: bool) -> Result<Vec<ScheduledJob>> {
-        self.sync_from_core().await;
-        Ok(self.jobs.read().await.iter().filter(|j| !enabled_only || j.enabled).cloned().collect())
+        let jobs = if enabled_only { self.scheduler.list_enabled() } else { self.scheduler.list_all() };
+        Ok(jobs.into_iter().map(from_core).collect())
     }
 
     pub async fn remove_job(&self, id: &str) -> Result<()> {
         let uid = Uuid::parse_str(id)?;
         self.scheduler.unschedule(uid)?;
-        self.jobs.write().await.retain(|j| j.id != id);
-        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
+        self.scheduler.save(&self.config.database_path).await?;
         Ok(())
-    }
-
-    async fn sync_from_core(&self) {
-        let core_jobs = self.scheduler.list_all();
-        let mut jobs = self.jobs.write().await;
-        for core in core_jobs {
-            if let Some(job) = jobs.iter_mut().find(|j| j.id == core.id.to_string()) {
-                job.next_run = core.next_run;
-                job.last_run = core.last_run;
-                job.run_count = core.run_count;
-                job.updated_at = core.updated_at;
-            }
-        }
     }
 
     pub async fn is_running(&self) -> bool { *self.running.read().await }
@@ -167,7 +143,7 @@ impl SchedulerModule {
 
 impl Clone for SchedulerModule {
     fn clone(&self) -> Self {
-        Self { config:self.config.clone(), event_bus:self.event_bus.clone(), running:self.running.clone(), jobs:self.jobs.clone(), scheduler:self.scheduler.clone(), scheduler_handle:self.scheduler_handle.clone() }
+        Self { config:self.config.clone(), event_bus:self.event_bus.clone(), running:self.running.clone(), scheduler:self.scheduler.clone(), scheduler_handle:self.scheduler_handle.clone() }
     }
 }
 
@@ -194,6 +170,36 @@ fn to_core(job: &ScheduledJob) -> Result<CoreScheduledTask> {
         created_at: job.created_at,
         updated_at: job.updated_at,
     })
+}
+
+fn from_core(job: CoreScheduledTask) -> ScheduledJob {
+    let task_template = Task {
+        id: job.id.to_string(),
+        name: job.task_template.name.clone(),
+        description: String::new(),
+        capability: job.task_template.task_type.clone(),
+        payload: job.task_template.payload.clone(),
+        priority: job.task_template.priority.clone(),
+        status: james_tasks::TaskStatus::Queued,
+        dependencies: Vec::new(),
+        scheduled_at: job.next_run,
+        started_at: None,
+        completed_at: None,
+        result: None,
+        error: None,
+        retries: 0,
+        max_retries: job.task_template.retry_policy.max_retries,
+        created_at: job.created_at,
+        updated_at: job.updated_at,
+        assigned_agent: None,
+    };
+    let cron_expression = match &job.schedule {
+        ScheduleType::Cron { expression } => expression.clone(),
+        ScheduleType::Immediate => "@once".into(),
+        ScheduleType::Delayed { delay_secs } => format!("@delay:{delay_secs}"),
+        ScheduleType::Interval { interval_secs } => format!("@interval:{interval_secs}"),
+    };
+    ScheduledJob { id: job.id.to_string(), name: job.name, description: String::new(), cron_expression, task_template, enabled: job.enabled, next_run: job.next_run, last_run: job.last_run, run_count: job.run_count, created_at: job.created_at, updated_at: job.updated_at }
 }
 
 pub fn manifest() -> ModuleManifest {
