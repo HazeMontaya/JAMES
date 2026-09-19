@@ -1,24 +1,20 @@
 //! Capability synchronization between Python skills and Rust registry
 
 use james_capabilities::{CapabilityDefinition, CapabilityCategory, ExecutionTarget, RiskLevel, CapabilityRegistry};
-use james_events::EventBus;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::config::BridgeConfig;
 use crate::nats_bridge::PythonCapabilityInfo;
 
 /// Sync Python capabilities to Rust registry
 #[derive(Clone)]
 pub struct CapabilitySync {
-    config: BridgeConfig,
     registry: Arc<CapabilityRegistry>,
-    event_bus: Option<Arc<EventBus>>,
 }
 
 impl CapabilitySync {
-    pub fn new(config: BridgeConfig, registry: Arc<CapabilityRegistry>, event_bus: Option<Arc<EventBus>>) -> Self {
-        Self { config, registry, event_bus }
+    pub fn new(registry: Arc<CapabilityRegistry>) -> Self {
+        Self { registry }
     }
 
     /// Sync all Python capabilities to Rust registry
