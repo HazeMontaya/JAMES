@@ -424,6 +424,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_plan_executor_broker_denies_then_allows_python_style_executor() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingExecutor {
+            calls: Arc<AtomicUsize>,
+        }
+
+        #[async_trait::async_trait]
+        impl CapabilityExecutor for CountingExecutor {
+            async fn execute(
+                &self,
+                _capability_id: &str,
+                _input: serde_json::Value,
+            ) -> anyhow::Result<serde_json::Value> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(serde_json::json!({"source": "python-bridge-contract", "ok": true}))
+            }
+        }
+
+        let event_bus = Arc::new(EventBus::with_default_buffer());
+        let registry = Arc::new(james_capabilities::CapabilityRegistry::new());
+        registry
+            .register(
+                CapabilityDefinition {
+                    id: "web.search".to_string(),
+                    name: "Web Search".to_string(),
+                    category: CapabilityCategory::Network,
+                    version: "1.0.0".to_string(),
+                    provider: "python".to_string(),
+                    description: "test Python bridge capability".to_string(),
+                    risk_level: RiskLevel::Medium,
+                    required_permissions: vec!["network.public_web".to_string()],
+                    dependencies: vec![],
+                    input_schema: None,
+                    output_schema: None,
+                    execution_target: ExecutionTarget::Local,
+                    tags: vec!["python".to_string(), "bridge".to_string()],
+                    deprecated: false,
+                    experimental: true,
+                },
+                "python-bridge",
+            )
+            .await
+            .unwrap();
+
+        let broker = Arc::new(CapabilityBroker::new(registry.clone()).with_event_bus(event_bus));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let bridge_executor: Arc<dyn CapabilityExecutor> =
+            Arc::new(CountingExecutor { calls: calls.clone() });
+
+        let executor = PlanExecutor::new(broker.clone());
+        executor.register_executor("web.search", bridge_executor);
+
+        let plan = test_plan("web.search");
+
+        let denied = executor.execute(&plan, "user").await.unwrap();
+        assert!(!denied.success);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+        broker.grant_capability_permissions("user", "web.search");
+
+        let allowed = executor.execute(&plan, "user").await.unwrap();
+        assert!(allowed.success);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            allowed.step_results[0].success,
+            true,
+            "broker approval must reach the executor"
+        );
+    }
+
+    #[tokio::test]
     async fn test_plan_executor_fails_cleanly_without_resolver_entry() {
         let registry = Arc::new(james_capabilities::CapabilityRegistry::new());
         register_test_capability(&registry, "missing.executor").await;
