@@ -497,7 +497,6 @@ impl CapabilityBroker {
                 .into());
             }
         };
-
         // 6. Output verification.
         if let Err(e) = self
             .registry
@@ -997,7 +996,6 @@ impl CapabilityBroker {
         if let Some(rule) = self.policies.get(&request.capability_id) {
             return Ok(rule.decision.clone());
         }
-
         let registered = self.registry.get(&request.capability_id).ok_or_else(|| {
             BrokerError::CapabilityUnavailable(request.capability_id.clone())
         })?;
@@ -1498,7 +1496,6 @@ mod tests {
         reg.register(def, "test").await.unwrap();
         let broker = CapabilityBroker::new(reg).without_audit();
         broker.grant_capability_permissions("agent:test", "file.write");
-
         let request = CapabilityRequestV2::new(
             "agent:test", "file.write", serde_json::json!({"path":"workspace/a.txt","content":"x"}),
         );
@@ -1540,7 +1537,6 @@ mod tests {
 
         let err = broker.execute_v2(altered, &NoopExecutor).await.unwrap_err();
         assert!(err.to_string().contains("binding"), "{err:?}");
-    }
     }
 
 }
