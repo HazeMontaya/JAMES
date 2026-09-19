@@ -27,6 +27,7 @@ use james_chat::ChatModule;
 use james_dashboard::DashboardModule;
 use james_memory::{MemoryEntry, MemoryModule, MemoryQuery};
 use james_modelrouter::{ModelRouterModule, RouterConfig};
+use james_models::ModelsModule;
 use james_scheduler::SchedulerConfig as SchedulerModuleConfig;
 use james_scheduler::SchedulerModule;
 use james_stt::SttModule;
@@ -55,6 +56,7 @@ pub struct JamesAssembly {
     text_input: Arc<TextInputModule>,
     text_output: Arc<TextOutputModule>,
     chat: Arc<ChatModule>,
+    models: Arc<ModelsModule>,
     model_router: Arc<ModelRouterModule>,
     ai: Arc<AiModule>,
     memory: Arc<MemoryModule>,
@@ -374,11 +376,18 @@ impl JamesAssembly {
         );
         let chat = Arc::new(chat_module);
 
-        // ---- Model registry + routing ----
+        // ---- Canonical model registry + routing ----
+        // ModelsModule owns model metadata/discovery. ModelRouter only resolves
+        // requests against that registry; it does not create or lifecycle-own it.
+        let models = Arc::new(ModelsModule::new(
+            event_bus.clone(),
+            capability_registry.clone(),
+        ));
         let model_router = Arc::new(ModelRouterModule::new(
             RouterConfig::default(),
             event_bus.clone(),
             capability_registry.clone(),
+            models.clone(),
         ));
 
         // ---- AI (with model router attached) ----
@@ -541,6 +550,7 @@ impl JamesAssembly {
             text_input,
             text_output,
             chat,
+            models,
             model_router,
             ai,
             memory,
@@ -692,7 +702,8 @@ impl JamesAssembly {
         self.text_input.start().await?;
         self.text_output.start().await?;
         self.chat.start().await?;
-        self.model_router.start().await?;
+        self.models.start().await?;
+        self.model_router.start().await?
         self.ai.start().await?;
         self.memory.start().await?;
         self.tasks.start().await?;
@@ -729,7 +740,8 @@ impl JamesAssembly {
         self.memory.stop().await?;
         self.ai.stop().await?;
         self.model_router.stop().await?;
-        self.chat.stop().await?;
+        self.models.stop().await?;
+        self.chat.stop().await?
         self.text_output.stop().await?;
         self.text_input.stop().await?;
 
