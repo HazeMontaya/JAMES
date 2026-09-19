@@ -7,6 +7,35 @@ model is downloaded and makes the registry safe to extend from discovery later.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from pydantic import BaseModel, Field
+
+
+class CanonicalModel(BaseModel):
+    """Typed projection of the Rust ModelsModule ModelInfo contract."""
+
+    id: str
+    name: str = ""
+    provider: str
+    model_type: str = "LLM"
+    capabilities: list[str] = Field(default_factory=list)
+    context_length: int = 0
+    parameters: Optional[str] = None
+    quantization: Optional[str] = None
+    size_bytes: Optional[int] = None
+    path: Optional[str] = None
+    endpoint: Optional[str] = None
+    api_key_required: bool = False
+    cost_per_1k_input: Optional[float] = None
+    cost_per_1k_output: Optional[float] = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class ModelSnapshot(BaseModel):
+    """Versioned typed snapshot emitted by the canonical Rust model registry."""
+
+    schema_version: int
+    models: list[CanonicalModel] = Field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -65,27 +94,39 @@ class ModelRegistry:
             self.register(model)
         self._snapshot_source = "fallback"
 
-    def replace_from_canonical(self, models: List[dict]) -> None:
-        """Replace the sidecar cache from a canonical Rust model snapshot."""
+    def replace_from_canonical(self, snapshot: ModelSnapshot) -> None:
+        """Replace the sidecar cache from a validated canonical Rust snapshot."""
+        if snapshot.schema_version != 1:
+            raise ValueError(f"unsupported model snapshot schema: {snapshot.schema_version}")
         canonical: Dict[str, ModelSpec] = {}
-        for raw in models:
-            model_id = str(raw.get("id", "")).strip()
+        for raw in snapshot.models:
+            model_id = raw.id.strip()
             if not model_id:
                 continue
+            parameters_b = 0.0
+            if raw.parameters:
+                try:
+                    parameters_b = float(raw.parameters.rstrip("Bb"))
+                except ValueError:
+                    parameters_b = 0.0
             canonical[model_id] = ModelSpec(
                 id=model_id,
-                provider=str(raw.get("provider", "unknown")),
-                parameters_b=float(raw.get("parameters_b", 0) or 0),
-                max_context=int(raw.get("max_context", raw.get("context_length", 0)) or 0),
-                capabilities=list(raw.get("capabilities", [])),
-                quality_tier=str(raw.get("quality_tier", "balanced")),
-                quality_score=float(raw.get("quality_score", 0.5) or 0.5),
-                local_path=raw.get("local_path", raw.get("path")),
-                format=raw.get("format"),
-                enabled=bool(raw.get("enabled", True)),
+                provider=raw.provider,
+                parameters_b=parameters_b,
+                max_context=raw.context_length,
+                capabilities=[cap.lower() for cap in raw.capabilities],
+                quality_tier="balanced",
+                quality_score=0.5,
+                local_path=raw.path,
+                format=raw.quantization,
+                enabled=True,
             )
         self._models = canonical
         self._snapshot_source = "rust"
+
+    def replace_from_canonical_payload(self, payload: object) -> None:
+        """Validate an untrusted transport payload at the bridge boundary."""
+        self.replace_from_canonical(ModelSnapshot.model_validate(payload))
 
     def is_canonical_snapshot(self) -> bool:
         return bool(self._models) and self._snapshot_source == "rust"
