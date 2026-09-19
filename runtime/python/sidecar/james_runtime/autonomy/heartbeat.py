@@ -61,7 +61,7 @@ class DurableHeartbeat:
         self._tasks[task.name] = task
 
     def due(self, now: float | None = None) -> list[HeartbeatTask]:
-        now = time.monotonic() if now is None else now
+        now = time.time() if now is None else now
         return [t for t in self._tasks.values() if t.enabled and now - self._last_run.get(t.name, 0.0) >= t.interval_seconds]
 
     async def tick(self) -> list[HeartbeatResult]:
@@ -79,7 +79,7 @@ class DurableHeartbeat:
                     self._failures[task.name] = self._failures.get(task.name, 0) + 1
                     results.append(HeartbeatResult(task.name, False, int((time.monotonic()-started)*1000), str(exc)))
                 finally:
-                    self._last_run[task.name] = time.monotonic()
+                    self._last_run[task.name] = time.time()
             self._persist()
             return results
 
