@@ -658,6 +658,71 @@ impl SelfMadeModule {
         self.verify_workspace(workspace).await
     }
 
+    /// Promote a verified candidate into the canonical checkout only when the
+    /// explicit local policy gate is enabled. This is never model-controlled.
+    pub async fn promote_workspace(&self) -> Result<serde_json::Value> {
+        if !self.is_running().await {
+            bail!("selfmade module is not running");
+        }
+        if std::env::var("JAMES_SELFMADE_ALLOW_PROMOTION").as_deref() != Ok("1") {
+            bail!("canonical promotion is disabled; set JAMES_SELFMADE_ALLOW_PROMOTION=1 for an explicit operator policy gate");
+        }
+
+        let root_status = Command::new("git")
+            .current_dir(&self.root)
+            .args(["status", "--porcelain"])
+            .output().await?;
+        if !root_status.status.success() {
+            bail!("could not inspect canonical repository state");
+        }
+        if !root_status.stdout.is_empty() {
+            bail!("canonical repository must be clean before promotion");
+        }
+
+        let workspace = self.ensure_workspace().await?;
+        let verification = self.verify_workspace(&workspace).await?;
+        if !verification.passed {
+            bail!("candidate must pass verification before promotion");
+        }
+
+        let diff = Command::new("git")
+            .current_dir(&workspace)
+            .args(["diff", "--cached", "--binary"])
+            .output().await?;
+        if !diff.status.success() {
+            bail!("could not export verified candidate diff");
+        }
+        if diff.stdout.is_empty() {
+            bail!("candidate contains no changes to promote");
+        }
+
+        let patch = String::from_utf8_lossy(&diff.stdout).into_owned();
+        validate_patch_paths(&patch)?;
+        let patch_file = self.workspace.parent().unwrap().join("promotion.patch");
+        tokio::fs::write(&patch_file, patch).await?;
+
+        let applied = Command::new("git")
+            .current_dir(&self.root)
+            .args(["apply", "--index"])
+            .arg(&patch_file)
+            .output().await?;
+        if !applied.status.success() {
+            bail!("promotion failed: {}", String::from_utf8_lossy(&applied.stderr));
+        }
+
+        self.emit("selfmade.change.promoted", serde_json::json!({
+            "workspace": workspace,
+            "canonical_root": self.root,
+            "promotion_policy": "JAMES_SELFMADE_ALLOW_PROMOTION=1"
+        })).await;
+
+        Ok(serde_json::json!({
+            "promoted": true,
+            "workspace": workspace,
+            "canonical_root": self.root
+        }))
+    }
+
     /// Roll back only the isolated SelfMade worktree. The canonical checkout is never touched.
     pub async fn rollback_workspace(&self) -> Result<serde_json::Value> {
         if !self.is_running().await {
@@ -689,21 +754,36 @@ impl SelfMadeModule {
         let mut stdout = String::new();
         let mut stderr = String::new();
 
-        let commands: &[(&str, &[&str])] = &[
-            ("git-diff-check", &["diff", "--check"]),
-            ("cargo-check", &["check", "--workspace"]),
-            ("cargo-test", &["test", "--workspace"]),
-        ];
+        let git_check = Command::new("git")
+            .current_dir(workspace)
+            .args(["diff", "--check"])
+            .output().await?;
+        let git_ok = git_check.status.success();
+        stdout.push_str(&String::from_utf8_lossy(&git_check.stdout));
+        stderr.push_str(&String::from_utf8_lossy(&git_check.stderr));
+        checks.push(VerificationCheck { name: "git-diff-check".into(), passed: git_ok });
+        if !git_ok {
+            return Ok(VerificationReport { passed: false, checks, stdout, stderr });
+        }
 
-        for (name, args) in commands {
-            let output = Command::new(if *name == "git-diff-check" { "git" } else { "cargo" })
-                .current_dir(workspace)
-                .args(*args)
+        // JAMES is a multi-workspace repository. Verify the two Rust workspaces
+        // independently instead of assuming a Cargo.toml at repository root.
+        for (name, relative_dir, args) in [
+            ("core-cargo-check", "runtime/core", vec!["check", "--workspace"]),
+            ("core-cargo-test", "runtime/core", vec!["test", "--workspace"]),
+            ("modules-cargo-check", "runtime/modules", vec!["check", "--workspace"]),
+            ("modules-cargo-test", "runtime/modules", vec!["test", "--workspace"]),
+        ] {
+            let dir = workspace.join(relative_dir);
+            let output = Command::new("cargo")
+                .current_dir(&dir)
+                .args(&args)
                 .output().await?;
             let ok = output.status.success();
+            stdout.push_str(&format!("\\n[{name}]\\n"));
             stdout.push_str(&String::from_utf8_lossy(&output.stdout));
             stderr.push_str(&String::from_utf8_lossy(&output.stderr));
-            checks.push(VerificationCheck { name: (*name).into(), passed: ok });
+            checks.push(VerificationCheck { name: name.into(), passed: ok });
             if !ok {
                 return Ok(VerificationReport { passed: false, checks, stdout, stderr });
             }
