@@ -450,7 +450,7 @@ async fn main() -> Result<()> {
                 .filter(|id| !incoming.contains(id))
                 .collect::<Vec<_>>();
             for stale_id in stale {
-                sync_service.executor.unregister_executor(&stale_id);
+                sync_service.executor.unregister_provider_executor(&stale_id, "python");
             }
         }
     });
