@@ -37,6 +37,13 @@ class NatsCapabilityBridge:
         self.subject_prefix = subject_prefix or os.getenv("JAMES_BRIDGE_SUBJECT_PREFIX", "james.bridge")
         self.service_name = service_name or os.getenv("JAMES_BRIDGE_PYTHON_SERVICE", "james-python")
         self.bridge_token = os.getenv("JAMES_BRIDGE_TOKEN", "")
+        if not self.bridge_token:
+            root = os.getenv("JAMES_ROOT", ".")
+            try:
+                with open(os.path.join(root, ".james", "bridge-token"), "r", encoding="utf-8") as token_file:
+                    self.bridge_token = token_file.read().strip()
+            except OSError:
+                pass
         self.client = NATS()
         self._subscriptions: list[Any] = []
 
