@@ -78,3 +78,20 @@ event -> decision -> mission -> plan -> capability resolution
 ## Operator capability allowlist
 
 Discovery does not grant execution rights. The Rust capability broker remains the authorization boundary. To grant capabilities to the application user explicitly, set `JAMES_USER_CAPABILITIES` to a comma-separated allowlist of capability IDs, for example `web_search,web_scrape`. Capabilities that are not listed remain denied even when their Python provider is connected. High-risk integrations such as `dify_agent` and `n8n_webhook` therefore require deliberate operator configuration.
+
+
+## Python bridge execution boundary
+
+Capability execution over NATS is authenticated independently of the caller identity
+inside the capability request. Configure the same high-entropy secret in both processes:
+
+- Rust bridge: `JAMES_BRIDGE_TOKEN`
+- Python sidecar: `JAMES_BRIDGE_TOKEN`
+
+If the token is absent, the Python execution endpoint refuses all capability execution.
+The token is transport authentication only; it does **not** grant a caller capability
+permissions. The Rust capability broker remains responsible for capability existence,
+schema validation, permissions, policy, confirmation, execution, output verification and audit.
+
+Registration, listing and health subjects remain separate from the execution subject and
+do not themselves authorize execution.
