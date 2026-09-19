@@ -209,10 +209,23 @@ impl CapabilityResolver {
         capability_id: &str,
         provider: &str,
     ) -> ProviderHealth {
-        self.capability_health
+        let provider_state = self.provider_health(provider);
+        let capability_state = self.capability_health
             .get(&(capability_id.to_string(), provider.to_string()))
             .map(|v| *v)
-            .unwrap_or_else(|| self.provider_health(provider))
+            .unwrap_or(ProviderHealth::Available);
+        if provider_state.rank() >= capability_state.rank() {
+            provider_state
+        } else {
+            capability_state
+        }
+    }
+
+    /// Remove health state for one capability/provider route.
+    pub fn clear_capability_health(&self, capability_id: &str, provider: &str) -> bool {
+        self.capability_health
+            .remove(&(capability_id.to_string(), provider.to_string()))
+            .is_some()
     }
 
     /// Remove runtime health state and return to the default healthy state.
