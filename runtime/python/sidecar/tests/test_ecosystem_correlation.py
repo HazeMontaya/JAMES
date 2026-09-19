@@ -1,0 +1,85 @@
+import pytest
+
+from james_runtime.integration.ecosystem import EcosystemRegistry
+from james_runtime.integration.tools import FirecrawlSearchTool
+from james_runtime.tools.base import ToolResult
+
+
+class FakeFirecrawl:
+    async def search(self, query: str, *, limit: int = 10):
+        return [{"query": query, "limit": limit, "ok": True}]
+
+    async def scrape(self, url: str):
+        return {"url": url}
+
+
+class BrokenFirecrawl:
+    async def search(self, query: str, *, limit: int = 10):
+        raise RuntimeError("sensitive provider payload")
+
+    async def scrape(self, url: str):
+        return {"url": url}
+
+
+@pytest.mark.asyncio
+async def test_ecosystem_tool_propagates_correlation_and_causation_metadata():
+    registry = EcosystemRegistry()
+    registry.register("firecrawl", FakeFirecrawl())
+    events = []
+
+    def sink(event_type, metadata):
+        events.append((event_type, metadata))
+
+    tool = FirecrawlSearchTool(registry, event_sink=sink)
+    result = await tool._run(
+        query="james",
+        limit=3,
+        correlation_id="corr-123",
+        causation_id="cause-456",
+    )
+
+    assert result.success is True
+    assert result.metadata["correlation_id"] == "corr-123"
+    assert result.metadata["causation_id"] == "cause-456"
+    assert events == [
+        (
+            "ECOSYSTEM_TOOL_COMPLETED",
+            {
+                "provider": "firecrawl",
+                "operation": "search",
+                "duration_ms": events[0][1]["duration_ms"],
+                "correlation_id": "corr-123",
+                "causation_id": "cause-456",
+            },
+        )
+    ]
+    assert registry.health("firecrawl")["healthy"] is True
+
+
+@pytest.mark.asyncio
+async def test_ecosystem_tool_failure_keeps_correlation_and_redacts_error_event():
+    registry = EcosystemRegistry()
+    registry.register("firecrawl", BrokenFirecrawl())
+    events = []
+
+    def sink(event_type, metadata):
+        events.append((event_type, metadata))
+
+    tool = FirecrawlSearchTool(registry, event_sink=sink)
+    result = await tool._run(
+        query="private",
+        correlation_id="corr-failure",
+        causation_id="cause-failure",
+    )
+
+    assert result.success is False
+    assert result.metadata["correlation_id"] == "corr-failure"
+    assert result.metadata["causation_id"] == "cause-failure"
+    assert "sensitive provider payload" in result.error
+    assert events[0][0] == "ECOSYSTEM_TOOL_FAILED"
+    assert events[0][1]["correlation_id"] == "corr-failure"
+    assert events[0][1]["causation_id"] == "cause-failure"
+    assert "error" not in events[0][1]
+    assert "query" not in events[0][1]
+    assert "sensitive provider payload" not in str(events[0][1])
+    assert registry.health("firecrawl")["healthy"] is False
