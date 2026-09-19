@@ -466,6 +466,17 @@ class JamesRuntime:
     def add_event_handler(self, handler: callable):
         self.event_handlers.append(handler)
     
+    @staticmethod
+    def _redact_persistent_event(event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist operational metadata, not prompt/response content."""
+        safe = dict(payload)
+        sensitive = {"token", "prompt", "prompt_preview", "content", "response", "messages", "args"}
+        for key in list(safe):
+            if key.lower() in sensitive or key.lower().endswith("_text"):
+                value = safe.pop(key)
+                safe[f"{key}_length"] = len(value) if isinstance(value, str) else None
+        return safe
+
     def _emit_event(self, event_type: str, payload: Dict[str, Any]):
         from james_runtime.core.events import RuntimeEvent
         from datetime import datetime
@@ -477,9 +488,10 @@ class JamesRuntime:
             timestamp=datetime.utcnow(),
         )
         try:
+            safe_payload = self._redact_persistent_event(event_type, payload)
             self.event_log.append(
                 event_type,
-                payload,
+                safe_payload,
                 source="james-runtime",
                 correlation_id=getattr(event, "correlation_id", None),
             )
