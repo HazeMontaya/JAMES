@@ -139,6 +139,8 @@ pub struct CapabilityRequestV2 {
     pub capability_version: Option<String>,
     pub target: Option<String>,
     pub scope: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
     pub input: serde_json::Value,
     pub data_classification: DataClassification,
     pub correlation_id: String,
@@ -161,6 +163,7 @@ impl CapabilityRequestV2 {
             capability_version: None,
             target: None,
             scope: None,
+            reason: None,
             input,
             data_classification: DataClassification::Internal,
             correlation_id: request_id,
