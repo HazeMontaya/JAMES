@@ -125,5 +125,6 @@ class AgentSystem:
             "tools": [t.name for t in self.tool_registry.list_tools()],
             "ecosystems": self.ecosystems.enabled(),
             "ecosystem_capabilities": self.ecosystems.capability_providers(),
+            "ecosystem_health": self.ecosystems.health_matrix(),
             "memories": self.memory.count(),
         }
