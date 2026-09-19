@@ -1,23 +1,11 @@
 """Append-only runtime event log."""
 from __future__ import annotations
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any, Iterable
-from uuid import uuid4
 
-@dataclass(frozen=True)
-class RuntimeEvent:
-    event_type: str
-    payload: dict[str, Any] = field(default_factory=dict)
-    source: str = "james"
-    correlation_id: str | None = None
-    causation_id: str | None = None
-    event_id: str = field(default_factory=lambda: str(uuid4()))
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+from james_runtime.core.events import RuntimeEvent
+
 
 class EventLog:
     def __init__(self, path: str | Path) -> None:
@@ -26,9 +14,9 @@ class EventLog:
     def append(self, event_type: str, payload: dict[str, Any] | None = None, *, source: str = "james", correlation_id: str | None = None, causation_id: str | None = None) -> RuntimeEvent:
         if not event_type.strip():
             raise ValueError("event_type must not be empty")
-        event = RuntimeEvent(event_type.strip(), payload or {}, source, correlation_id, causation_id)
+        event = RuntimeEvent(event_type=event_type.strip(), payload=payload or {}, source=source, correlation_id=correlation_id, causation_id=causation_id)
         with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event.to_dict(), ensure_ascii=False, sort_keys=True) + "\n")
+            handle.write(json.dumps(event.model_dump(mode="json"), ensure_ascii=False, sort_keys=True) + "\n")
             handle.flush()
         return event
     def tail(self, limit: int = 100) -> list[RuntimeEvent]:
@@ -37,7 +25,7 @@ class EventLog:
         result = []
         for row in self.path.read_text(encoding="utf-8").splitlines()[-limit:]:
             try:
-                result.append(RuntimeEvent(**json.loads(row)))
+                result.append(RuntimeEvent.model_validate(json.loads(row)))
             except (TypeError, ValueError, json.JSONDecodeError):
                 continue
         return result

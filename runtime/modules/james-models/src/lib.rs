@@ -97,7 +97,12 @@ impl ModelsModule {
     }
 
     pub async fn register_model(&self, model: ModelInfo) -> Result<()> {
-        self.models.write().await.push(model);
+        let mut models = self.models.write().await;
+        if let Some(existing) = models.iter_mut().find(|existing| existing.id == model.id) {
+            *existing = model;
+        } else {
+            models.push(model);
+        }
         Ok(())
     }
 
@@ -233,6 +238,30 @@ mod tests {
         let manifest = manifest();
         assert_eq!(manifest.id, "james.models");
         assert!(ModuleManifestValidator::validate(&manifest).is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_register_model_replaces_duplicate_id() {
+        let event_bus = Arc::new(EventBus::new(100));
+        event_bus.start().await.unwrap();
+        let cap_reg = Arc::new(CapabilityRegistry::new());
+        let module = ModelsModule::new(event_bus, cap_reg);
+
+        let base = ModelInfo {
+            id: "same".into(), name: "first".into(), provider: "local".into(),
+            model_type: ModelType::LLM, capabilities: vec![], context_length: 4096,
+            parameters: None, quantization: None, size_bytes: None, path: None,
+            endpoint: None, api_key_required: false, cost_per_1k_input: None,
+            cost_per_1k_output: None, metadata: serde_json::json!({}),
+        };
+        module.register_model(base.clone()).await.unwrap();
+        let mut replacement = base;
+        replacement.name = "second".into();
+        module.register_model(replacement).await.unwrap();
+
+        let models = module.list_models(None).await;
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].name, "second");
     }
 
     #[tokio::test]

@@ -94,29 +94,25 @@ impl ModelRouterModule {
         config: RouterConfig,
         event_bus: Arc<EventBus>,
         capability_registry: Arc<CapabilityRegistry>,
+        models_module: Arc<james_models::ModelsModule>,
     ) -> Self {
         Self {
             config,
             event_bus: event_bus.clone(),
             capability_registry: capability_registry.clone(),
             running: Arc::new(RwLock::new(false)),
-            models_module: Arc::new(james_models::ModelsModule::new(
-                event_bus,
-                capability_registry,
-            )),
+            models_module,
         }
     }
 
     pub async fn start(&self) -> Result<()> {
         *self.running.write().await = true;
-        self.models_module.start().await?;
         info!("James-ModelRouter started");
         Ok(())
     }
 
     pub async fn stop(&self) -> Result<()> {
         *self.running.write().await = false;
-        self.models_module.stop().await?;
         info!("James-ModelRouter stopped");
         Ok(())
     }

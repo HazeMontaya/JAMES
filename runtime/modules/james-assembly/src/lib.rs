@@ -27,6 +27,7 @@ use james_chat::ChatModule;
 use james_dashboard::DashboardModule;
 use james_memory::{MemoryEntry, MemoryModule, MemoryQuery};
 use james_modelrouter::{ModelRouterModule, RouterConfig};
+use james_models::ModelsModule;
 use james_scheduler::SchedulerConfig as SchedulerModuleConfig;
 use james_scheduler::SchedulerModule;
 use james_stt::SttModule;
@@ -55,6 +56,7 @@ pub struct JamesAssembly {
     text_input: Arc<TextInputModule>,
     text_output: Arc<TextOutputModule>,
     chat: Arc<ChatModule>,
+    models: Arc<ModelsModule>,
     model_router: Arc<ModelRouterModule>,
     ai: Arc<AiModule>,
     memory: Arc<MemoryModule>,
@@ -374,11 +376,18 @@ impl JamesAssembly {
         );
         let chat = Arc::new(chat_module);
 
-        // ---- Model registry + routing ----
+        // ---- Canonical model registry + routing ----
+        // ModelsModule owns model metadata/discovery. ModelRouter only resolves
+        // requests against that registry; it does not create or lifecycle-own it.
+        let models = Arc::new(ModelsModule::new(
+            event_bus.clone(),
+            capability_registry.clone(),
+        ));
         let model_router = Arc::new(ModelRouterModule::new(
             RouterConfig::default(),
             event_bus.clone(),
             capability_registry.clone(),
+            models.clone(),
         ));
 
         // ---- AI (with model router attached) ----
@@ -413,8 +422,14 @@ impl JamesAssembly {
             capability_registry.clone(),
         ));
 
-        // ---- Tasks (depends on memory) ----
-        let tasks = Arc::new(TasksModule::new(
+        // ---- Canonical task manager + module facade ----
+        let core_tasks = Arc::new(
+            james_tasks_core::TaskManager::new(Some(event_bus.clone()))
+                .with_capability_registry(capability_registry.clone())
+                .with_max_concurrent(TasksModuleConfig::default().max_concurrent),
+        );
+        // One TaskManager instance is shared by tasks, scheduler, and agents.
+        let tasks = Arc::new(TasksModule::from_manager(
             TasksModuleConfig {
                 database_path: options.tasks_path
                     .unwrap_or_else(|| ".james/tasks.json".to_string()),
@@ -423,9 +438,10 @@ impl JamesAssembly {
             event_bus.clone(),
             capability_registry.clone(),
             memory.clone(),
+            core_tasks.clone(),
         ));
 
-        // ---- Scheduler (depends on tasks) ----
+        // ---- Scheduler (delegates to the same canonical task manager) ----
         let scheduler = Arc::new(SchedulerModule::new(
             SchedulerModuleConfig {
                 database_path: options.scheduler_path
@@ -434,7 +450,7 @@ impl JamesAssembly {
             },
             event_bus.clone(),
             capability_registry.clone(),
-            tasks.clone(),
+            core_tasks.clone(),
         ));
 
         // ---- STT / TTS ----
@@ -512,7 +528,6 @@ impl JamesAssembly {
         // Shares the assembly broker and memory; executor candidates come from
         // the shared resolver. The core task manager tracks plan steps.
         let identity_registry = Arc::new(james_identity::IdentityRegistry::new());
-        let core_tasks = Arc::new(james_tasks_core::TaskManager::new(Some(event_bus.clone())));
         let executor_registry = Arc::new(james_agents::ExecutorRegistry::with_provider("james-assembly"));
         let resolver = Arc::new(CapabilityResolver::new());
         let mut agent_factory = james_agents::AgentFactory::new(
@@ -541,6 +556,7 @@ impl JamesAssembly {
             text_input,
             text_output,
             chat,
+            models,
             model_router,
             ai,
             memory,
@@ -692,6 +708,7 @@ impl JamesAssembly {
         self.text_input.start().await?;
         self.text_output.start().await?;
         self.chat.start().await?;
+        self.models.start().await?;
         self.model_router.start().await?;
         self.ai.start().await?;
         self.memory.start().await?;
@@ -729,6 +746,7 @@ impl JamesAssembly {
         self.memory.stop().await?;
         self.ai.stop().await?;
         self.model_router.stop().await?;
+        self.models.stop().await?;
         self.chat.stop().await?;
         self.text_output.stop().await?;
         self.text_input.stop().await?;
