@@ -326,6 +326,16 @@ if modules.contains_key(&manifest.id) {
         }
         
         meta.state = ModuleState::Stopped;
+        let capabilities = meta.manifest.capabilities.clone();
+        drop(modules);
+
+        // Disabling a module also revokes the module-scoped broker grants.
+        if let Some(broker) = self.broker().await {
+            for cap_id in &capabilities {
+                broker.revoke_capability_permissions(id, cap_id);
+            }
+        }
+
         Ok(())
     }
     
