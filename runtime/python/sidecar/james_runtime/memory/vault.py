@@ -7,6 +7,30 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, Field
+
+class CanonicalMemoryEntry(BaseModel):
+    """Typed projection of the Rust MemorySyncEntry contract."""
+
+    id: str
+    memory_type: str
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    importance: float = 1.0
+    tags: list[str] = Field(default_factory=list)
+    session_id: str | None = None
+    agent_id: str | None = None
+    updated_at: str
+
+
+class MemorySyncSnapshot(BaseModel):
+    """Versioned typed snapshot from the canonical Rust memory authority."""
+
+    schema_version: int
+    authority: str
+    entries: list[CanonicalMemoryEntry] = Field(default_factory=list)
+
+
 @dataclass(frozen=True)
 class MemoryNote:
     note_id: str
@@ -79,6 +103,33 @@ class MemoryVault:
                 project=excluded.project,tags=excluded.tags,updated_at=excluded.updated_at""",
                 (note.note_id,note.path,note.title,note.kind,note.status,note.project,"\x1f".join(note.tags),note.updated_at))
         return note
+    def project_canonical_snapshot(self, snapshot: MemorySyncSnapshot) -> int:
+        """Project canonical Rust memory into a dedicated sidecar namespace."""
+        if snapshot.schema_version != 1:
+            raise ValueError(f"unsupported memory snapshot schema: {snapshot.schema_version}")
+        if snapshot.authority != self.canonical_authority:
+            raise ValueError("memory snapshot authority is not the canonical Rust module")
+        projected = 0
+        for entry in snapshot.entries:
+            title = str(entry.metadata.get("title") or entry.id)
+            relative = f"canonical/{self._slug(entry.id)}.md"
+            self.write_note(
+                title,
+                entry.content,
+                kind=f"canonical_{entry.memory_type.lower()}",
+                status="active",
+                project=entry.metadata.get("project"),
+                tags=entry.tags,
+                relative_path=relative,
+                note_id=f"rust-{entry.id}",
+            )
+            projected += 1
+        return projected
+
+    def project_canonical_payload(self, payload: object) -> int:
+        """Validate an untrusted transport payload at the bridge boundary."""
+        return self.project_canonical_snapshot(MemorySyncSnapshot.model_validate(payload))
+
     def read_note(self, note_id: str) -> str:
         with self._connect() as db:
             row = db.execute("SELECT path FROM notes WHERE note_id=?", (note_id,)).fetchone()
