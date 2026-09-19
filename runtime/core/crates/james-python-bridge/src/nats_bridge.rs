@@ -48,6 +48,8 @@ pub struct CapabilityExecuteRequest {
     pub capability_id: String,
     pub caller: String,
     pub input: serde_json::Value,
+    /// Internal bridge authentication token. Never exposed to capability tools.
+    pub bridge_token: String,
 }
 
 /// Response from Python capability execution
@@ -271,6 +273,7 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
             capability_id: capability_id.to_string(),
             caller: caller.to_string(),
             input,
+            bridge_token: self.config.bridge_token.clone(),
         };
 
         let subject = format!("{}.{}", subjects::capability_execute_prefix(&self.config), capability_id);
