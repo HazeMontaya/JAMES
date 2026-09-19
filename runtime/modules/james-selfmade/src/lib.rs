@@ -424,6 +424,7 @@ impl SelfMadeModule {
             "selfmade.propose",
             "selfmade.develop",
             "selfmade.verify",
+            "selfmade.evaluate",
             "selfmade.rollback",
         ];
         let missing_capabilities = expected.iter()
