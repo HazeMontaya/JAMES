@@ -717,6 +717,8 @@ impl CapabilityBroker {
         if registered.status != CapabilityStatus::Available {
             return Err(BrokerError::CapabilityUnavailable(request.capability_id.clone()).into());
         }
+        let definition = registered.definition;
+        let risk_level = format!("{:?}", &definition.risk_level).to_ascii_lowercase();
         let now = Utc::now();
         let expires_at = now + chrono::Duration::minutes(5);
         let confirmation_id = Uuid::new_v4().to_string();
@@ -725,7 +727,7 @@ impl CapabilityBroker {
             request_id: request.request_id.clone(),
             caller_identity: request.caller_identity.clone(),
             capability_id: request.capability_id.clone(),
-            risk_level: request.risk_class.clone(),
+            risk_level,
             target: request.target.clone(),
             scope: request.scope.clone(),
             reason: request.reason.clone().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| format!("interactive approval required for {}", request.capability_id)),
