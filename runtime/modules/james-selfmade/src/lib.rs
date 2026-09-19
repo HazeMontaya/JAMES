@@ -543,6 +543,20 @@ impl SelfMadeModule {
             bail!("selfmade module is not running");
         }
         let workspace = self.ensure_workspace().await?;
+        // Every proposal starts from a clean candidate baseline. This prevents
+        // failed or stale experiments from contaminating the next evolution cycle.
+        for args in [
+            vec!["reset", "--hard", "HEAD"],
+            vec!["clean", "-fd"],
+        ] {
+            let cleanup = Command::new("git")
+                .current_dir(&workspace)
+                .args(&args)
+                .output().await?;
+            if !cleanup.status.success() {
+                bail!("could not reset isolated SelfMade workspace: {}", String::from_utf8_lossy(&cleanup.stderr));
+            }
+        }
         self.emit("selfmade.change.proposed", serde_json::json!({
             "mission_id": proposal.mission_id,
             "proposal_id": proposal.id,
@@ -633,6 +647,7 @@ impl SelfMadeModule {
                 "proposal_id": proposal.id
             })).await;
         }
+        let _ = tokio::fs::remove_file(&diff).await;
         Ok(report)
     }
 
