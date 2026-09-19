@@ -137,6 +137,10 @@ class JamesRuntime:
     
     async def _heartbeat_autonomy_decision(self) -> None:
         decision = self.autonomy.tick()
+        # Decision generation is intentionally separated from action execution.
+        # Only bounded, read-only observations are dispatched automatically.
+        if decision.action == "run_health_sweep":
+            await self._heartbeat_engine_health()
         self._emit_event("AUTONOMOUS_DECISION", {
             "action": decision.action,
             "priority": decision.priority,
