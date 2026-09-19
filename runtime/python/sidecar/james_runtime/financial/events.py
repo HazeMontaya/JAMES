@@ -1,15 +1,14 @@
-"""Financial Cortex runtime events."""
-from __future__ import annotations
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-from uuid import uuid4
-from pydantic import BaseModel, Field
+"""Financial Cortex domain events.
 
-class FinancialEvent(BaseModel):
-    event_id: str = Field(default_factory=lambda: str(uuid4()))
+These are domain-specialized RuntimeEvent instances; the Python sidecar has one
+wire/event envelope rather than a second transport model.
+"""
+from __future__ import annotations
+from typing import Any, Dict
+from james_runtime.core.events import RuntimeEvent
+
+
+class FinancialEvent(RuntimeEvent):
     event_type: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source: str = "financial.cortex"
-    correlation_id: Optional[str] = None
-    causation_id: Optional[str] = None
-    payload: Dict[str, Any] = Field(default_factory=dict)
+    payload: Dict[str, Any] = {}
