@@ -15,6 +15,21 @@ $env:CARGO_INCREMENTAL = ''
 $env:JAMES_AUTH_DEV_MODE = 'true'
 $cargo = "$env:USERPROFILE\.cargo\bin\cargo.exe"
 
+# Establish one local-only secret for Rust↔Python capability execution.
+# The token authenticates the bridge transport; the Rust broker still authorizes
+# every capability separately.
+$env:JAMES_ROOT = $root
+$tokenDir = Join-Path $root '.james'
+$tokenFile = Join-Path $tokenDir 'bridge-token'
+New-Item -ItemType Directory -Force -Path $tokenDir | Out-Null
+if (-not (Test-Path -LiteralPath $tokenFile)) {
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    [Convert]::ToBase64String($bytes) | Set-Content -LiteralPath $tokenFile -NoNewline -Encoding ascii
+}
+$env:JAMES_BRIDGE_TOKEN = (Get-Content -LiteralPath $tokenFile -Raw).Trim()
+
+
 # Ollama: lokale AI-Inferenz sicherstellen. JAMES' AI-Provider spricht den
 # Ollama-kompatiblen Endpoint an; ohne ihn antwortet der Chat ehrlich
 # "No models available".
