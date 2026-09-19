@@ -48,6 +48,8 @@ pub struct CapabilityExecuteRequest {
     pub capability_id: String,
     pub caller: String,
     pub input: serde_json::Value,
+    pub correlation_id: String,
+    pub causation_id: Option<String>,
     /// Internal bridge authentication token. Never exposed to capability tools.
     pub bridge_token: String,
 }
@@ -60,6 +62,10 @@ pub struct CapabilityExecuteResponse {
     pub output: Option<serde_json::Value>,
     pub error: Option<String>,
     pub duration_ms: u64,
+    #[serde(default)]
+    pub correlation_id: Option<String>,
+    #[serde(default)]
+    pub causation_id: Option<String>,
 }
 
 /// Python capability registration info
@@ -84,6 +90,16 @@ pub struct HealthCheck {
     pub status: String,
     pub timestamp: String,
     pub capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct CapabilityRequestContext {
+    caller: String,
+    capability_id: String,
+    input: serde_json::Value,
+    correlation_id: String,
+    causation_id: Option<String>,
+    request_id: Option<String>,
 }
 
 /// NATS Bridge - manages NATS connection and message routing
@@ -260,6 +276,34 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
         caller: &str,
         input: serde_json::Value,
     ) -> anyhow::Result<CapabilityExecuteResponse> {
+        self.execute_capability_context(CapabilityRequestContext {
+            caller: caller.to_string(),
+            capability_id: capability_id.to_string(),
+            input,
+            correlation_id: uuid::Uuid::now_v7().to_string(),
+            causation_id: None,
+            request_id: None,
+        }).await
+    }
+
+    pub async fn execute_capability_with_request(
+        &self,
+        request: &james_capability_broker::CapabilityRequestV2,
+    ) -> anyhow::Result<CapabilityExecuteResponse> {
+        self.execute_capability_context(CapabilityRequestContext {
+            caller: request.caller_identity.clone(),
+            capability_id: request.capability_id.clone(),
+            input: request.input.clone(),
+            correlation_id: request.correlation_id.clone(),
+            causation_id: request.causation_id.clone(),
+            request_id: Some(request.request_id.clone()),
+        }).await
+    }
+
+    async fn execute_capability_context(
+        &self,
+        context: CapabilityRequestContext,
+    ) -> anyhow::Result<CapabilityExecuteResponse> {
         let client = {
             let guard = self.client.lock().await;
             guard.as_ref()
@@ -267,17 +311,18 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
                 .clone()
         };
 
-        let request_id = uuid::Uuid::now_v7().to_string();
+        let request_id = context.request_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
         let request = CapabilityExecuteRequest {
             request_id: request_id.clone(),
-            capability_id: capability_id.to_string(),
-            caller: caller.to_string(),
-            input,
+            capability_id: context.capability_id,
+            caller: context.caller,
+            input: context.input,
+            correlation_id: context.correlation_id,
+            causation_id: context.causation_id,
             bridge_token: self.config.bridge_token.clone(),
         };
 
-        let subject = format!("{}.{}", subjects::capability_execute_prefix(&self.config), capability_id);
-
+        let subject = format!("{}.{}", subjects::capability_execute_prefix(&self.config), request.capability_id);
         let payload = serde_json::to_vec(&request)?;
         let response_message = tokio::time::timeout(
             Duration::from_secs(self.config.request_timeout_secs),
@@ -292,11 +337,15 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
         if response.request_id != request_id {
             return Err(anyhow::anyhow!(
                 "Python capability response correlation mismatch: expected {}, got {}",
-                request_id,
-                response.request_id
+                request_id, response.request_id
             ));
         }
-
+        if response.correlation_id.as_deref() != Some(request.correlation_id.as_str()) {
+            return Err(anyhow::anyhow!("Python capability response correlation id mismatch"));
+        }
+        if response.causation_id != request.causation_id {
+            return Err(anyhow::anyhow!("Python capability response causation id mismatch"));
+        }
         Ok(response)
     }
 
