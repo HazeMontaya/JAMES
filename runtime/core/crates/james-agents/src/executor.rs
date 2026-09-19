@@ -71,7 +71,32 @@ impl PlanExecutor {
     }
 
     pub fn unregister_executor(&self, capability_id: &str) -> Option<Arc<dyn CapabilityExecutor>> {
-        self.executors.remove(capability_id).map(|(_, e)| e)
+        let removed = self.executors.remove(capability_id).map(|(_, e)| e);
+        self.resolver.unregister(capability_id, "direct");
+        self.resolver.unregister(capability_id, "python");
+        removed
+    }
+
+    /// Remove every executor candidate owned by one provider.
+    pub fn unregister_provider(&self, provider: &str) -> usize {
+        let ids = self.resolver.ids();
+        let mut removed = 0;
+        for id in ids {
+            if self.resolver.unregister(&id, provider) {
+                self.executors.remove(&id);
+                removed += 1;
+            }
+        }
+        removed
+    }
+
+    pub fn provider_executor_ids(&self, provider: &str) -> Vec<String> {
+        let mut ids = self.resolver.ids().into_iter()
+            .filter(|id| self.resolver.candidates(id).iter().any(|c| c.provider == provider))
+            .collect::<Vec<_>>();
+        ids.sort();
+        ids.dedup();
+        ids
     }
 
     pub fn has_executor(&self, capability_id: &str) -> bool {
