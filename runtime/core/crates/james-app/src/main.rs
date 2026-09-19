@@ -434,12 +434,23 @@ async fn main() -> Result<()> {
             interval.tick().await;
             let _expired_confirmations = sync_broker.cleanup_expired_confirmations().await;
             let caps = sync_nats.list_python_capabilities().await;
+            let incoming: std::collections::HashSet<String> = caps.iter().map(|cap| cap.id.clone()).collect();
             if let Err(error) = sync.sync_all(&caps).await {
                 tracing::warn!("Python capability sync failed: {}", error);
                 continue;
             }
-            for cap in caps {
-                sync_service.register_python_executor(cap.id, sync_executor.clone());
+            for cap in &caps {
+                sync_service.register_python_executor(cap.id.clone(), sync_executor.clone());
+            }
+            // Capability removal must also remove the transport executor candidate;
+            // otherwise the resolver can select a stale Python route after the
+            // registry has already converged.
+            let stale = sync_service.executor.provider_executor_ids("python")
+                .into_iter()
+                .filter(|id| !incoming.contains(id))
+                .collect::<Vec<_>>();
+            for stale_id in stale {
+                sync_service.executor.unregister_executor(&stale_id);
             }
         }
     });
