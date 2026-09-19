@@ -23,9 +23,20 @@ def _direct_mode(text: str) -> str:
     out = re.sub(r"(?m)^\s*[-*]\s*$", "", out)
     return out.strip()
 
+def _casual_mode(text: str) -> str:
+    replacements = {
+        "However": "But", "Furthermore": "Also", "Utilize": "Use",
+        "utilize": "use", "Prior to": "Before", "prior to": "before",
+        "Due to the fact that": "Because", "due to the fact that": "because",
+    }
+    result = text
+    for source, target in replacements.items():
+        result = result.replace(source, target)
+    return result
 MODULES = {
     "hedge_reducer": _hedge_reducer,
     "direct_mode": _direct_mode,
+    "casual_mode": _casual_mode,
 }
 
 def transform_text(text: str, modules: list[str] | None = None) -> tuple[str, list[str]]:
