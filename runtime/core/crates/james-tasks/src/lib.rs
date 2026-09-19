@@ -11,7 +11,7 @@ use dashmap::DashMap;
 use james_events::{EventEnvelope, builtin_events, create_system_event, EventBus};
 use james_capabilities::CapabilityRegistry;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskPriority {
     Low = 0,
     Normal = 50,
