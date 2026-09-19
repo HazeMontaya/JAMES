@@ -289,6 +289,14 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
         let response: CapabilityExecuteResponse = serde_json::from_slice(&response_message.payload)
             .map_err(|e| anyhow::anyhow!("Invalid Python capability response: {}", e))?;
 
+        if response.request_id != request_id {
+            return Err(anyhow::anyhow!(
+                "Python capability response correlation mismatch: expected {}, got {}",
+                request_id,
+                response.request_id
+            ));
+        }
+
         Ok(response)
     }
 
