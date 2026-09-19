@@ -1,11 +1,12 @@
 """Append-only runtime event log."""
 from __future__ import annotations
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any, Iterable
 
 from james_runtime.core.events import RuntimeEvent
+
+
 class EventLog:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path).expanduser()
