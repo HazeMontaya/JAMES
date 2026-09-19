@@ -738,7 +738,7 @@ impl CapabilityBroker {
         { let _guard = self.confirmation_lock.lock().await;
             self.confirmations.insert(confirmation_id, pending.clone());
         }
-        self.audit_v2("audit.capability.confirmation_requested", request, None).await;
+        self.audit_confirmation("audit.capability.confirmation_requested", &pending, &request.caller_identity).await;
         Ok(pending)
     }
 
@@ -940,16 +940,41 @@ impl CapabilityBroker {
                 "request_id": confirmation.request_id,
                 "caller_identity": confirmation.caller_identity,
                 "capability": confirmation.capability_id,
+                "risk_level": confirmation.risk_level,
                 "target": confirmation.target,
                 "scope": confirmation.scope,
+                "reason": confirmation.reason,
                 "approved": confirmation.approved,
                 "actor": actor,
                 "created_at": confirmation.created_at.to_rfc3339(),
                 "expires_at": confirmation.expires_at.to_rfc3339(),
                 "at": Utc::now().to_rfc3339(),
             });
-            if bus.publish(Event::new(event_type, "james-capability-broker").with_payload(payload)).await.is_err() {
+            if bus.publish(Event::new(event_type, "james-capability-broker").with_payload(payload.clone())).await.is_err() {
                 warn!("broker confirmation audit: failed to publish {}", event_type);
+            }
+            if let Some(suffix) = event_type.strip_prefix("audit.capability.confirmation_") {
+                let ui_type = format!("capability.confirmation.{}", suffix);
+                let ui_payload = serde_json::json!({
+                    "confirmation": {
+                        "confirmation_id": confirmation.confirmation_id,
+                        "request_id": confirmation.request_id,
+                        "caller_identity": confirmation.caller_identity,
+                        "capability_id": confirmation.capability_id,
+                        "risk_level": confirmation.risk_level,
+                        "target": confirmation.target,
+                        "scope": confirmation.scope,
+                        "reason": confirmation.reason,
+                        "approved": confirmation.approved,
+                        "created_at": confirmation.created_at.to_rfc3339(),
+                        "expires_at": confirmation.expires_at.to_rfc3339(),
+                    },
+                    "actor": actor,
+                    "at": Utc::now().to_rfc3339(),
+                });
+                if bus.publish(Event::new(ui_type, "james-capability-broker").with_payload(ui_payload)).await.is_err() {
+                    warn!("broker confirmation UI event failed for {}", event_type);
+                }
             }
         }
         info!(
