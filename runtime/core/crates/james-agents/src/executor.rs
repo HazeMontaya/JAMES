@@ -622,7 +622,12 @@ mod tests {
 
         let executor = PlanExecutor::new(broker);
         executor.attach_resolver(shared);
-        let plan = test_plan("failover.capability");
+        let mut plan = test_plan("failover.capability");
+        // Verify health propagation across separate executions, not intra-step retry.
+        plan.steps[0].retry_policy = RetryPolicy {
+            max_retries: 0,
+            ..RetryPolicy::default()
+        };
 
         let first = executor.execute(&plan, "agent:test").await.unwrap();
         assert!(!first.success);
