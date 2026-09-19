@@ -37,6 +37,13 @@ impl CapabilityExecutor for PythonExecutor {
             .execute_capability(capability_id, &self.default_caller, input)
             .await?;
 
+        if response.request_id.is_empty() {
+            return Err(anyhow::anyhow!(
+                "Python capability '{}' returned an invalid empty request id",
+                capability_id
+            ));
+        }
+
         if !response.success {
             return Err(anyhow::anyhow!(
                 "Python capability '{}' failed: {}",
