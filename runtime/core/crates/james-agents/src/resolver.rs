@@ -333,7 +333,7 @@ impl CapabilityResolver {
         }
 
         considered.retain(|c| {
-            let health = self.provider_health(&c.provider);
+            let health = self.capability_health(&c.capability_id, &c.provider);
             (c.available || context.include_unavailable)
                 && (health.is_routable() || context.include_unavailable)
                 && context.min_priority.map_or(true, |min| c.priority >= min)
