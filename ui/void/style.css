@@ -84,3 +84,19 @@ html[data-state="ERROR"] .brain-aura{opacity:.7}
 @media(prefers-reduced-motion:reduce){
   .context-item,.intent-actions button,.nav-chip,.tab,.data-card,.data-row{transition:none}
 }
+
+/* Capability confirmation gate */
+.confirmation-layer{margin:18px 0 0;border:1px solid rgba(224,200,138,.28);background:rgba(11,15,20,.76);padding:14px 16px;box-shadow:0 0 32px rgba(224,200,138,.06)}
+.confirmation-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}
+.confirmation-card .confirmation-main{min-width:0}
+.confirmation-title{font-size:1rem;letter-spacing:.08em;text-transform:uppercase}
+.confirmation-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.confirmation-chip{border:1px solid rgba(255,255,255,.12);padding:4px 7px;font-size:.68rem;letter-spacing:.08em}
+.confirmation-reason{margin:10px 0 0;color:var(--muted,#9aa5b1);line-height:1.45}
+.confirmation-actions{display:flex;gap:8px}
+.confirmation-actions button{min-width:96px;padding:10px 12px}
+.confirmation-actions .approve{border-color:rgba(180,220,180,.4)}
+.confirmation-actions .reject{border-color:rgba(230,150,150,.35)}
+.confirmation-layer[data-risk="critical"]{border-color:rgba(235,105,105,.5)}
+.confirmation-layer[data-risk="high"]{border-color:rgba(235,180,105,.45)}
+@media (max-width:700px){.confirmation-card{grid-template-columns:1fr}.confirmation-actions{justify-content:flex-start}}
