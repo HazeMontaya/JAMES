@@ -152,7 +152,10 @@ async def test_tool_registry_preserves_execution_correlation_metadata():
     registry = ToolRegistry()
     registry.register(CaptureTool())
     result = await registry.execute(
-        "capture", {}, correlation_id="corr-reg", causation_id="cause-reg"
+        "capture", {},
+        broker_authorized=True,
+        correlation_id="corr-reg",
+        causation_id="cause-reg",
     )
     assert result["success"] is True
     assert result["output"]["correlation_id"] == "corr-reg"
