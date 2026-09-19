@@ -11,7 +11,7 @@ use tracing::warn;
 
 use crate::model::*;
 use james_capability_broker::{CapabilityBroker, CapabilityExecutor, CapabilityRequestV2, RequestedEffect};
-use crate::{AgentError, AgentState, CapabilityResolver, ExecutorCandidate, ResolutionContext, PlanExecutionResult, StepResult};
+use crate::{AgentError, AgentState, CapabilityResolver, ExecutorCandidate, ProviderHealth, ResolutionContext, PlanExecutionResult, StepResult};
 
 /// Simple exponential backoff delay for a retry attempt.
 fn backoff_delay(policy: &RetryPolicy, attempt: u32) -> Duration {
@@ -102,14 +102,23 @@ impl PlanExecutor {
         
         // Resolve via the shared resolver first, then the local map
         // (Block C: Requirement → Candidates → Selection).
-        let executor = self
+        let resolution = self
             .resolver
-            .resolve_executor(&step.capability_id, &ResolutionContext::default())
-            .or_else(|| self.executors.get(&step.capability_id).map(|e| e.clone()))
-            .ok_or_else(|| {
-                tracing::error!("PlanExecutor: executor not found for capability_id={}", step.capability_id);
-                AgentError::ExecutorNotFound(step.capability_id.clone())
-            })?;
+            .resolve(&step.capability_id, &ResolutionContext::default());
+
+        let (executor, provider) = match resolution.selected {
+            Some(candidate) => (candidate.executor, candidate.provider),
+            None => {
+                // Compatibility fallback for legacy local registrations.
+                match self.executors.get(&step.capability_id).map(|e| e.clone()) {
+                    Some(executor) => (executor, "direct".to_string()),
+                    None => {
+                        tracing::error!("PlanExecutor: executor not found for capability_id={}", step.capability_id);
+                        return Err(AgentError::ExecutorNotFound(step.capability_id.clone()));
+                    }
+                }
+            }
+        };
 
         tracing::debug!("PlanExecutor: found executor for capability_id={}", step.capability_id);
         
@@ -160,7 +169,19 @@ impl PlanExecutor {
                 })?,
         };
 
-        tracing::info!("PlanExecutor: step '{}' completed, allowed={}, executed={}, reason={:?}", step.id, outcome.allowed, outcome.executed, outcome.reason);
+        tracing::info!("PlanExecutor: step '{}' completed, provider={}, allowed={}, executed={}, reason={:?}", step.id, provider, outcome.allowed, outcome.executed, outcome.reason);
+
+        // Feed executor health back into the resolver. Authorization denials are
+        // not provider failures; only an allowed-but-unexecuted request marks a
+        // provider unavailable. A successful execution restores health.
+        if outcome.allowed {
+            let health = if outcome.executed {
+                ProviderHealth::Available
+            } else {
+                ProviderHealth::Unavailable
+            };
+            self.resolver.set_provider_health(&provider, health);
+        }
 
         Ok(CapabilityExecutionResult {
             step_id: step.id.clone(),
