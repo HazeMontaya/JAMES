@@ -38,6 +38,7 @@ from james_runtime.models.pricing import PricingRegistry
 from james_runtime.telemetry.metrics import MetricsCollector
 from james_runtime.memory import EventLog
 from james_runtime.autonomy.heartbeat import DurableHeartbeat, HeartbeatTask
+from james_runtime.autonomy.decision import AutonomousDecisionLoop
 from james_runtime.steering.liquid import liquid_race
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ class JamesRuntime:
         # keeping runtime events machine-replayable. The log is outside source code.
         self.event_log = EventLog(Path(".james") / "events.jsonl")
         self.heartbeat = DurableHeartbeat(Path(".james") / "heartbeat.json")
+        self.autonomy = AutonomousDecisionLoop(self.event_log, self.heartbeat)
 
         # Agent system (lazy)
         self._agent_system = None
@@ -126,12 +128,22 @@ class JamesRuntime:
         # 6. Restore autonomous scheduler state and start background tasks.
         await self.heartbeat.restore()
         self.heartbeat.register(HeartbeatTask("runtime.engine_health", 30.0, self._heartbeat_engine_health, timeout_seconds=15.0))
+        self.heartbeat.register(HeartbeatTask("autonomy.decision", 60.0, self._heartbeat_autonomy_decision, timeout_seconds=5.0))
         self._health_check_task = asyncio.create_task(self._health_check_loop(), name="james-health")
         self._heartbeat_task = asyncio.create_task(self.heartbeat.run(poll_seconds=1.0), name="james-heartbeat")
         
         self._initialized = True
         logger.info("JAMES Runtime initialized successfully")
     
+    async def _heartbeat_autonomy_decision(self) -> None:
+        decision = self.autonomy.tick()
+        self._emit_event("AUTONOMOUS_DECISION", {
+            "action": decision.action,
+            "priority": decision.priority,
+            "reason": decision.reason,
+            "evidence": decision.evidence,
+        })
+
     async def _initialize_engines(self) -> None:
         """Initialize all available engines"""
         engine_config = EngineConfig(
