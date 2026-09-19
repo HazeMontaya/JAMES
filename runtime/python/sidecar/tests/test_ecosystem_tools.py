@@ -55,13 +55,13 @@ async def test_nats_capability_bridge_rejects_missing_or_invalid_token(monkeypat
         b'{"request_id":"r1","capability_id":"missing","caller":"attacker","input":{}}'
     )
     assert missing["success"] is False
-    assert "authentication" in missing["error"]
+    assert "PermissionError" in missing["error"]
 
     invalid = await bridge._execute_request(
         b'{"request_id":"r2","capability_id":"missing","caller":"attacker","bridge_token":"wrong","input":{}}'
     )
     assert invalid["success"] is False
-    assert "authentication" in invalid["error"]
+    assert "PermissionError" in invalid["error"]
 
 
 @pytest.mark.asyncio
