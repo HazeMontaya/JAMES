@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from james_runtime.core.requests import CompletionRequest
 from james_runtime.steering.autotune import compute_autotune
@@ -89,6 +89,7 @@ class ReActReasoner:
         system_prompt: str = "",
         agent_id: str = "default",
         goal_id: str = "",
+        tool_executor: Callable[..., Awaitable[Dict[str, Any]]] | None = None,
     ):
         self.runtime = runtime
         self.tools = tool_registry
@@ -97,6 +98,7 @@ class ReActReasoner:
         self.system_prompt = system_prompt
         self.agent_id = agent_id
         self.goal_id = goal_id
+        self.tool_executor = tool_executor
 
     def _tool_docs(self) -> str:
         lines = []
@@ -203,7 +205,10 @@ class ReActReasoner:
                     "tool": step.tool,
                     "args": json.dumps(step.tool_args, ensure_ascii=False)[:300],
                 })
-                result = await self.tools.execute(step.tool, step.tool_args)
+                if self.tool_executor is not None:
+                    result = await self.tool_executor(step.tool, step.tool_args, caller=f"agent:{self.agent_id}")
+                else:
+                    result = await self.tools.execute(step.tool, step.tool_args)
                 self.runtime._emit_event("AGENT_TOOL_RESULT", {
                     "agent_id": self.agent_id,
                     "goal_id": self.goal_id,
