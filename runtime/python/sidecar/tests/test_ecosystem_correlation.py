@@ -134,3 +134,55 @@ async def test_nats_bridge_health_payload_reports_degraded_capability(monkeypatc
     payload = bridge._health_payload()
     assert payload["status"] == "degraded"
     assert payload["capability_health"] == {"echo": False}
+
+
+@pytest.mark.asyncio
+async def test_tool_registry_preserves_execution_correlation_metadata():
+    from james_runtime.tools.registry import ToolRegistry
+    from james_runtime.tools.base import Tool, ToolResult
+
+    class CaptureTool(Tool):
+        name = "capture"
+        description = "capture metadata"
+        parameters = {}
+
+        async def _run(self, **kwargs):
+            return ToolResult(success=True, output=kwargs)
+
+    registry = ToolRegistry()
+    registry.register(CaptureTool())
+    result = await registry.execute(
+        "capture", {}, correlation_id="corr-reg", causation_id="cause-reg"
+    )
+    assert result["success"] is True
+    assert result["output"]["correlation_id"] == "corr-reg"
+    assert result["output"]["causation_id"] == "cause-reg"
+
+
+@pytest.mark.asyncio
+async def test_nats_bridge_passes_correlation_context_to_tool(monkeypatch):
+    from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
+    from james_runtime.tools.base import Tool, ToolResult
+    from james_runtime.tools.registry import ToolRegistry
+
+    seen = {}
+
+    class CaptureTool(Tool):
+        name = "capture"
+        description = "capture metadata"
+        parameters = {}
+
+        async def _run(self, **kwargs):
+            seen.update(kwargs)
+            return ToolResult(success=True, output="ok")
+
+    monkeypatch.setenv("JAMES_BRIDGE_TOKEN", "test-secret")
+    registry = ToolRegistry()
+    registry.register(CaptureTool())
+    bridge = NatsCapabilityBridge(registry)
+    result = await bridge._execute_request(
+        b'{"request_id":"corr-1","capability_id":"capture","caller":"broker","bridge_token":"test-secret","correlation_id":"corr-outer","causation_id":"cause-outer","input":{}}'
+    )
+    assert result["success"] is True
+    assert seen["correlation_id"] == "corr-outer"
+    assert seen["causation_id"] == "cause-outer"
