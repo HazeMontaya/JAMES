@@ -38,10 +38,6 @@ class AutonomousDecisionLoop:
                 "the autonomous mission layer recorded a failed mission",
                 {"event_id": latest.event_id, "action": latest.payload.get("action")},
             )
-        if not any(e.event_type == "AUTONOMY_HEALTH_SWEEP" for e in events):
-            return AutonomousDecision("run_health_sweep", 90,
-                "no autonomous health sweep has been recorded yet",
-                {"recent_events": len(events)})
         selfmade = [e for e in events if e.event_type.startswith("selfmade.")]
         completed = [e for e in selfmade if e.event_type == "selfmade.evaluation.completed"]
         if len(completed) >= 3 and all(e.payload.get("passed") is True for e in completed[-3:]):
@@ -50,6 +46,11 @@ class AutonomousDecisionLoop:
                 "recent SelfMade evaluations are consistently passing; inspect for the next bounded improvement",
                 {"successful_evaluations": len(completed), "window": 3},
             )
+        if not any(e.event_type == "AUTONOMY_HEALTH_SWEEP" for e in events):
+            return AutonomousDecision("run_health_sweep", 90,
+                "no autonomous health sweep has been recorded yet",
+                {"recent_events": len(events)})
+
         failed_selfmade = [
             e for e in selfmade
             if e.event_type in {"selfmade.evaluation.completed", "selfmade.change.failed"}
