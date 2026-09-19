@@ -83,3 +83,29 @@ async def test_ecosystem_tool_failure_keeps_correlation_and_redacts_error_event(
     assert "query" not in events[0][1]
     assert "sensitive provider payload" not in str(events[0][1])
     assert registry.health("firecrawl")["healthy"] is False
+
+
+@pytest.mark.asyncio
+async def test_nats_bridge_tracks_capability_health_after_execution(monkeypatch):
+    from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
+    from james_runtime.tools.base import Tool, ToolResult
+    from james_runtime.tools.registry import ToolRegistry
+
+    class EchoTool(Tool):
+        name = "echo"
+        description = "echo"
+        parameters = {}
+
+        async def _run(self, **kwargs):
+            return ToolResult(success=True, output="ok")
+
+    monkeypatch.setenv("JAMES_BRIDGE_TOKEN", "test-secret")
+    registry = ToolRegistry()
+    registry.register(EchoTool())
+    bridge = NatsCapabilityBridge(registry)
+
+    result = await bridge._execute_request(
+        b'{"request_id":"health-1","capability_id":"echo","caller":"broker","bridge_token":"test-secret","input":{}}'
+    )
+    assert result["success"] is True
+    assert bridge._capability_health["echo"] is True
