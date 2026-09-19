@@ -431,3 +431,26 @@ mod contract_tests {
         assert!(validate_response_correlation(&r, "req-1", "corr-1", &Some("cause-2".into())).is_err());
     }
 }
+
+#[cfg(test)]
+mod request_contract_tests {
+    use super::*;
+
+    #[test]
+    fn execute_request_serialization_preserves_correlation_context() {
+        let request = CapabilityExecuteRequest {
+            request_id: "req-1".into(),
+            capability_id: "web.search".into(),
+            caller: "agent:test".into(),
+            input: serde_json::json!({"query":"contract"}),
+            correlation_id: "corr-1".into(),
+            causation_id: Some("cause-1".into()),
+            bridge_token: "secret-token".into(),
+        };
+        let encoded = serde_json::to_value(&request).unwrap();
+        assert_eq!(encoded["request_id"], "req-1");
+        assert_eq!(encoded["correlation_id"], "corr-1");
+        assert_eq!(encoded["causation_id"], "cause-1");
+        assert_eq!(encoded["bridge_token"], "secret-token");
+    }
+}
