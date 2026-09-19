@@ -94,16 +94,14 @@ impl ModelRouterModule {
         config: RouterConfig,
         event_bus: Arc<EventBus>,
         capability_registry: Arc<CapabilityRegistry>,
+        models_module: Arc<james_models::ModelsModule>,
     ) -> Self {
         Self {
             config,
             event_bus: event_bus.clone(),
             capability_registry: capability_registry.clone(),
             running: Arc::new(RwLock::new(false)),
-            models_module: Arc::new(james_models::ModelsModule::new(
-                event_bus,
-                capability_registry,
-            )),
+            models_module,
         }
     }
 
