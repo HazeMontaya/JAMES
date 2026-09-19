@@ -524,7 +524,6 @@ impl JamesAssembly {
         // Shares the assembly broker and memory; executor candidates come from
         // the shared resolver. The core task manager tracks plan steps.
         let identity_registry = Arc::new(james_identity::IdentityRegistry::new());
-        let core_tasks = Arc::new(james_tasks_core::TaskManager::new(Some(event_bus.clone())));
         let executor_registry = Arc::new(james_agents::ExecutorRegistry::with_provider("james-assembly"));
         let resolver = Arc::new(CapabilityResolver::new());
         let mut agent_factory = james_agents::AgentFactory::new(
