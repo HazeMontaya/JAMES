@@ -67,7 +67,7 @@ impl SchedulerModule {
         task_manager: Arc<TaskManager>,
     ) -> Self {
         let scheduler = Arc::new(CoreScheduler::new(task_manager).with_event_bus(event_bus.clone()));
-        Self { config, event_bus, capability_registry, running: Arc::new(RwLock::new(false)), jobs: Arc::new(RwLock::new(Vec::new())), scheduler, scheduler_handle: Arc::new(RwLock::new(None)) }
+        Self { config, event_bus, running: Arc::new(RwLock::new(false)), jobs: Arc::new(RwLock::new(Vec::new())), scheduler, scheduler_handle: Arc::new(RwLock::new(None)) }
     }
 
     pub fn scheduler(&self) -> Arc<CoreScheduler> { self.scheduler.clone() }
@@ -115,7 +115,7 @@ impl SchedulerModule {
         let core_job = to_core(&job)?;
         self.scheduler.schedule(core_job)?;
         self.jobs.write().await.push(job.clone());
-        self.save().await?;
+        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
         self.event_bus.publish(Event::new("scheduler.job.added", "james-scheduler")
             .with_payload(serde_json::json!({"job_id":job.id,"name":job.name}))).await?;
         Ok(job.id)
@@ -132,7 +132,7 @@ impl SchedulerModule {
         let uid = Uuid::parse_str(&job.id)?;
         if enabled { self.scheduler.enable(uid)?; } else { self.scheduler.disable(uid)?; }
         if let Some(j) = self.jobs.write().await.iter_mut().find(|j| j.id == id) { j.enabled = enabled; j.updated_at = Utc::now(); }
-        self.save().await?;
+        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
         Ok(())
     }
 
@@ -145,7 +145,7 @@ impl SchedulerModule {
         let uid = Uuid::parse_str(id)?;
         self.scheduler.unschedule(uid)?;
         self.jobs.write().await.retain(|j| j.id != id);
-        self.save().await?;
+        persistence::save(&self.config, &self.jobs.read().await.clone()).await?;
         Ok(())
     }
 
