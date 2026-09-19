@@ -26,7 +26,7 @@ async def test_firecrawl_adapter_uses_expected_endpoint(monkeypatch):
 async def test_provider_adapters_keep_calls_structured(monkeypatch):
     adapters = [
         (DifyAdapter(base_url="https://dify.invalid"), "run_agent", {"query": "hello"}),
-        (N8nAdapter(base_url="https://n8n.invalid"), "trigger_webhook", {"webhook_path": "james"}),
+        (N8nAdapter(base_url="https://n8n.invalid"), "trigger_webhook", {"webhook_path": "james", "payload": {"event": "test"}}),
         (CrewAIAdapter(base_url="https://crew.invalid"), "run", {"endpoint": "/flow", "payload": {"x": 1}}),
         (LiveKitAdapter(base_url="https://livekit.invalid"), "health", {}),
     ]
