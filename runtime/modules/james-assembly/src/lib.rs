@@ -270,6 +270,10 @@ impl CapabilityExecutor for SelfMadeCapabilityExecutor {
                 let report = self.selfmade.verify_workspace_public(&workspace).await?;
                 serde_json::to_value(report).map_err(Into::into)
             }
+            "selfmade.evaluate" => {
+                serde_json::to_value(self.selfmade.evaluate_workspace().await?)
+                    .map_err(Into::into)
+            }
             "selfmade.rollback" => {
                 let result = self.selfmade.rollback_workspace().await?;
                 Ok(result)
@@ -610,6 +614,15 @@ impl JamesAssembly {
             priority: 10,
             available: true,
             capabilities: vec!["selfmade.verify".to_string()],
+            health: None,
+            executor: selfmade_executor.clone(),
+        });
+        self.resolver.register(ExecutorCandidate {
+            capability_id: "selfmade.evaluate".to_string(),
+            provider: "james-selfmade".to_string(),
+            priority: 10,
+            available: true,
+            capabilities: vec!["selfmade.evaluate".to_string()],
             health: None,
             executor: selfmade_executor.clone(),
         });
