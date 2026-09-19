@@ -108,6 +108,8 @@ pub struct EvolutionCycle {
 }
 
 pub trait DevelopmentAgent: Send + Sync {
+    /// Context is borrowed only for the call; implementations must own any data
+    /// captured by the returned future so the trait remains object-safe.
     fn propose(&self, context: &str) -> Pin<Box<dyn Future<Output = Result<EvolutionProposal>> + Send + '_>>;
 
     /// Generate a unified diff for the isolated workspace. The runtime still
