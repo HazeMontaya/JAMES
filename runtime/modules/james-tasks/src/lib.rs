@@ -3,13 +3,13 @@
 //! Canonical task state lives in the core james-tasks::TaskManager.
 //! This module owns only the public module DTO/configuration boundary.
 
-use james_tasks_core::{RetryPolicy as CoreRetryPolicy, Task as CoreTask, TaskManager, TaskPriority as CoreTaskPriority, TaskStatus as CoreTaskStatus};use std::sync::Arc;
+use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
 use james_module_host::{ModuleManifest, ModuleType};
 use james_memory::MemoryModule;
-use james_tasks_core::{RetryPolicy as CoreRetryPolicy, Task as CoreTask, TaskManager, TaskPriority as CoreTaskPriority, TaskStatus as CoreTaskStatus};
+use james_tasks_core::{RetryPolicy as CoreRetryPolicy, Task as CoreTask, TaskManager, TaskStatus as CoreTaskStatus};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::info;
