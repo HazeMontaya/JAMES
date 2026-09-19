@@ -97,7 +97,12 @@ impl ModelsModule {
     }
 
     pub async fn register_model(&self, model: ModelInfo) -> Result<()> {
-        self.models.write().await.push(model);
+        let mut models = self.models.write().await;
+        if let Some(existing) = models.iter_mut().find(|existing| existing.id == model.id) {
+            *existing = model;
+        } else {
+            models.push(model);
+        }
         Ok(())
     }
 
