@@ -45,8 +45,8 @@ class EcosystemTool(Tool):
 
 
 class FirecrawlSearchTool(EcosystemTool):
-    def __init__(self, registry: EcosystemRegistry) -> None:
-        super().__init__("web_search", "Search the public web through the explicitly enabled Firecrawl adapter.", {"query": {"type": "string", "description": "Search query"}, "limit": {"type": "integer", "description": "Maximum results"}}, registry, "firecrawl")
+    def __init__(self, registry: EcosystemRegistry, event_sink: Callable[..., Any] | None = None) -> None:
+        super().__init__("web_search", "Search the public web through the explicitly enabled Firecrawl adapter.", {"query": {"type": "string", "description": "Search query"}, "limit": {"type": "integer", "description": "Maximum results"}}, registry, "firecrawl", event_sink)
 
     async def _run(self, query: str = "", limit: int = 10, **kwargs: Any) -> ToolResult:
         if not query.strip():
@@ -55,8 +55,8 @@ class FirecrawlSearchTool(EcosystemTool):
 
 
 class FirecrawlScrapeTool(EcosystemTool):
-    def __init__(self, registry: EcosystemRegistry) -> None:
-        super().__init__("web_scrape", "Extract a public web page through Firecrawl.", {"url": {"type": "string", "description": "Public HTTP(S) URL"}}, registry, "firecrawl")
+    def __init__(self, registry: EcosystemRegistry, event_sink: Callable[..., Any] | None = None) -> None:
+        super().__init__("web_scrape", "Extract a public web page through Firecrawl.", {"url": {"type": "string", "description": "Public HTTP(S) URL"}}, registry, "firecrawl", event_sink)
 
     async def _run(self, url: str = "", **kwargs: Any) -> ToolResult:
         if not url.strip():
@@ -65,8 +65,8 @@ class FirecrawlScrapeTool(EcosystemTool):
 
 
 class DifyAgentTool(EcosystemTool):
-    def __init__(self, registry: EcosystemRegistry) -> None:
-        super().__init__("dify_agent", "Run an explicitly enabled Dify agent.", {"query": {"type": "string", "description": "Agent request"}}, registry, "dify")
+    def __init__(self, registry: EcosystemRegistry, event_sink: Callable[..., Any] | None = None) -> None:
+        super().__init__("dify_agent", "Run an explicitly enabled Dify agent.", {"query": {"type": "string", "description": "Agent request"}}, registry, "dify", event_sink)
 
     async def _run(self, query: str = "", **kwargs: Any) -> ToolResult:
         if not query.strip():
@@ -75,8 +75,8 @@ class DifyAgentTool(EcosystemTool):
 
 
 class N8nWebhookTool(EcosystemTool):
-    def __init__(self, registry: EcosystemRegistry) -> None:
-        super().__init__("n8n_webhook", "Trigger an explicitly enabled n8n webhook.", {"webhook_path": {"type": "string", "description": "Webhook path"}, "payload": {"type": "object", "description": "Webhook payload"}}, registry, "n8n")
+    def __init__(self, registry: EcosystemRegistry, event_sink: Callable[..., Any] | None = None) -> None:
+        super().__init__("n8n_webhook", "Trigger an explicitly enabled n8n webhook.", {"webhook_path": {"type": "string", "description": "Webhook path"}, "payload": {"type": "object", "description": "Webhook payload"}}, registry, "n8n", event_sink)
 
     async def _run(self, webhook_path: str = "", payload: Mapping[str, Any] | None = None, **kwargs: Any) -> ToolResult:
         if not webhook_path.strip():
