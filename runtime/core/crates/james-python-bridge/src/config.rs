@@ -124,6 +124,12 @@ impl BridgeConfig {
         }
         if let Ok(token) = std::env::var("JAMES_BRIDGE_TOKEN") {
             config.bridge_token = token;
+        } else if config.bridge_token.is_empty() {
+            let root = std::env::var("JAMES_ROOT").unwrap_or_else(|_| ".".to_string());
+            let token_path = std::path::PathBuf::from(root).join(".james").join("bridge-token");
+            if let Ok(token) = std::fs::read_to_string(token_path) {
+                config.bridge_token = token.trim().to_string();
+            }
         }
         if let Ok(auto) = std::env::var("JAMES_BRIDGE_AUTO_REGISTER") {
             config.auto_register_skills = auto.parse().unwrap_or(true);
