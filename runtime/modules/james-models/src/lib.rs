@@ -31,6 +31,17 @@ pub struct ModelInfo {
     pub metadata: serde_json::Value,
 }
 
+/// Versioned typed snapshot exchanged with sidecar adapters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelSnapshot {
+    pub schema_version: u32,
+    pub models: Vec<ModelInfo>,
+}
+
+impl ModelSnapshot {
+    pub const SCHEMA_VERSION: u32 = 1;
+}
+
 /// Model type classification
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ModelType {
@@ -113,6 +124,13 @@ impl ModelsModule {
         registry.clear();
         registry.extend(models);
         Ok(())
+    }
+
+    pub async fn snapshot(&self) -> ModelSnapshot {
+        ModelSnapshot {
+            schema_version: ModelSnapshot::SCHEMA_VERSION,
+            models: self.models.read().await.clone(),
+        }
     }
 
     pub async fn get_model(&self, id: &str) -> Option<ModelInfo> {
