@@ -13,6 +13,7 @@ class RuntimeEvent:
     payload: dict[str, Any] = field(default_factory=dict)
     source: str = "james"
     correlation_id: str | None = None
+    causation_id: str | None = None
     event_id: str = field(default_factory=lambda: str(uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     def to_dict(self) -> dict[str, Any]:
@@ -22,10 +23,10 @@ class EventLog:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-    def append(self, event_type: str, payload: dict[str, Any] | None = None, *, source: str = "james", correlation_id: str | None = None) -> RuntimeEvent:
+    def append(self, event_type: str, payload: dict[str, Any] | None = None, *, source: str = "james", correlation_id: str | None = None, causation_id: str | None = None) -> RuntimeEvent:
         if not event_type.strip():
             raise ValueError("event_type must not be empty")
-        event = RuntimeEvent(event_type.strip(), payload or {}, source, correlation_id)
+        event = RuntimeEvent(event_type.strip(), payload or {}, source, correlation_id, causation_id)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event.to_dict(), ensure_ascii=False, sort_keys=True) + "\n")
             handle.flush()
