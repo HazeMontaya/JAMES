@@ -91,3 +91,27 @@ async def test_nats_capability_bridge_redacts_tool_errors(monkeypatch):
     )
     assert result["success"] is False
     assert "secret payload" not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_tool_registry_denies_direct_execution_without_rust_broker_authorization():
+    from james_runtime.tools.base import Tool, ToolResult
+    from james_runtime.tools.registry import ToolRegistry
+
+    class EchoTool(Tool):
+        name = "echo_direct"
+        description = "echo"
+        parameters = {"value": {"type": "string"}}
+
+        async def _run(self, **kwargs):
+            return ToolResult(success=True, output=kwargs["value"])
+
+    registry = ToolRegistry()
+    registry.register(EchoTool())
+    denied = await registry.execute("echo_direct", {"value": "blocked"})
+    assert denied["success"] is False
+    assert "Rust broker authorization" in denied["error"]
+
+    allowed = await registry.execute("echo_direct", {"value": "ok"}, broker_authorized=True)
+    assert allowed["success"] is True
+    assert allowed["output"] == "ok"
