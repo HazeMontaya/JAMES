@@ -109,3 +109,28 @@ async def test_nats_bridge_tracks_capability_health_after_execution(monkeypatch)
     )
     assert result["success"] is True
     assert bridge._capability_health["echo"] is True
+
+
+@pytest.mark.asyncio
+async def test_nats_bridge_health_payload_reports_degraded_capability(monkeypatch):
+    from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
+    from james_runtime.tools.base import Tool
+    from james_runtime.tools.registry import ToolRegistry
+
+    class EchoTool(Tool):
+        name = "echo"
+        description = "echo"
+        parameters = {}
+
+        async def _run(self, **kwargs):
+            return None
+
+    monkeypatch.setenv("JAMES_BRIDGE_TOKEN", "test-secret")
+    registry = ToolRegistry()
+    registry.register(EchoTool())
+    bridge = NatsCapabilityBridge(registry)
+    bridge._capability_health["echo"] = False
+
+    payload = bridge._health_payload()
+    assert payload["status"] == "degraded"
+    assert payload["capability_health"] == {"echo": False}
