@@ -83,6 +83,7 @@ class JamesRuntime:
         
         # Health
         self._health_check_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None
     
     async def initialize(self) -> None:
         """Initialize all components"""
@@ -125,7 +126,8 @@ class JamesRuntime:
         # 6. Restore autonomous scheduler state and start background tasks.
         await self.heartbeat.restore()
         self.heartbeat.register(HeartbeatTask("runtime.engine_health", 30.0, self._heartbeat_engine_health, timeout_seconds=15.0))
-        self._health_check_task = asyncio.create_task(self._health_check_loop())
+        self._health_check_task = asyncio.create_task(self._health_check_loop(), name="james-health")
+        self._heartbeat_task = asyncio.create_task(self.heartbeat.run(poll_seconds=1.0), name="james-heartbeat")
         
         self._initialized = True
         logger.info("JAMES Runtime initialized successfully")
@@ -159,12 +161,15 @@ class JamesRuntime:
         logger.info("Shutting down JAMES Runtime...")
         self.heartbeat.stop()
         
-        if self._health_check_task:
-            self._health_check_task.cancel()
-            try:
-                await self._health_check_task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._heartbeat_task, self._health_check_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._heartbeat_task = None
+        self._health_check_task = None
         
         # Shutdown engines
         for engine in self.engine_registry.list_all():
