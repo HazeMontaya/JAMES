@@ -90,6 +90,8 @@ pub struct HealthCheck {
     pub status: String,
     pub timestamp: String,
     pub capabilities: Vec<String>,
+    #[serde(default)]
+    pub capability_health: std::collections::HashMap<String, bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -161,11 +163,7 @@ impl NatsBridge {
 
         // Set up subscriptions
         self.subscribe_capability_register().await?;
-        self.subscribe_health_check().await?;
         self.subscribe_event_forward().await?;
-
-        // Start health check publisher
-        self.start_health_publisher().await?;
 
         info!("NATS bridge connected successfully");
         Ok(())
@@ -197,41 +195,6 @@ impl NatsBridge {
         Ok(())
     }
 
-    async fn subscribe_health_check(&self) -> anyhow::Result<()> {
-        let client = {
-            let guard = self.client.lock().await;
-            guard.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("NATS client not connected"))?
-                .clone()
-        };
-        let subject = subjects::health_check(&self.config);
-        let mut subscriber = client.subscribe(subject).await?;
-
-        let python_caps = self.python_capabilities.clone();
-        let config = self.config.clone();
-        let client = client.clone();
-
-        tokio::spawn(async move {
-            while let Some(msg) = subscriber.next().await {
-                let caps = python_caps.read().await;
-                let health = HealthCheck {
-                    service: config.service_name.clone(),
-                    status: "healthy".to_string(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                    capabilities: caps.iter().map(|c| c.id.clone()).collect(),
-                    capability_health: std::collections::HashMap::new(),
-                };
-                if let Some(reply) = msg.reply {
-                    if let Ok(bytes) = serde_json::to_vec(&health) {
-                        let _ = client.publish(reply, bytes.into()).await;
-                    }
-                }
-            }
-        });
-
-        Ok(())
-    }
-
     async fn subscribe_event_forward(&self) -> anyhow::Result<()> {
         let client = {
             let guard = self.client.lock().await;
@@ -250,37 +213,6 @@ impl NatsBridge {
                     if let Some(bus) = &event_bus {
                         let _ = bus.publish(event).await;
                     }
-                }
-            }
-        });
-
-        Ok(())
-    }
-
-async fn start_health_publisher(&self) -> anyhow::Result<()> {
-        let client = {
-            let guard = self.client.lock().await;
-            guard.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("NATS client not connected"))?
-                .clone()
-        };
-        let config = self.config.clone();
-        let python_caps = self.python_capabilities.clone();
-        let subject = subjects::health_check(&config);
-
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(config.health_check_interval_secs));
-            loop {
-                interval.tick().await;
-                let caps = python_caps.read().await;
-                let health = HealthCheck {
-                    service: config.service_name.clone(),
-                    status: "healthy".to_string(),
-                    timestamp: chrono::Utc::now().to_rfc3339(),
-                    capabilities: caps.iter().map(|c| c.id.clone()).collect(),
-                };
-                if let Ok(bytes) = serde_json::to_vec(&health) {
-                    let _ = client.publish(subject.clone(), bytes.into()).await;
                 }
             }
         });
@@ -355,6 +287,25 @@ async fn start_health_publisher(&self) -> anyhow::Result<()> {
 
         validate_response_correlation(&response, &request_id, &request.correlation_id, &request.causation_id)?;
         Ok(response)
+    }
+
+    /// Query the Python bridge health endpoint without executing a capability.
+    pub async fn health_check(&self) -> anyhow::Result<HealthCheck> {
+        let client = {
+            let guard = self.client.lock().await;
+            guard.as_ref()
+                .ok_or_else(|| anyhow::anyhow!("NATS client not connected"))?
+                .clone()
+        };
+        let subject = subjects::health_check(&self.config);
+        let message = tokio::time::timeout(
+            Duration::from_secs(self.config.request_timeout_secs.min(10)),
+            client.request(subject, serde_json::json!({}).to_string().into()),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Health check timeout"))??;
+        serde_json::from_slice(&message.payload)
+            .map_err(|e| anyhow::anyhow!("Invalid Python health response: {}", e))
     }
 
     /// Get list of registered Python capabilities
