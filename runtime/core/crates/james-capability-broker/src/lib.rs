@@ -398,6 +398,16 @@ impl CapabilityBroker {
         }
     }
 
+    /// Revoke every permission required by a capability from a caller.
+    pub fn revoke_capability_permissions(&self, caller: impl Into<String>, capability_id: &str) {
+        let caller = caller.into();
+        if let Some(def) = self.registry.get_definition(capability_id) {
+            for perm in def.required_permissions {
+                self.revoke_permission(caller.clone(), perm);
+            }
+        }
+    }
+
     pub fn caller_permissions(&self, caller: &str) -> Vec<String> {
         self.grants.get(caller).map(|e| e.clone()).unwrap_or_default()
     }
