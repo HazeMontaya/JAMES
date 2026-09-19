@@ -77,6 +77,19 @@ impl PlanExecutor {
         removed
     }
 
+    /// Remove one provider route without disturbing another provider for the
+    /// same capability.
+    pub fn unregister_provider_executor(&self, capability_id: &str, provider: &str) -> bool {
+        let removed_route = self.resolver.unregister(capability_id, provider);
+        if removed_route {
+            let has_remaining_route = !self.resolver.candidates(capability_id).is_empty();
+            if !has_remaining_route {
+                self.executors.remove(capability_id);
+            }
+        }
+        removed_route
+    }
+
     /// Remove every executor candidate owned by one provider.
     pub fn unregister_provider(&self, provider: &str) -> usize {
         let ids = self.resolver.ids();
@@ -633,6 +646,28 @@ mod tests {
             error.contains("Executor not found for capability: missing.executor"),
             "unexpected error: {error}"
         );
+    }
+
+    #[test]
+    fn test_unregister_provider_executor_preserves_other_provider() {
+        let registry = Arc::new(james_capabilities::CapabilityRegistry::new());
+        let broker = Arc::new(CapabilityBroker::new(registry));
+        let executor = PlanExecutor::new(broker);
+        executor.register_executor_with_provider(
+            "shared.capability",
+            "python",
+            Arc::new(james_capability_broker::NoopExecutor),
+        );
+        executor.register_executor_with_provider(
+            "shared.capability",
+            "backup",
+            Arc::new(james_capability_broker::NoopExecutor),
+        );
+
+        assert!(executor.unregister_provider_executor("shared.capability", "python"));
+        let candidates = executor.resolver().candidates("shared.capability");
+        assert!(candidates.iter().all(|c| c.provider != "python"));
+        assert!(candidates.iter().any(|c| c.provider == "backup"));
     }
 
     #[test]
