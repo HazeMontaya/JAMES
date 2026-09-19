@@ -116,6 +116,34 @@ impl Scheduler {
         self.scheduled_tasks.iter().map(|t| t.clone()).collect()
     }
 
+    /// Persist the canonical scheduler state atomically.
+    pub async fn save(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        let path = path.as_ref();
+        let tasks = self.list_all();
+        let json = serde_json::to_string_pretty(&tasks)?;
+        if let Some(parent) = path.parent() { tokio::fs::create_dir_all(parent).await?; }
+        let tmp = path.with_extension("json.tmp");
+        tokio::fs::write(&tmp, json.as_bytes()).await?;
+        tokio::fs::rename(&tmp, path).await?;
+        Ok(())
+    }
+
+    /// Restore canonical scheduler state without recalculating persisted run metadata.
+    pub async fn load(&self, path: impl AsRef<std::path::Path>) -> Result<usize> {
+        let path = path.as_ref();
+        if !path.exists() { return Ok(0); }
+        let raw = tokio::fs::read_to_string(path).await?;
+        if raw.trim().is_empty() { return Ok(0); }
+        let tasks: Vec<ScheduledTask> = serde_json::from_str(&raw)?;
+        let mut loaded = 0;
+        for task in tasks {
+            if self.scheduled_tasks.contains_key(&task.id) { continue; }
+            self.scheduled_tasks.insert(task.id, task);
+            loaded += 1;
+        }
+        Ok(loaded)
+    }
+
     pub fn list_enabled(&self) -> Vec<ScheduledTask> {
         self.scheduled_tasks
             .iter()
