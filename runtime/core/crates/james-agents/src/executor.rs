@@ -214,11 +214,21 @@ impl PlanExecutor {
         caller: &str,
     ) -> Result<PlanExecutionResult, AgentError> {
         tracing::info!("PlanExecutor: executing plan '{}' with {} steps, caller={}", plan.name, plan.steps.len(), caller);
+        let plan_started = std::time::Instant::now();
         let mut step_results: Vec<StepResult> = Vec::with_capacity(plan.steps.len());
         let mut previous_outputs: HashMap<String, serde_json::Value> = HashMap::new();
+        let mut completed_steps: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut all_success = true;
 
         for step in &plan.steps {
+            for dependency in &step.depends_on {
+                if !completed_steps.contains(dependency) {
+                    return Err(AgentError::BrokerError(format!(
+                        "step '{}' dependency '{}' has not completed",
+                        step.id, dependency
+                    )));
+                }
+            }
             tracing::info!("PlanExecutor: executing step '{}' (capability={})", step.name, step.capability_id);
             // Resolve variable references against previous step outputs.
             let mut enriched = plan.clone();
@@ -238,6 +248,7 @@ impl PlanExecutor {
                         error: None,
                         duration_ms: result.duration_ms,
                     });
+                    completed_steps.insert(step.id.clone());
                     tracing::info!("PlanExecutor: step '{}' ok in {}ms, output={}", step.id, result.duration_ms, result.output.clone().unwrap_or(serde_json::json!(null)));
                 }
                 Err(e) => {
@@ -261,7 +272,7 @@ impl PlanExecutor {
             plan_id: plan.id.clone(),
             success: all_success,
             step_results,
-            total_duration_ms: 0,
+            total_duration_ms: plan_started.elapsed().as_millis() as u64,
             final_state: if all_success { AgentState::Completed } else { AgentState::Failed },
         })
     }
