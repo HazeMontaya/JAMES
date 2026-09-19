@@ -20,17 +20,27 @@ class FakeN8n:
 
 def test_ecosystem_capability_metadata_has_explicit_risk_permissions():
     from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
+    from james_runtime.tools.base import Tool, ToolResult
+    from james_runtime.tools.registry import ToolRegistry
 
-    registry = __import__("james_runtime.tools.registry", fromlist=["ToolRegistry"]).ToolRegistry()
-    registry.register("firecrawl", FakeFirecrawl())
-    registry.register("dify", FakeDify())
-    registry.register("n8n", FakeN8n())
+    class MetadataTool(Tool):
+        def __init__(self, name):
+            self.name = name
+            self.description = name
+            self.parameters = {}
+
+        async def _run(self, **kwargs):
+            return ToolResult(success=True, output="ok")
+
+    registry = ToolRegistry()
+    registry.register(MetadataTool("web_search"))
+    registry.register(MetadataTool("dify_agent"))
+    registry.register(MetadataTool("n8n_webhook"))
 
     bridge = NatsCapabilityBridge(registry)
-    assert bridge._capability_info(next(t for t in registry.list_tools() if t.name == "web_search"))["required_permissions"] == ["network.public_web"]
-    assert bridge._capability_info(next(t for t in registry.list_tools() if t.name == "dify_agent"))["risk_level"] == "high"
-    assert bridge._capability_info(next(t for t in registry.list_tools() if t.name == "n8n_webhook"))["required_permissions"] == ["integration.n8n.execute", "integration.n8n.communicate"]
-
+    assert bridge._capability_info(registry.get("web_search"))["required_permissions"] == ["network.public_web"]
+    assert bridge._capability_info(registry.get("dify_agent"))["risk_level"] == "high"
+    assert bridge._capability_info(registry.get("n8n_webhook"))["required_permissions"] == ["integration.n8n.execute", "integration.n8n.communicate"]
 
 @pytest.mark.asyncio
 async def test_nats_capability_bridge_rejects_missing_or_invalid_token(monkeypatch):
