@@ -170,10 +170,33 @@ async fn test_core_registry_capability_integration() {
     let registry = core.registry();
     let capability_registry = core.capability_registry();
 
-    // Register a module with capabilities
+    // Registry and CapabilityRegistry are independent authorities.
+    // Register the module metadata in Registry and the capability contract
+    // explicitly in CapabilityRegistry; module registration must not mutate
+    // capability ownership as a side effect.
+    use james_capabilities::{CapabilityCategory, CapabilityDefinition, ExecutionTarget, RiskLevel};
     use james_registry::{RegistryEntry, RegistryEntryType, RegistryStatus};
     use chrono::Utc;
-    
+
+    let capability = CapabilityDefinition {
+        id: "custom.test.capability".to_string(),
+        name: "Custom Test Capability".to_string(),
+        category: CapabilityCategory::Custom("test".to_string()),
+        version: "1.0.0".to_string(),
+        provider: "test".to_string(),
+        description: "A capability registered independently from module metadata".to_string(),
+        risk_level: RiskLevel::Low,
+        required_permissions: vec![],
+        dependencies: vec![],
+        input_schema: None,
+        output_schema: None,
+        execution_target: ExecutionTarget::Local,
+        tags: vec![],
+        deprecated: false,
+        experimental: false,
+    };
+    capability_registry.register(capability, "lifecycle-test").await.unwrap();
+
     let entry = RegistryEntry {
         id: Uuid::nil(),
         entry_type: RegistryEntryType::Module,
@@ -190,15 +213,15 @@ async fn test_core_registry_capability_integration() {
     };
 
     let id = registry.register(entry).await.unwrap();
-    
-    // Verify capability is registered
+
+    // Module registration does not implicitly create capabilities.
     let caps = capability_registry.list_by_provider("test");
     assert!(caps.iter().any(|c| c.definition.id == "custom.test.capability"));
 
-    // Unregister module
+    // Unregistering module metadata must not remove the independently-owned
+    // capability contract.
     registry.unregister(id).await.unwrap();
-    
-    // Capability should still exist (capabilities are independent)
+
     let caps = capability_registry.list_by_provider("test");
     assert!(caps.iter().any(|c| c.definition.id == "custom.test.capability"));
 
