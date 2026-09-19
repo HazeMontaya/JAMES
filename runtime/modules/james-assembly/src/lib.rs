@@ -273,7 +273,7 @@ impl CapabilityExecutor for SelfMadeCapabilityExecutor {
             "selfmade.evaluate" => {
                 serde_json::to_value(self.selfmade.evaluate_workspace().await?)
                     .map_err(Into::into)
-            }
+            },
             "selfmade.rollback" => {
                 let result = self.selfmade.rollback_workspace().await?;
                 Ok(result)
