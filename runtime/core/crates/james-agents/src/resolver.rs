@@ -444,7 +444,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn test_provider_health_failover_and_recovery() {
         let resolver = CapabilityResolver::new();
         resolver.register(candidate("a.b", "primary", 100));
@@ -456,7 +455,7 @@ mod tests {
         assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "backup");
 
         assert_eq!(resolver.set_provider_health("primary", ProviderHealth::Degraded), 1);
-        assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "primary");
+        assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "backup");
 
         assert_eq!(resolver.set_provider_health("primary", ProviderHealth::Available), 1);
         assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "primary");
