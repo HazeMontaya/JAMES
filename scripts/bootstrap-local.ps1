@@ -8,6 +8,10 @@ $Model = Join-Path $Models "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 
 New-Item -ItemType Directory -Force -Path $Models | Out-Null
 
+# Install the Python sidecar and its test/runtime dependencies into the active interpreter.
+python -m pip install --upgrade pip
+python -m pip install -e "$Sidecar[test]"
+
 function Require-Command($Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "$Name was not found in PATH."
