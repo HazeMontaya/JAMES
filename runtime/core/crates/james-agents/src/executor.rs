@@ -117,6 +117,7 @@ impl PlanExecutor {
             CapabilityRequestV2 {
                 requested_effect,
                 timeout_ms: step.timeout_ms,
+                reason: Some(if step.description.trim().is_empty() { step.name.clone() } else { step.description.clone() }),
                 ..CapabilityRequestV2::new(caller.to_string(), step.capability_id.clone(), input)
             },
             executor.as_ref(),
