@@ -61,3 +61,33 @@ async def test_nats_capability_bridge_accepts_valid_token(monkeypatch):
     assert result["success"] is True
     assert result["request_id"] == "r3"
     assert result["output"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_nats_capability_bridge_redacts_tool_errors(monkeypatch):
+    from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
+    from james_runtime.tools.base import Tool, ToolResult
+    from james_runtime.tools.registry import ToolRegistry
+
+    class BrokenTool(Tool):
+        name = "broken"
+        description = "broken"
+        parameters = {}
+
+        async def _run(self, **kwargs):
+            return ToolResult(
+                success=False,
+                output="",
+                error="secret payload must not cross the bridge",
+            )
+
+    monkeypatch.setenv("JAMES_BRIDGE_TOKEN", "test-secret")
+    registry = ToolRegistry()
+    registry.register(BrokenTool())
+    bridge = NatsCapabilityBridge(registry)
+
+    result = await bridge._execute_request(
+        b'{"request_id":"r4","capability_id":"broken","caller":"broker","bridge_token":"test-secret","input":{}}'
+    )
+    assert result["success"] is False
+    assert "secret payload" not in str(result)
