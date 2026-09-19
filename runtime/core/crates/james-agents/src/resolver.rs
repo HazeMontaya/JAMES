@@ -133,6 +133,7 @@ impl ProviderHealth {
 pub struct CapabilityResolver {
     candidates: DashMap<String, Vec<ExecutorCandidate>>,
     provider_health: DashMap<String, ProviderHealth>,
+    capability_health: DashMap<(String, String), ProviderHealth>,
 }
 
 impl Default for CapabilityResolver {
@@ -146,6 +147,7 @@ impl CapabilityResolver {
         Self {
             candidates: DashMap::new(),
             provider_health: DashMap::new(),
+            capability_health: DashMap::new(),
         }
     }
 
@@ -184,6 +186,33 @@ impl CapabilityResolver {
             .get(provider)
             .map(|v| *v)
             .unwrap_or(ProviderHealth::Available)
+    }
+
+    /// Set health for one capability/provider route without affecting the
+    /// provider's other capabilities.
+    pub fn set_capability_health(
+        &self,
+        capability_id: &str,
+        provider: &str,
+        health: ProviderHealth,
+    ) {
+        self.capability_health.insert(
+            (capability_id.to_string(), provider.to_string()),
+            health,
+        );
+    }
+
+    /// Read effective health for a concrete capability route. A route-specific
+    /// state overrides provider-wide state.
+    pub fn capability_health(
+        &self,
+        capability_id: &str,
+        provider: &str,
+    ) -> ProviderHealth {
+        self.capability_health
+            .get(&(capability_id.to_string(), provider.to_string()))
+            .map(|v| *v)
+            .unwrap_or_else(|| self.provider_health(provider))
     }
 
     /// Remove runtime health state and return to the default healthy state.
@@ -273,7 +302,7 @@ impl CapabilityResolver {
         let mut filtered: Vec<(String, String)> = Vec::new();
 
         for candidate in &all {
-            let health = self.provider_health(&candidate.provider);
+            let health = self.capability_health(&candidate.capability_id, &candidate.provider);
             if !candidate.available && !context.include_unavailable {
                 filtered.push((candidate.provider.clone(), "unavailable".to_string()));
             }
@@ -306,7 +335,7 @@ impl CapabilityResolver {
             let pa = preference_rank(&context.preferred_providers, &ca.provider);
             let pb = preference_rank(&context.preferred_providers, &cb.provider);
             pa.cmp(&pb)
-                .then_with(|| self.provider_health(&ca.provider).rank().cmp(&self.provider_health(&cb.provider).rank()))
+                .then_with(|| self.capability_health(&ca.capability_id, &ca.provider).rank().cmp(&self.capability_health(&cb.capability_id, &cb.provider).rank()))
                 .then_with(|| cb.available.cmp(&ca.available))
                 .then_with(|| cb.priority.cmp(&ca.priority))
         });
@@ -459,6 +488,26 @@ mod tests {
 
         assert_eq!(resolver.set_provider_health("primary", ProviderHealth::Available), 1);
         assert_eq!(resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider, "primary");
+    }
+
+    #[test]
+    fn test_capability_health_overrides_provider_health() {
+        let resolver = CapabilityResolver::new();
+        resolver.register(candidate("a.b", "python", 100));
+        resolver.register(candidate("x.y", "python", 100));
+        resolver.register(candidate("a.b", "backup", 1));
+
+        resolver.set_provider_health("python", ProviderHealth::Available);
+        resolver.set_capability_health("a.b", "python", ProviderHealth::Unavailable);
+
+        assert_eq!(
+            resolver.resolve("a.b", &ResolutionContext::default()).selected.unwrap().provider,
+            "backup"
+        );
+        assert_eq!(
+            resolver.resolve("x.y", &ResolutionContext::default()).selected.unwrap().provider,
+            "python"
+        );
     }
 
     #[test]
