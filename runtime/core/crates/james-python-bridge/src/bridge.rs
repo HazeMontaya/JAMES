@@ -6,9 +6,9 @@ use james_core::JamesCore;
 use james_events::EventBus;
 use std::sync::Arc;
 use tokio::sync::{RwLock, Mutex};
-use tracing::{info, warn};
+use tracing::info;
 
-use crate::capability_sync::{CapabilitySync, PythonCapabilityExecutor, start_capability_sync_task};
+use crate::capability_sync::{CapabilitySync, start_capability_sync_task};
 use crate::config::BridgeConfig;
 use crate::executor::PythonExecutor;
 use crate::nats_bridge::NatsBridge;
@@ -126,8 +126,26 @@ impl PythonBridge {
         let executor = self.python_executor.as_ref()
             .ok_or_else(|| anyhow::anyhow!("Python executor not initialized"))?;
 
-        // Call the trait method directly - caller is passed to nats_bridge.execute_capability
-        <PythonExecutor as CapabilityExecutor>::execute(executor.as_ref(), capability_id, input).await
+        let nats_bridge = self.nats_bridge.read().await
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("NATS bridge not initialized"))?;
+
+        let response = nats_bridge
+            .execute_capability(capability_id, caller, input)
+            .await?;
+
+        if !response.success {
+            return Err(anyhow::anyhow!(
+                "Python capability '{}' failed: {}",
+                capability_id,
+                response.error.unwrap_or_else(|| "unknown error".to_string())
+            ));
+        }
+
+        response.output.ok_or_else(|| {
+            anyhow::anyhow!("Python capability '{}' returned no output", capability_id)
+        })
     }
 
     /// Execute via broker (full enforcement chain)
