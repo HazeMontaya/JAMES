@@ -1,4 +1,4 @@
-"""Model registry for the JAMES sidecar runtime.
+"""Compatibility model catalog for the Python sidecar.
 
 The registry is intentionally dependency-free.  It describes models; engines remain
 responsible for actually loading them.  This keeps routing usable before any local
@@ -23,10 +23,11 @@ class ModelSpec:
 
 
 class ModelRegistry:
-    """In-memory model catalog with deterministic local-first defaults."""
+    """Sidecar model cache; canonical Rust metadata wins when synchronized."""
 
     def __init__(self):
         self._models: Dict[str, ModelSpec] = {}
+        self._snapshot_source = ""
 
     def initialize(self) -> None:
         if not self._models:
@@ -62,6 +63,32 @@ class ModelRegistry:
         ]
         for model in defaults:
             self.register(model)
+        self._snapshot_source = "fallback"
+
+    def replace_from_canonical(self, models: List[dict]) -> None:
+        """Replace the sidecar cache from a canonical Rust model snapshot."""
+        canonical: Dict[str, ModelSpec] = {}
+        for raw in models:
+            model_id = str(raw.get("id", "")).strip()
+            if not model_id:
+                continue
+            canonical[model_id] = ModelSpec(
+                id=model_id,
+                provider=str(raw.get("provider", "unknown")),
+                parameters_b=float(raw.get("parameters_b", 0) or 0),
+                max_context=int(raw.get("max_context", raw.get("context_length", 0)) or 0),
+                capabilities=list(raw.get("capabilities", [])),
+                quality_tier=str(raw.get("quality_tier", "balanced")),
+                quality_score=float(raw.get("quality_score", 0.5) or 0.5),
+                local_path=raw.get("local_path", raw.get("path")),
+                format=raw.get("format"),
+                enabled=bool(raw.get("enabled", True)),
+            )
+        self._models = canonical
+        self._snapshot_source = "rust"
+
+    def is_canonical_snapshot(self) -> bool:
+        return bool(self._models) and self._snapshot_source == "rust"
 
     def register(self, model: ModelSpec) -> None:
         if not model.id:
