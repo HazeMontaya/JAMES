@@ -2,12 +2,12 @@
 
 use async_nats::jetstream;
 use async_nats::Client;
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use james_events::{Event, EventBus};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 
 use crate::config::BridgeConfig;
