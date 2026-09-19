@@ -172,15 +172,31 @@ impl PlanExecutor {
             "code" | "task" | "process" | "system" => RequestedEffect::Execute,
             _ => RequestedEffect::Transform,
         };
-        let outcome_fut = self.broker.execute_v2(
-            CapabilityRequestV2 {
-                requested_effect,
-                timeout_ms: step.timeout_ms,
-                reason: Some(if step.description.trim().is_empty() { step.name.clone() } else { step.description.clone() }),
-                ..CapabilityRequestV2::new(caller.to_string(), step.capability_id.clone(), input)
-            },
-            executor.as_ref(),
-        );
+        // Keep one correlation trace for the complete plan. The intent is
+        // the root causation; each step also points at its immediate predecessor
+        // when dependencies exist.
+        let causation_id = step
+            .depends_on
+            .first()
+            .cloned()
+            .or_else(|| Some(plan.intent_id.clone()));
+        let request = CapabilityRequestV2::new(
+            caller.to_string(),
+            step.capability_id.clone(),
+            input,
+        )
+        .with_reason(if step.description.trim().is_empty() {
+            step.name.clone()
+        } else {
+            step.description.clone()
+        })
+        .with_correlation(plan.id.clone(), causation_id);
+        let request = CapabilityRequestV2 {
+            requested_effect,
+            timeout_ms: step.timeout_ms,
+            ..request
+        };
+        let outcome_fut = self.broker.execute_v2(request, executor.as_ref());
         let outcome = match step.timeout_ms {
             Some(ms) => {
                 tracing::debug!("PlanExecutor: executing with timeout {}ms", ms);
