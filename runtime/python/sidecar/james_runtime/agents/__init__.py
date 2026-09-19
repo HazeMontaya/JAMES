@@ -11,6 +11,7 @@ from james_runtime.memory.sessions import SessionRecorder
 from james_runtime.memory.skills import SkillStore
 from james_runtime.tools.builtins import default_tools
 from james_runtime.tools.registry import ToolRegistry
+from james_runtime.integration.bootstrap import configure_ecosystems
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,9 @@ class AgentSystem:
         # Register built-in + memory tools
         self.tool_registry.register_many(default_tools())
         MemoryTools(self.memory).register(self.tool_registry)
+        # External ecosystems are opt-in via explicit environment URLs.
+        # The registry is retained for health/routing introspection.
+        self.ecosystems = configure_ecosystems(self.tool_registry)
 
         self._agents: Dict[str, ReActReasoner] = {}
 
@@ -119,5 +123,7 @@ class AgentSystem:
             "agents": list(self._agents.keys()),
             "active_goals": sorted({agent.goal_id for agent in self._agents.values() if agent.goal_id}),
             "tools": [t.name for t in self.tool_registry.list_tools()],
+            "ecosystems": self.ecosystems.enabled(),
+            "ecosystem_capabilities": self.ecosystems.capability_providers(),
             "memories": self.memory.count(),
         }
