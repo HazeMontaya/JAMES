@@ -145,7 +145,8 @@ struct AssemblyDevelopmentAgent {
 }
 
 impl DevelopmentAgent for AssemblyDevelopmentAgent {
-    fn propose<'a>(&'a self, context: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<james_selfmade::EvolutionProposal>> + Send + 'a>> {
+    fn propose(&self, context: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<james_selfmade::EvolutionProposal>> + Send + '_>> {
+        let context = context.to_owned();
         Box::pin(async move {
         let prompt = format!(r#"You are JAMES's bounded software-development agent.
 Return ONLY valid JSON matching this schema:
@@ -190,7 +191,8 @@ Context:
         })
     }
 
-    fn generate_patch<'a>(&'a self, context: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send + 'a>> {
+    fn generate_patch(&self, context: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send + '_>> {
+        let context = context.to_owned();
         Box::pin(async move {
         let root = std::env::var_os("JAMES_ROOT")
             .map(std::path::PathBuf::from)
