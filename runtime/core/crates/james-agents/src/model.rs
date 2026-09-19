@@ -199,7 +199,12 @@ impl Default for RetryPolicy {
             base_delay_ms: 1000,
             max_delay_ms: 30000,
             exponential_base: 2.0,
-            retry_on: vec![RetryCondition::TransientError, RetryCondition::Timeout],
+            retry_on: vec![
+                RetryCondition::TransientError,
+                RetryCondition::Timeout,
+                RetryCondition::Unavailable,
+                RetryCondition::RateLimited,
+            ],
         }
     }
 }
