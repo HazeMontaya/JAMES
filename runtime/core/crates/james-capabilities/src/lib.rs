@@ -60,7 +60,7 @@ pub enum RiskLevel {
     Critical,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub enum ExecutionTarget {
     Local,
     Remote(String),
@@ -69,7 +69,7 @@ pub enum ExecutionTarget {
     Native,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub struct CapabilityDefinition {
     pub id: String,
     pub name: String,
