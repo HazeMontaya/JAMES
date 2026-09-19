@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import asyncio
 import time
+import json
+from pathlib import Path
 from typing import Awaitable, Callable
 
 @dataclass(frozen=True)
@@ -25,13 +27,33 @@ class HeartbeatResult:
     error: str | None = None
 
 class DurableHeartbeat:
-    """Single-process scheduler with overlap protection and timeout."""
-    def __init__(self) -> None:
+    """Persistent scheduler with overlap protection and timeout."""
+    def __init__(self, state_path: str | Path | None = None) -> None:
         self._tasks: dict[str, HeartbeatTask] = {}
+        self._state_path = Path(state_path).expanduser() if state_path else None
         self._last_run: dict[str, float] = {}
         self._failures: dict[str, int] = {}
         self._running = False
         self._tick_lock = asyncio.Lock()
+
+    async def restore(self) -> None:
+        if not self._state_path or not self._state_path.exists():
+            return
+        try:
+            data = json.loads(self._state_path.read_text(encoding="utf-8"))
+            self._last_run = {str(k): float(v) for k, v in data.get("last_run", {}).items()}
+            self._failures = {str(k): int(v) for k, v in data.get("failures", {}).items()}
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            self._last_run = {}
+            self._failures = {}
+
+    def _persist(self) -> None:
+        if not self._state_path:
+            return
+        self._state_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._state_path.with_suffix(self._state_path.suffix + ".tmp")
+        tmp.write_text(json.dumps({"last_run": self._last_run, "failures": self._failures}, sort_keys=True), encoding="utf-8")
+        tmp.replace(self._state_path)
 
     def register(self, task: HeartbeatTask) -> None:
         if task.interval_seconds <= 0:
@@ -58,6 +80,7 @@ class DurableHeartbeat:
                     results.append(HeartbeatResult(task.name, False, int((time.monotonic()-started)*1000), str(exc)))
                 finally:
                     self._last_run[task.name] = time.monotonic()
+            self._persist()
             return results
 
     async def run(self, poll_seconds: float = 1.0) -> None:
