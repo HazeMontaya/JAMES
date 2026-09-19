@@ -17,9 +17,15 @@ impl CapabilitySync {
         Self { registry }
     }
 
-    /// Sync all Python capabilities to Rust registry
+    /// Reconcile the Rust registry with the Python bridge's current tool set.
+    ///
+    /// Python is authoritative only for capabilities it owns (provider == "python").
+    /// Core/module-owned capabilities are never overwritten or removed.
     pub async fn sync_all(&self, python_caps: &[PythonCapabilityInfo]) -> anyhow::Result<()> {
-        info!("Syncing {} Python capabilities to Rust registry", python_caps.len());
+        info!("Reconciling {} Python capabilities with Rust registry", python_caps.len());
+
+        let incoming: std::collections::HashSet<String> =
+            python_caps.iter().map(|cap| cap.id.clone()).collect();
 
         for cap_info in python_caps {
             if let Err(e) = self.sync_one(cap_info).await {
@@ -27,21 +33,51 @@ impl CapabilitySync {
             }
         }
 
+        let stale: Vec<String> = self
+            .registry
+            .list_by_provider("python")
+            .into_iter()
+            .filter(|registered| !incoming.contains(&registered.definition.id))
+            .map(|registered| registered.definition.id)
+            .collect();
+
+        for capability_id in stale {
+            match self.registry.unregister(&capability_id).await {
+                Ok(true) => info!("Removed stale Python capability: {}", capability_id),
+                Ok(false) => debug!("Python capability already absent: {}", capability_id),
+                Err(e) => warn!("Failed to remove stale Python capability {}: {}", capability_id, e),
+            }
+        }
+
         Ok(())
     }
 
-    /// Sync a single Python capability
+    /// Sync one capability without allowing Python to overwrite another owner.
     pub async fn sync_one(&self, cap_info: &PythonCapabilityInfo) -> anyhow::Result<()> {
-        // Check if already registered
-        if self.registry.get(&cap_info.id).is_some() {
-            debug!("Capability {} already registered, skipping", cap_info.id);
-            return Ok(());
+        let definition = self.python_to_rust_definition(cap_info);
+
+        match self.registry.get(&cap_info.id) {
+            None => {
+                self.registry.register(definition, "python-bridge").await?;
+                info!("Registered Python capability: {}", cap_info.id);
+            }
+            Some(existing) if existing.definition.provider == "python" => {
+                if existing.definition != definition {
+                    self.registry.unregister(&cap_info.id).await?;
+                    self.registry.register(definition, "python-bridge").await?;
+                    info!("Updated Python capability contract: {}", cap_info.id);
+                } else {
+                    debug!("Python capability {} unchanged", cap_info.id);
+                }
+            }
+            Some(existing) => {
+                warn!(
+                    "Python capability {} conflicts with owner {}; keeping existing definition",
+                    cap_info.id, existing.definition.provider
+                );
+            }
         }
 
-        let definition = self.python_to_rust_definition(cap_info);
-        self.registry.register(definition, "python-bridge").await?;
-
-        info!("Registered Python capability in Rust: {}", cap_info.id);
         Ok(())
     }
 
@@ -89,42 +125,6 @@ impl CapabilitySync {
             deprecated: false,
             experimental: true, // Python bridge is experimental
         }
-    }
-}
-
-/// Python capability executor that forwards to Python via NATS
-pub struct PythonCapabilityExecutor {
-    nats_bridge: crate::nats_bridge::NatsBridge,
-}
-
-impl PythonCapabilityExecutor {
-    pub fn new(nats_bridge: crate::nats_bridge::NatsBridge) -> Self {
-        Self { nats_bridge }
-    }
-}
-
-#[async_trait::async_trait]
-impl james_capability_broker::CapabilityExecutor for PythonCapabilityExecutor {
-    async fn execute(
-        &self,
-        capability_id: &str,
-        input: serde_json::Value,
-    ) -> anyhow::Result<serde_json::Value> {
-        debug!("Executing Python capability via bridge: {}", capability_id);
-
-        // Use a default caller for bridge executions
-        let response = self.nats_bridge
-            .execute_capability(capability_id, "python-bridge", input)
-            .await?;
-
-        if !response.success {
-            return Err(anyhow::anyhow!(
-                "Python capability execution failed: {}",
-                response.error.unwrap_or_else(|| "unknown error".to_string())
-            ));
-        }
-
-        response.output.ok_or_else(|| anyhow::anyhow!("No output from Python capability"))
     }
 }
 
