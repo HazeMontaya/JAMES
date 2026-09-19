@@ -143,6 +143,7 @@ class JamesRuntime:
         """Register read-only mission handlers; registration is the policy boundary."""
         self.missions.register("run_health_sweep", self._mission_health_sweep)
         self.missions.register("inspect_failure", self._mission_inspect_failure)
+        self.missions.register("inspect_mission_failure", self._mission_inspect_mission_failure)
         self.missions.register("inspect_inference_reliability", self._mission_inspect_inference)
         self.missions.register("inspect_repository", self._mission_inspect_repository)
         self.missions.register("inspect_selfmade_regression", self._mission_inspect_selfmade_regression)
@@ -168,6 +169,22 @@ class JamesRuntime:
         failures = {name: self.heartbeat.failures(name) for name in ("runtime.engine_health", "autonomy.decision")}
         self._emit_event("AUTONOMY_FAILURE_INSPECTION", {"mission_id": mission.mission_id, "failures": failures})
         return {"failures": failures}
+
+    async def _mission_inspect_mission_failure(self, mission: AutonomousMission) -> dict[str, Any]:
+        failures = [
+            e for e in self.event_log.tail(250)
+            if e.event_type == "MISSION_FAILED"
+        ]
+        latest = failures[-1] if failures else None
+        self._emit_event("AUTONOMY_MISSION_FAILURE_INSPECTION", {
+            "mission_id": mission.mission_id,
+            "failed_missions": len(failures),
+            "latest_event_id": latest.event_id if latest else None,
+        })
+        return {
+            "failed_missions": len(failures),
+            "latest_event_id": latest.event_id if latest else None,
+        }
 
     async def _mission_inspect_inference(self, mission: AutonomousMission) -> dict[str, Any]:
         events = self.event_log.tail(250)
