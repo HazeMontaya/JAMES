@@ -154,6 +154,26 @@ pub struct CapabilityRequestV2 {
 }
 
 impl CapabilityRequestV2 {
+    pub fn with_target(mut self, target: impl Into<String>) -> Self {
+        self.target = Some(target.into());
+        self
+    }
+
+    pub fn with_scope(mut self, scope: impl Into<String>) -> Self {
+        self.scope = Some(scope.into());
+        self
+    }
+
+    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
+        self.reason = Some(reason.into());
+        self
+    }
+
+    pub fn with_confirmation_context(mut self, context: ConfirmationContext) -> Self {
+        self.confirmation_context = context;
+        self
+    }
+
     pub fn new(caller_identity: impl Into<String>, capability_id: impl Into<String>, input: serde_json::Value) -> Self {
         let request_id = uuid::Uuid::new_v4().to_string();
         Self {
