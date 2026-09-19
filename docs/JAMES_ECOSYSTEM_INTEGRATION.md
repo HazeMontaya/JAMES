@@ -74,3 +74,7 @@ event -> decision -> mission -> plan -> capability resolution
 - Firecrawl: https://github.com/firecrawl/firecrawl
 - n8n: https://github.com/n8n-io/n8n
 - CrewAI: https://github.com/crewAIInc/crewAI
+
+## Operator capability allowlist
+
+Discovery does not grant execution rights. The Rust capability broker remains the authorization boundary. To grant capabilities to the application user explicitly, set `JAMES_USER_CAPABILITIES` to a comma-separated allowlist of capability IDs, for example `web_search,web_scrape`. Capabilities that are not listed remain denied even when their Python provider is connected. High-risk integrations such as `dify_agent` and `n8n_webhook` therefore require deliberate operator configuration.
