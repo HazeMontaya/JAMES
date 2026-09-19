@@ -18,13 +18,17 @@ class EcosystemTool(Tool):
         self.name, self.description, self.parameters = name, description, parameters
         self.registry, self.provider, self.event_sink = registry, provider, event_sink
 
-    async def _execute(self, operation: str, awaitable: Any) -> ToolResult:
+    async def _execute(self, operation: str, awaitable: Any, *, correlation_id: str | None = None, causation_id: str | None = None) -> ToolResult:
         started = time.perf_counter()
         try:
             value = await awaitable
             duration_ms = int((time.perf_counter() - started) * 1000)
             self.registry.mark_health(self.provider, True)
             metadata = {"provider": self.provider, "operation": operation, "duration_ms": duration_ms}
+            if correlation_id:
+                metadata["correlation_id"] = correlation_id
+            if causation_id:
+                metadata["causation_id"] = causation_id
             if self.event_sink:
                 self.event_sink("ECOSYSTEM_TOOL_COMPLETED", metadata)
             return ToolResult(success=True, output=json.dumps(value, ensure_ascii=False, default=str), metadata=metadata)
@@ -33,6 +37,10 @@ class EcosystemTool(Tool):
             error = f"{type(exc).__name__}: {exc}"
             self.registry.mark_health(self.provider, False, error=error)
             metadata = {"provider": self.provider, "operation": operation, "duration_ms": duration_ms}
+            if correlation_id:
+                metadata["correlation_id"] = correlation_id
+            if causation_id:
+                metadata["causation_id"] = causation_id
             if self.event_sink:
                 self.event_sink("ECOSYSTEM_TOOL_FAILED", {**metadata, "error_type": type(exc).__name__})
             return ToolResult(success=False, output="", error=error, metadata=metadata)
@@ -51,7 +59,12 @@ class FirecrawlSearchTool(EcosystemTool):
     async def _run(self, query: str = "", limit: int = 10, **kwargs: Any) -> ToolResult:
         if not query.strip():
             return ToolResult(False, "", "query is required")
-        return await self._execute("search", self.adapter().search(query, limit=max(1, min(limit, 50))))
+        return await self._execute(
+            "search",
+            self.adapter().search(query, limit=max(1, min(limit, 50))),
+            correlation_id=kwargs.get("correlation_id"),
+            causation_id=kwargs.get("causation_id"),
+        )
 
 
 class FirecrawlScrapeTool(EcosystemTool):
@@ -61,7 +74,12 @@ class FirecrawlScrapeTool(EcosystemTool):
     async def _run(self, url: str = "", **kwargs: Any) -> ToolResult:
         if not url.strip():
             return ToolResult(False, "", "url is required")
-        return await self._execute("scrape", self.adapter().scrape(url))
+        return await self._execute(
+            "scrape",
+            self.adapter().scrape(url),
+            correlation_id=kwargs.get("correlation_id"),
+            causation_id=kwargs.get("causation_id"),
+        )
 
 
 class DifyAgentTool(EcosystemTool):
@@ -71,7 +89,12 @@ class DifyAgentTool(EcosystemTool):
     async def _run(self, query: str = "", **kwargs: Any) -> ToolResult:
         if not query.strip():
             return ToolResult(False, "", "query is required")
-        return await self._execute("run_agent", self.adapter().run_agent(query))
+        return await self._execute(
+            "run_agent",
+            self.adapter().run_agent(query),
+            correlation_id=kwargs.get("correlation_id"),
+            causation_id=kwargs.get("causation_id"),
+        )
 
 
 class N8nWebhookTool(EcosystemTool):
@@ -81,7 +104,12 @@ class N8nWebhookTool(EcosystemTool):
     async def _run(self, webhook_path: str = "", payload: Mapping[str, Any] | None = None, **kwargs: Any) -> ToolResult:
         if not webhook_path.strip():
             return ToolResult(False, "", "webhook_path is required")
-        return await self._execute("trigger_webhook", self.adapter().trigger_webhook(webhook_path, payload or {}))
+        return await self._execute(
+            "trigger_webhook",
+            self.adapter().trigger_webhook(webhook_path, payload or {}),
+            correlation_id=kwargs.get("correlation_id"),
+            causation_id=kwargs.get("causation_id"),
+        )
 
 
 def ecosystem_tools(registry: EcosystemRegistry, event_sink: Callable[..., Any] | None = None) -> list[Tool]:
