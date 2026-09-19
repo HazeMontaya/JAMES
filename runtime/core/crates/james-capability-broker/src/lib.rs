@@ -1224,6 +1224,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_capability_permission_revocation() {
+        let reg = registry_with(&[("integration.n8n.execute", vec!["integration.n8n.execute"]) ]).await;
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("module:n8n", "integration.n8n.execute");
+        assert_eq!(broker.caller_permissions("module:n8n"), vec!["integration.n8n.execute".to_string()]);
+
+        broker.revoke_capability_permissions("module:n8n", "integration.n8n.execute");
+        assert!(broker.caller_permissions("module:n8n").is_empty());
+    }
+
+    #[tokio::test]
     async fn test_policy_deny_blocks_execution() {
         let reg = registry_with(&[("ai.inference", vec!["ai.inference"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
