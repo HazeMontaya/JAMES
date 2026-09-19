@@ -68,6 +68,8 @@ async def test_execute_request_rejects_unknown_capability():
     registry.register(Calculator())
     bridge = NatsCapabilityBridge.__new__(NatsCapabilityBridge)
     bridge.registry = registry
+    bridge.bridge_token = "test-secret"
+    bridge._capability_health = {}
 
     response = await bridge._execute_request(json.dumps({
         "request_id": "test-2",
