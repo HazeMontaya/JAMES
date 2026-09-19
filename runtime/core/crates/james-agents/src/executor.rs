@@ -37,9 +37,21 @@ impl PlanExecutor {
 
     /// Register an executor for a capability id.
     pub fn register_executor(&self, capability_id: impl Into<String>, executor: Arc<dyn CapabilityExecutor>) {
+        self.register_executor_with_provider(capability_id, "direct", executor);
+    }
+
+    /// Register an executor while preserving its real provider identity.
+    /// Provider identity is used by health-aware resolution and failover.
+    pub fn register_executor_with_provider(
+        &self,
+        capability_id: impl Into<String>,
+        provider: impl Into<String>,
+        executor: Arc<dyn CapabilityExecutor>,
+    ) {
         let id = capability_id.into();
+        let provider = provider.into();
         self.executors.insert(id.clone(), executor.clone());
-        self.resolver.register_or_replace(ExecutorCandidate::new(id, "direct", executor));
+        self.resolver.register_or_replace(ExecutorCandidate::new(id, provider, executor));
     }
 
     /// Merge a shared capability resolver's candidates into this executor.
