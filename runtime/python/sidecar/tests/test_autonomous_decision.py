@@ -33,3 +33,41 @@ def test_decision_loop_detects_sustained_selfmade_success(tmp_path):
     decision = AutonomousDecisionLoop(log, heartbeat).tick()
     assert decision.action == "inspect_selfmade_opportunity"
     assert decision.priority == 60
+
+
+def test_mission_layer_creates_and_deduplicates(tmp_path):
+    import asyncio
+    from james_runtime.autonomy.mission import AutonomousMissionManager
+    from james_runtime.autonomy.decision import AutonomousDecision
+    log = EventLog(tmp_path / "events.jsonl")
+    manager = AutonomousMissionManager(log, tmp_path / "missions.json", cooldown_seconds=300)
+    async def handler(mission):
+        return {"ok": True}
+    manager.register("run_health_sweep", handler)
+    decision = AutonomousDecision("run_health_sweep", 90, "test", {})
+    async def run():
+        first = await manager.dispatch(decision)
+        second = await manager.dispatch(decision)
+        return first, second
+    first, second = asyncio.run(run())
+    assert first is not None and second is not None
+    assert first.mission_id == second.mission_id
+    assert first.status == "completed"
+    assert [e.event_type for e in log.tail(10)].count("MISSION_DEDUPLICATED") == 1
+
+
+def test_mission_layer_persists_and_restores(tmp_path):
+    import asyncio
+    from james_runtime.autonomy.mission import AutonomousMissionManager
+    from james_runtime.autonomy.decision import AutonomousDecision
+    log = EventLog(tmp_path / "events.jsonl")
+    state = tmp_path / "missions.json"
+    manager = AutonomousMissionManager(log, state)
+    async def handler(mission):
+        return {"value": 42}
+    manager.register("inspect_repository", handler)
+    mission = asyncio.run(manager.dispatch(AutonomousDecision("inspect_repository", 20, "test", {})))
+    restored = AutonomousMissionManager(log, state)
+    asyncio.run(restored.restore())
+    assert mission is not None
+    assert restored.missions[mission.mission_id].result["value"] == 42
