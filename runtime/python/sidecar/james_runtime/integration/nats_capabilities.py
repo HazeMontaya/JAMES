@@ -211,8 +211,7 @@ class NatsCapabilityBridge:
         except Exception as exc:
             # Never return exception text to the caller: tool errors can contain
             # user input, provider payloads, credentials or filesystem details.
-            if capability_id:
-                if hasattr(self, "_capability_health"):
+            if capability_id and hasattr(self, "_capability_health"):
                 self._capability_health[capability_id] = False
             logger.exception("Python capability execution failed")
             return {
