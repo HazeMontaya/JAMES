@@ -9,4 +9,7 @@ from .consortium import ConsortiumResult, run_consortium
 __all__ = [
     "AutoTuneProfile", "AutoTuneResult", "compute_autotune",
     "FeedbackStore", "FeedbackSample", "transform_text",
+    "RaceResult", "race_models", "best_result",
+    "LiquidUpdate", "LiquidRaceResult", "liquid_race",
+    "ConsortiumResult", "run_consortium",
 ]
