@@ -422,6 +422,11 @@ if modules.contains_key(&manifest.id) {
         };
         
         if let Some(meta) = meta {
+            if let Some(broker) = self.broker().await {
+                for cap_id in &meta.manifest.capabilities {
+                    broker.revoke_capability_permissions(id, cap_id);
+                }
+            }
             for cap_id in &meta.manifest.capabilities {
                 let _ = self.capability_registry.unregister(cap_id).await;
             }
