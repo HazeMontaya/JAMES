@@ -61,6 +61,8 @@ pub struct JamesAssembly {
     ai: Arc<AiModule>,
     memory: Arc<MemoryModule>,
     tasks: Arc<TasksModule>,
+    /// Canonical task authority; UI/module facades are adapters over this manager.
+    task_manager: Arc<james_tasks_core::TaskManager>,
     scheduler: Arc<SchedulerModule>,
     stt: Arc<SttModule>,
     tts: Arc<TtsModule>,
@@ -536,7 +538,7 @@ impl JamesAssembly {
             broker.clone(),
             identity_registry,
             memory.clone(),
-            core_tasks,
+            core_tasks.clone(),
             executor_registry,
         );
         // Built-in typed agents (researcher/coder/browser) must use the same
@@ -561,6 +563,7 @@ impl JamesAssembly {
             ai,
             memory,
             tasks,
+            task_manager: core_tasks,
             scheduler,
             stt,
             tts,
@@ -1002,20 +1005,23 @@ impl JamesAssembly {
     }
 
     async fn tasks_summary(&self) -> (usize, usize, usize) {
-        let tasks = self.tasks.list_tasks(None, 1000).await.unwrap_or_default();
+        let tasks = self.task_manager.list_tasks();
         let pending = tasks
             .iter()
             .filter(|t| {
                 matches!(
                     t.status,
-                    james_tasks::TaskStatus::Created | james_tasks::TaskStatus::Queued
+                    james_tasks_core::TaskStatus::Created | james_tasks_core::TaskStatus::Queued
                 )
             })
             .count();
-        let running = tasks.iter().filter(|t| t.status == james_tasks::TaskStatus::Running).count();
+        let running = tasks
+            .iter()
+            .filter(|t| t.status == james_tasks_core::TaskStatus::Running)
+            .count();
         let completed = tasks
             .iter()
-            .filter(|t| t.status == james_tasks::TaskStatus::Completed)
+            .filter(|t| t.status == james_tasks_core::TaskStatus::Completed)
             .count();
         (pending, running, completed)
     }
