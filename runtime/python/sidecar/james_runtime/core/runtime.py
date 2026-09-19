@@ -422,6 +422,18 @@ class JamesRuntime:
         })
         return result
 
+    async def heartbeat_tick(self):
+        """Run registered background health/maintenance tasks once."""
+        results = await self.heartbeat.tick()
+        for result in results:
+            self._emit_event("HEARTBEAT_TASK", {
+                "task": result.name,
+                "success": result.success,
+                "duration_ms": result.duration_ms,
+                "error": result.error,
+            })
+        return results
+
     # ============ Model Management ============
     
     async def load_model(self, model_id: str) -> Dict[str, Any]:
