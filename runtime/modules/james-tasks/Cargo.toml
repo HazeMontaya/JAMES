@@ -12,6 +12,7 @@ james-registry = { path = "../../core/crates/james-registry" }
 james-capabilities = { path = "../../core/crates/james-capabilities" }
 james-module-host = { path = "../../core/crates/james-module-host" }
 james-memory = { path = "../james-memory" }
+james-tasks-core = { path = "../../core/crates/james-tasks", package = "james-tasks" }
 tokio = { version = "1.38", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
