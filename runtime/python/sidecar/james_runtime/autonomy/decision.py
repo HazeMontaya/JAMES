@@ -46,11 +46,6 @@ class AutonomousDecisionLoop:
                 "recent SelfMade evaluations are consistently passing; inspect for the next bounded improvement",
                 {"successful_evaluations": len(completed), "window": 3},
             )
-        if not any(e.event_type == "AUTONOMY_HEALTH_SWEEP" for e in events):
-            return AutonomousDecision("run_health_sweep", 90,
-                "no autonomous health sweep has been recorded yet",
-                {"recent_events": len(events)})
-
         failed_selfmade = [
             e for e in selfmade
             if e.event_type in {"selfmade.evaluation.completed", "selfmade.change.failed"}
@@ -63,6 +58,11 @@ class AutonomousDecisionLoop:
                 "latest SelfMade candidate did not pass evaluation",
                 {"event_id": latest.event_id, "event_type": latest.event_type},
             )
+
+        if not any(e.event_type == "AUTONOMY_HEALTH_SWEEP" for e in events):
+            return AutonomousDecision("run_health_sweep", 90,
+                "no autonomous health sweep has been recorded yet",
+                {"recent_events": len(events)})
 
         errors = [e for e in events if e.event_type in {
             "INFERENCE_ERROR", "MODEL_FALLBACK", "ENGINE_ERROR"
