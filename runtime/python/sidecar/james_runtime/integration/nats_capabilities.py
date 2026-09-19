@@ -129,6 +129,27 @@ class NatsCapabilityBridge:
             self.execute_subject,
         )
 
+    async def execute_capability(self, capability_id: str, input_data: dict[str, Any], *, caller: str = "agent") -> dict[str, Any]:
+        """Execute a capability through the NATS bridge request/reply boundary."""
+        if not self.client.is_connected:
+            raise RuntimeError("NATS capability bridge is not connected")
+        request_id = __import__("uuid").uuid4().hex
+        payload = {
+            "request_id": request_id,
+            "capability_id": capability_id,
+            "caller": caller,
+            "input": input_data,
+        }
+        response = await self.client.request(
+            f"{self.subject_prefix}.capability.execute.{capability_id}",
+            json.dumps(payload).encode("utf-8"),
+            timeout=30,
+        )
+        result = json.loads(response.data.decode("utf-8"))
+        if result.get("request_id") != request_id:
+            raise RuntimeError("capability response request_id mismatch")
+        return result
+
     async def _register(self, tool: Any) -> None:
         payload = self._capability_info(tool)
         await self.client.publish(
