@@ -1,6 +1,6 @@
 use james_app_api::{preview_bind_allowed, serve, AppState, DashboardSnapshot, IntentProvider, AuthConfig, EnvTokenStore, TokenStore};
 use james_core::{init_tracing, CoreConfig, JamesCore, LogFields};
-use james_agents::{model::*, planner::*, executor::*, Planner, PlanExecutor, UserIntent, PlanStep, Plan, RetryPolicy, StepMetadata, PlanExecutionResult};
+use james_agents::{model::*, planner::*, executor::*, Planner, PlanExecutor, UserIntent, PlanStep, Plan, RetryPolicy, StepMetadata, PlanExecutionResult, ProviderHealth};
 use james_python_bridge::{BridgeConfig as PythonBridgeConfig, CapabilitySync, NatsBridge, PythonExecutor};
 use anyhow::Result;
 use std::sync::Arc;
@@ -442,6 +442,20 @@ async fn main() -> Result<()> {
             for cap in &caps {
                 sync_service.register_python_executor(cap.id.clone(), sync_executor.clone());
             }
+            match sync_nats.health_check().await {
+                Ok(health) if health.status == "healthy" => {
+                    sync_service.executor.resolver().set_provider_health("python", ProviderHealth::Available);
+                }
+                Ok(health) => {
+                    tracing::warn!("Python bridge health is {}", health.status);
+                    sync_service.executor.resolver().set_provider_health("python", ProviderHealth::Unavailable);
+                }
+                Err(error) => {
+                    tracing::warn!("Python bridge health check failed: {}", error);
+                    sync_service.executor.resolver().set_provider_health("python", ProviderHealth::Degraded);
+                }
+            }
+
             // Capability removal must also remove the transport executor candidate;
             // otherwise the resolver can select a stale Python route after the
             // registry has already converged.
