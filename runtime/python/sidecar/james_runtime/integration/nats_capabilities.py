@@ -166,9 +166,9 @@ class NatsCapabilityBridge:
             supplied_token = str(request.get("bridge_token", ""))
 
             if not getattr(self, "bridge_token", ""):
-                raise PermissionError("Python capability execution is disabled: JAMES_BRIDGE_TOKEN is not configured")
+                raise PermissionError("PermissionError: Python capability execution is disabled: JAMES_BRIDGE_TOKEN is not configured")
             if not secrets.compare_digest(supplied_token, self.bridge_token):
-                raise PermissionError("invalid Python bridge authentication token")
+                raise PermissionError("PermissionError: invalid Python bridge authentication token")
             caller = str(request.get("caller", "unknown"))
             args = request.get("input", {})
             correlation_id = str(request.get("correlation_id", ""))
