@@ -116,32 +116,26 @@ impl PythonBridge {
         Ok(())
     }
 
-    /// Execute a capability through the bridge (uses Python executor)
+    /// Execute a capability through the broker-enforced bridge.
+    ///
+    /// This is intentionally the only public execution entry point on the
+    /// bridge. Direct NATS execution is kept inside the broker executor so
+    /// callers cannot accidentally bypass policy, permissions or audit.
     pub async fn execute_capability(
         &self,
         capability_id: &str,
         caller: &str,
         input: serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
-        let nats_bridge = self.nats_bridge.read().await
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("NATS bridge not initialized"))?;
-
-        let response = nats_bridge
-            .execute_capability(capability_id, caller, input)
-            .await?;
-
-        if !response.success {
+        let outcome = self.execute_via_broker(capability_id, caller, input).await?;
+        if !outcome.executed {
             return Err(anyhow::anyhow!(
-                "Python capability '{}' failed: {}",
-                capability_id,
-                response.error.unwrap_or_else(|| "unknown error".to_string())
+                "Capability '{}' was not executed by policy",
+                capability_id
             ));
         }
-
-        response.output.ok_or_else(|| {
-            anyhow::anyhow!("Python capability '{}' returned no output", capability_id)
+        outcome.output.ok_or_else(|| {
+            anyhow::anyhow!("Capability '{}' returned no output", capability_id)
         })
     }
 
