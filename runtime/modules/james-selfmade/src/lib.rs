@@ -856,7 +856,7 @@ mod tests {
         let module = SelfMadeModule::new(root.clone(), bus, registry);
         module.start().await.unwrap();
 
-        for path in ["../outside.txt", "/absolute.txt", "runtime/core/crates/james-core/src/lib.rs"] {
+        for path in ["../outside.txt", "/absolute.txt", "runtime/core/crates/james-core/src/lib.rs", "safe.txt"] {
             let proposal = ChangeProposal {
                 id: Uuid::now_v7().to_string(),
                 mission_id: Uuid::now_v7().to_string(),
@@ -866,6 +866,17 @@ mod tests {
                 created_at: Utc::now(),
             };
             assert!(module.apply_proposal(&proposal).await.is_err(), "path should be rejected: {path}");
+        }
+
+        let hidden_traversal = ChangeProposal {
+            id: Uuid::now_v7().to_string(),
+            mission_id: Uuid::now_v7().to_string(),
+            cycle_id: None,
+            objective: "header path safety".into(),
+            patch: "diff --git a/safe.txt b/safe.txt\n--- a/safe.txt\n+++ b/../outside.txt\n".into(),
+            created_at: Utc::now(),
+        };
+        assert!(module.apply_proposal(&hidden_traversal).await.is_err());
         }
 
         let _ = tokio::fs::remove_dir_all(root).await;
