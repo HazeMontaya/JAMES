@@ -145,7 +145,7 @@ struct AssemblyDevelopmentAgent {
 }
 
 impl DevelopmentAgent for AssemblyDevelopmentAgent {
-    fn propose(&self, context: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<james_selfmade::EvolutionProposal>> + Send + '_>> {
+    fn propose<'a>(&'a self, context: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<james_selfmade::EvolutionProposal>> + Send + 'a>> {
         Box::pin(async move {
         let prompt = format!(r#"You are JAMES's bounded software-development agent.
 Return ONLY valid JSON matching this schema:
@@ -190,7 +190,7 @@ Context:
         })
     }
 
-    fn generate_patch(&self, context: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send + '_>> {
+    fn generate_patch<'a>(&'a self, context: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send + 'a>> {
         Box::pin(async move {
         let root = std::env::var_os("JAMES_ROOT")
             .map(std::path::PathBuf::from)
@@ -600,7 +600,7 @@ impl JamesAssembly {
             available: true,
             capabilities: vec!["selfmade.assess".to_string()],
             health: None,
-            executor: selfmade_executor,
+            executor: selfmade_executor.clone(),
         });
         self.resolver.register(ExecutorCandidate {
             capability_id: "selfmade.verify".to_string(),
