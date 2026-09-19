@@ -12,7 +12,8 @@ use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarg
 use james_events::{Event, EventBus};
 use james_module_host::{ModuleManifest, ModuleType};
 use james_tasks::{Task, TaskPriority, RetryPolicy, TaskStatus};
-use james_tasks_core::{TaskManager, Scheduler as CoreScheduler, ScheduledTask as CoreScheduledTask, ScheduleType, TaskTemplate};
+use james_tasks_core::TaskManager;
+use james_scheduler_core::{Scheduler as CoreScheduler, ScheduledTask as CoreScheduledTask, ScheduleType, TaskTemplate};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tokio::time::interval;
