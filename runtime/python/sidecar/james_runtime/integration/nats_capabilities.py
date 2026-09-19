@@ -185,12 +185,14 @@ class NatsCapabilityBridge:
                 "duration_ms": int((time.perf_counter() - started) * 1000),
             }
         except Exception as exc:
+            # Never return exception text to the caller: tool errors can contain
+            # user input, provider payloads, credentials or filesystem details.
             logger.exception("Python capability execution failed")
             return {
                 "request_id": request_id,
                 "success": False,
                 "output": None,
-                "error": str(exc),
+                "error": f"{type(exc).__name__}: capability execution failed",
                 "duration_ms": int((time.perf_counter() - started) * 1000),
             }
 
