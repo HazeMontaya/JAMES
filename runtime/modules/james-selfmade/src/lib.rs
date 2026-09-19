@@ -506,7 +506,8 @@ impl SelfMadeModule {
 
         // Defense in depth: the model is never allowed to modify the authority
         // layer even though it is instructed not to. Parse every file header
-        // before git sees the patch.
+        // before git sees the patch. Reject traversal/absolute paths as well as
+        // protected prefixes so a crafted diff cannot escape the repository.
         const PROTECTED: &[&str] = &[
             "runtime/core/crates/james-capability-broker/",
             "runtime/core/crates/james-core/",
@@ -520,13 +521,17 @@ impl SelfMadeModule {
             }
             for raw in &parts[2..4] {
                 let path = raw.trim_start_matches("a/").trim_start_matches("b/");
-                if PROTECTED.iter().any(|prefix| path == *prefix || path.starts_with(prefix)) {
+                let normalized = path.replace('\\', "/");
+                if normalized.starts_with('/')
+                    || normalized.split('/').any(|component| component == "..")
+                    || PROTECTED.iter().any(|prefix| normalized == *prefix || normalized.starts_with(prefix))
+                {
                     self.emit("selfmade.change.rejected", serde_json::json!({
                         "mission_id": proposal.mission_id,
                         "proposal_id": proposal.id,
-                        "reason": "protected authority path"
+                        "reason": "unsafe or protected authority path"
                     })).await;
-                    bail!("selfmade patch targets protected authority path: {path}");
+                    bail!("selfmade patch targets unsafe or protected path: {path}");
                 }
             }
         }
@@ -562,7 +567,7 @@ impl SelfMadeModule {
 
         let report = self.verify_workspace(&workspace).await?;
         let outcome = EvolutionOutcome {
-            cycle_id: proposal.mission_id.clone(),
+            cycle_id: proposal.id.clone(),
             proposal_id: proposal.id.clone(),
             objective: proposal.objective.clone(),
             passed: report.passed,
@@ -832,6 +837,28 @@ mod tests {
         };
         let result = module.apply_proposal(&proposal).await;
         assert!(result.is_err());
+        let _ = tokio::fs::remove_dir_all(root).await;
+    }
+
+    #[tokio::test]
+    async fn protected_patch_paths_reject_traversal_and_absolute_paths() {
+        let bus = Arc::new(EventBus::new(32));
+        let registry = Arc::new(CapabilityRegistry::new());
+        let root = std::env::temp_dir().join(format!("james-self-paths-{}", Uuid::now_v7()));
+        let module = SelfMadeModule::new(root.clone(), bus, registry);
+        module.start().await.unwrap();
+
+        for path in ["../outside.txt", "/absolute.txt", "runtime/core/crates/james-core/src/lib.rs"] {
+            let proposal = ChangeProposal {
+                id: Uuid::now_v7().to_string(),
+                mission_id: Uuid::now_v7().to_string(),
+                objective: "path safety".into(),
+                patch: format!("diff --git a/{path} b/{path}\n"),
+                created_at: Utc::now(),
+            };
+            assert!(module.apply_proposal(&proposal).await.is_err(), "path should be rejected: {path}");
+        }
+
         let _ = tokio::fs::remove_dir_all(root).await;
     }
 
