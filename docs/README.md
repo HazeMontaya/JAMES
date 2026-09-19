@@ -1,51 +1,36 @@
-# JAMES
+# JAMES Documentation
 
-Universelle, modulare, lokale und erweiterbare KI-Plattform.
+## Source of truth
 
-> **JAMES selbst ist nur das Herz. Alles, was JAMES kann, ist ein Modul.**
+1. `JAMES-MASTER-CONCEPT.md` — identity and non-negotiable architecture/security rules.
+2. `JAMES_MASTER_ARCHITECTURE.md` — canonical runtime lifecycle and subsystem boundaries.
+3. `PROJECT-CONTINUATION.md` — current implementation state and next gates.
+4. `CURRENT-STATE.md` — verification snapshot.
+5. `STRUCTURE.md` — canonical repository layout and anti-duplication invariants.
+6. `DEPENDENCY-MAP.md` — workspace dependencies and boundaries.
+7. `FUNCTIONAL-GAP-ANALYSIS.md` — capability gaps and acceptance gates.
+8. `JAMES_ECOSYSTEM_INTEGRATION.md` — external ecosystem integration boundaries.
+9. `AUDIT.md` — reproducible audit information.
+10. `architecture/` — focused subsystem architecture notes.
 
-## Dokumentation
+## Canonical workspaces
 
-| Dokument | Inhalt |
-|----------|--------|
-| [JAMES-MASTER-CONCEPT.md](JAMES-MASTER-CONCEPT.md) | Verbindliche Identitaet, Architektur, Sicherheits- und Entwicklungsregeln |
-| [PROJECT-CONTINUATION.md](PROJECT-CONTINUATION.md) | Aktueller Projektstand, Entscheidungen, naechste Bloecke und Verifikation |
-| [AUDIT.md](AUDIT.md) | Reproduzierbarer Audit des erreichbaren JAMES-Workspaces |
-| [CURRENT-STATE.md](CURRENT-STATE.md) | Verifizierte Gates und offene Implementierungsgrenzen |
-| [MIGRATION-MATRIX.md](MIGRATION-MATRIX.md) | JARVIS/AUTOMATON-Migrationsstand und Blockaden |
-| [DEPENDENCY-MAP.md](DEPENDENCY-MAP.md) | Workspace-Abhaengigkeiten und Architekturgrenzen |
-| [FUNCTIONAL-GAP-ANALYSIS.md](FUNCTIONAL-GAP-ANALYSIS.md) | Verifizierter Nutzbarkeitsstand, fehlende Funktionen und Abnahmegates |
-| [STRUCTURE.md](STRUCTURE.md) | Ordnungsschema des Repositories |
-| [discovery.md](discovery.md) | Environment-Discovery-Tool (TS) |
-| [architecture/*.md](architecture/) | Kern-Architektur (Core, Capabilities, Security) |
-| [architecture/ui-orchestration.md](architecture/ui-orchestration.md) | Void, Live Brain, UI-Orchestrator und Dashboard-Vertrag |
-| [architecture/void-visual-system.md](architecture/void-visual-system.md) | Visuelle Sprache, Brain-Zustaende, Motion und Window Intelligence |
+- Rust core: `runtime/core/`
+- Rust modules: `runtime/modules/`
+- Python sidecar: `runtime/python/sidecar/`
+- Discovery: `runtime/tools/discovery/`
+- UI: `ui/`
 
-## Schnellstart
+Retired parallel package trees must not be reintroduced. When a responsibility moves, remove the old implementation and update references in the same change.
+
+## Windows quick start
 
 ```powershell
-# Core (unveränderliches Herz)
-cd S:\JAMES\core
-cargo check          # Verifikation: 0 Fehler
-
-# Module (alle James-*-Fähigkeiten)
-cd S:\JAMES\modules
-cargo check
+.\\ops\\scripts\\start-james.ps1
 ```
 
-- `james-app` (core/crates/james-app) — Zero-Module-Pfad: Core startet ohne Module
-- `james-system` (modules/james-system) — Voll-Assembly: Core + alle Module
+Local inference bootstrap:
 
-## Grundprinzip
-
-- **Core bleibt klein.** Alle Fähigkeiten sind `James-*`-Module.
-- **AI ist ein Modul,** nicht der Core.
-- **Jede Aktion** läuft durch Capability → Permission → Policy → Execution → Verification → Audit.
-- **Void und Dashboard** sind dynamische Darstellungen desselben JAMES.
-- **Void ist die primaere adaptive Oberflaeche mit dem Live Brain im Zentrum.**
-- **UI-Aktionen sind Capabilities und keine Sicherheitsumgehung.**
-- **Animation ist Information: Das Live Brain visualisiert echten JAMES-State.**
-- **James-SelfMade** ist optionale, kontrollierte Autonomie — kein zweiter Core.
-- **PC-first bedeutet Windows als erste Referenzplattform, nicht Windows-Abhängigkeit.**
-- **Die konkrete JAMES-Instanz entsteht aus Environment, Modulen, Capabilities, Ressourcen und Policy.**
-- **Neue Sitzungen lesen zuerst `PROJECT-CONTINUATION.md` und danach `JAMES-MASTER-CONCEPT.md`.**
+```powershell
+.\\scripts\\bootstrap-local.ps1
+```
