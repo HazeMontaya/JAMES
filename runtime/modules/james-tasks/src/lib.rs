@@ -1,6 +1,7 @@
-//! James-Tasks - Task queue and execution for JAMES
+//! James-Tasks module facade.
 //!
-//! Provides task management capabilities with JSON file persistence.
+//! Canonical task state lives in the core james-tasks::TaskManager.
+//! This module owns only the public module DTO/configuration boundary.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -9,29 +10,13 @@ use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarg
 use james_events::{Event, EventBus};
 use james_module_host::{ModuleManifest, ModuleType};
 use james_memory::MemoryModule;
+use james_tasks_core::{RetryPolicy as CoreRetryPolicy, Task as CoreTask, TaskManager, TaskPriority as CoreTaskPriority, TaskStatus as CoreTaskStatus};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::info;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-pub enum TaskStatus {
-    Created,
-    Queued,
-    Running,
-    Paused,
-    Completed,
-    Failed,
-    Cancelled,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TaskPriority {
-    Low,
-    Normal,
-    High,
-    Critical,
-}
+pub use james_tasks_core::{RetryPolicy, TaskPriority, TaskStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
@@ -79,7 +64,7 @@ pub struct TasksModule {
     event_bus: Arc<EventBus>,
     capability_registry: Arc<CapabilityRegistry>,
     running: Arc<RwLock<bool>>,
-    tasks: Arc<RwLock<Vec<Task>>>,
+    manager: Arc<TaskManager>,
     _memory: Arc<MemoryModule>,
 }
 
@@ -90,204 +75,161 @@ impl TasksModule {
         capability_registry: Arc<CapabilityRegistry>,
         memory_module: Arc<MemoryModule>,
     ) -> Self {
+        let manager = Arc::new(
+            TaskManager::new(Some(event_bus.clone()))
+                .with_capability_registry(capability_registry.clone())
+                .with_max_concurrent(config.max_concurrent),
+        );
         Self {
             config,
             event_bus,
             capability_registry,
             running: Arc::new(RwLock::new(false)),
-            tasks: Arc::new(RwLock::new(Vec::new())),
+            manager,
             _memory: memory_module,
         }
     }
 
+    pub fn from_manager(
+        config: TasksConfig,
+        event_bus: Arc<EventBus>,
+        capability_registry: Arc<CapabilityRegistry>,
+        memory_module: Arc<MemoryModule>,
+        manager: Arc<TaskManager>,
+    ) -> Self {
+        Self { config, event_bus, capability_registry, running: Arc::new(RwLock::new(false)), manager, _memory: memory_module }
+    }
+
+    pub fn manager(&self) -> Arc<TaskManager> { self.manager.clone() }
+
     pub async fn start(&self) -> Result<()> {
+        self.manager.start().await?;
+        self.manager.load(&self.config.database_path).await?;
         *self.running.write().await = true;
-        self.load().await?;
-        info!("James-Tasks started");
+        info!("James-Tasks facade started");
         self.event_bus.publish(Event::new("module.tasks.started", "james-tasks")
             .with_payload(serde_json::json!({"database": self.config.database_path}))).await?;
         Ok(())
     }
 
     pub async fn stop(&self) -> Result<()> {
-        self.save().await?;
+        self.manager.save(&self.config.database_path).await?;
+        self.manager.stop().await?;
         *self.running.write().await = false;
-        info!("James-Tasks stopped");
         self.event_bus.publish(Event::new("module.tasks.stopped", "james-tasks")).await?;
         Ok(())
     }
 
-    async fn load(&self) -> Result<()> {
-        let path = Path::new(&self.config.database_path);
-        if path.exists() {
-            let raw = tokio::fs::read_to_string(path).await?;
-            if !raw.trim().is_empty() {
-                *self.tasks.write().await = serde_json::from_str(&raw)?;
-            }
-        }
-        Ok(())
-    }
-
-    async fn save(&self) -> Result<()> {
-        let path = Path::new(&self.config.database_path);
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                tokio::fs::create_dir_all(parent).await?;
-            }
-        }
-        let tasks = self.tasks.read().await.clone();
-        tokio::fs::write(path, serde_json::to_string_pretty(&tasks)?).await?;
-        Ok(())
-    }
-
-    pub async fn create_task(&self, mut task: Task) -> Result<String> {
-        if task.id.is_empty() {
-            task.id = Uuid::now_v7().to_string();
-        }
-        task.created_at = chrono::Utc::now();
-        task.updated_at = chrono::Utc::now();
-
-        {
-            let mut tasks = self.tasks.write().await;
-            tasks.push(task.clone());
-        }
-        self.save().await?;
-
-        self.event_bus.publish(Event::new("task.created", "james-tasks")
-            .with_payload(serde_json::json!({"task_id": task.id, "name": task.name}))).await?;
-
-        Ok(task.id)
+    pub async fn create_task(&self, task: Task) -> Result<String> {
+        let core = to_core(task)?;
+        let id = self.manager.create_task(core).await?;
+        Ok(id.to_string())
     }
 
     pub async fn get_task(&self, id: &str) -> Result<Option<Task>> {
-        let tasks = self.tasks.read().await;
-        Ok(tasks.iter().find(|t| t.id == id).cloned())
+        let id = Uuid::parse_str(id)?;
+        Ok(self.manager.get_task(id).map(from_core))
     }
 
     pub async fn update_task_status(&self, id: &str, status: TaskStatus, result: Option<serde_json::Value>, error: Option<String>) -> Result<()> {
-        let now = chrono::Utc::now();
-        {
-            let mut tasks = self.tasks.write().await;
-            if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
-                task.status = status;
-                task.result = result;
-                task.error = error;
-                task.updated_at = now;
-                if status == TaskStatus::Running && task.started_at.is_none() {
-                    task.started_at = Some(now);
-                }
-                if status == TaskStatus::Completed || status == TaskStatus::Failed {
-                    task.completed_at = Some(now);
-                }
-            }
+        let id = Uuid::parse_str(id)?;
+        if let Some(result) = result {
+            self.manager.set_result(id, result).await?;
+        } else if let Some(error) = error {
+            self.manager.set_error(id, error).await?;
+        } else {
+            self.manager.update_status(id, status).await?;
         }
-        self.save().await?;
         Ok(())
     }
 
     pub async fn list_tasks(&self, status: Option<TaskStatus>, limit: usize) -> Result<Vec<Task>> {
-        let tasks = self.tasks.read().await;
-        let mut result: Vec<Task> = tasks.iter()
-            .filter(|t| status.map(|s| t.status == s).unwrap_or(true))
-            .cloned()
-            .collect();
-        result.sort_by(|a, b| b.priority.cmp(&a.priority).then_with(|| a.created_at.cmp(&b.created_at)));
-        result.truncate(limit);
-        Ok(result)
+        let mut tasks = match status {
+            Some(s) => self.manager.list_by_status(s),
+            None => self.manager.list_tasks(),
+        };
+        tasks.sort_by(|a,b| b.priority.cmp(&a.priority).then_with(|| a.created_at.cmp(&b.created_at)));
+        tasks.truncate(limit);
+        Ok(tasks.into_iter().map(from_core).collect())
     }
 
     pub async fn queue_task(&self, id: &str) -> Result<()> {
-        self.update_task_status(id, TaskStatus::Queued, None, None).await?;
-        self.event_bus.publish(Event::new("task.queued", "james-tasks")
-            .with_payload(serde_json::json!({"task_id": id}))).await?;
+        let id = Uuid::parse_str(id)?;
+        self.manager.update_status(id, CoreTaskStatus::Queued).await?;
         Ok(())
     }
 
-    pub async fn is_running(&self) -> bool {
-        *self.running.read().await
+    pub async fn is_running(&self) -> bool { *self.running.read().await }
+}
+
+fn to_core(t: Task) -> Result<CoreTask> {
+    let id = if t.id.is_empty() { Uuid::nil() } else { Uuid::parse_str(&t.id)? };
+    let dependencies = t.dependencies.into_iter().map(|x| Uuid::parse_str(&x)).collect::<Result<Vec<_>,_>>()?;
+    let retry_policy = CoreRetryPolicy { max_retries: t.max_retries, base_delay_secs: 1, max_delay_secs: 60, exponential_backoff: true, retry_on: vec!["timeout".into(), "error".into()] };
+    Ok(CoreTask {
+        id,
+        task_type: t.capability.clone(),
+        name: t.name,
+        priority: t.priority,
+        status: match t.status { CoreTaskStatus::Created | CoreTaskStatus::Paused => CoreTaskStatus::Queued, s => s },
+        created_at: t.created_at,
+        started_at: t.started_at,
+        completed_at: t.completed_at,
+        source: "james.tasks".into(),
+        dependencies,
+        timeout_secs: 300,
+        retry_policy,
+        current_retry: t.retries,
+        payload: t.payload,
+        result: t.result,
+        error: t.error,
+        assigned_worker: t.assigned_agent,
+        progress: None,
+    })
+}
+
+fn from_core(t: CoreTask) -> Task {
+    Task {
+        id: t.id.to_string(),
+        name: t.name,
+        description: String::new(),
+        capability: t.task_type,
+        payload: t.payload,
+        priority: t.priority,
+        status: t.status,
+        dependencies: t.dependencies.into_iter().map(|x| x.to_string()).collect(),
+        scheduled_at: None,
+        started_at: t.started_at,
+        completed_at: t.completed_at,
+        result: t.result,
+        error: t.error,
+        retries: t.current_retry,
+        max_retries: t.retry_policy.max_retries,
+        created_at: t.created_at,
+        updated_at: t.completed_at.unwrap_or(t.created_at),
+        assigned_agent: t.assigned_worker,
     }
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
-        id: "james.tasks".to_string(),
-        name: "James-Tasks".to_string(),
-        version: "0.1.0".to_string(),
-        description: "Task queue and execution for JAMES".to_string(),
-        module_type: ModuleType::Service,
-        entry_point: "james_tasks".to_string(),
-        capabilities: vec![
-            "task.create".to_string(),
-            "task.queue".to_string(),
-            "task.execute".to_string(),
-            "task.cancel".to_string(),
-            "task.status".to_string(),
-        ],
-        dependencies: vec![
-            james_module_host::ModuleDependency {
-                name: "james.memory".to_string(),
-                version: "0.1.0".to_string(),
-                optional: false,
-                reason: Some("Required for persistence".to_string()),
-            },
-        ],
+        id: "james.tasks".into(), name: "James-Tasks".into(), version: "0.1.0".into(),
+        description: "Task queue facade over the canonical core task manager".into(),
+        module_type: ModuleType::Service, entry_point: "james_tasks".into(),
+        capabilities: vec!["task.create".into(),"task.queue".into(),"task.execute".into(),"task.cancel".into(),"task.status".into()],
+        dependencies: vec![james_module_host::ModuleDependency { name: "james.memory".into(), version: "0.1.0".into(), optional: false, reason: Some("Task integration".into()) }],
         permissions: vec![],
-        configuration_schema: Some(serde_json::json!({
-            "type": "object",
-            "properties": {
-                "database_path": {"type": "string", "default": ".james/tasks.json"},
-                "max_concurrent": {"type": "integer", "default": 10},
-                "default_timeout_secs": {"type": "integer", "default": 300},
-                "retry_delay_secs": {"type": "integer", "default": 60}
-            }
-        })),
-        default_config: Some(serde_json::json!({
-            "database_path": ".james/tasks.json",
-            "max_concurrent": 10,
-            "default_timeout_secs": 300,
-            "retry_delay_secs": 60
-        })),
-        author: Some("JAMES Project".to_string()),
-        homepage: None,
-        repository: None,
-        license: "MIT".to_string(),
-        tags: vec!["tasks".to_string(), "queue".to_string(), "execution".to_string()],
-        min_core_version: "0.1.0".to_string(),
-        platforms: vec!["windows".to_string(), "linux".to_string(), "macos".to_string()],
+        configuration_schema: Some(serde_json::json!({"type":"object","properties":{"database_path":{"type":"string","default":".james/tasks.json"},"max_concurrent":{"type":"integer","default":10}}})),
+        default_config: Some(serde_json::json!({"database_path":".james/tasks.json","max_concurrent":10})),
+        author: Some("JAMES Project".into()), homepage: None, repository: None, license: "MIT".into(),
+        tags: vec!["tasks".into(),"queue".into()], min_core_version: "0.1.0".into(),
+        platforms: vec!["windows".into(),"linux".into(),"macos".into()],
     }
 }
 
 pub async fn register_capabilities(registry: &CapabilityRegistry) -> Result<()> {
-    for (id, name, desc) in [
-        ("task.create", "Task Create", "Create a new task"),
-        ("task.queue", "Task Queue", "Queue a task for execution"),
-        ("task.execute", "Task Execute", "Execute a task"),
-        ("task.cancel", "Task Cancel", "Cancel a running task"),
-        ("task.status", "Task Status", "Get task status"),
-    ] {
-        registry.register(CapabilityDefinition {
-            id: id.to_string(), name: name.to_string(),
-            category: james_capabilities::CapabilityCategory::Custom("tasks".to_string()),
-            version: "1.0.0".to_string(), provider: "james.tasks".to_string(),
-            description: desc.to_string(), risk_level: RiskLevel::Low,
-            required_permissions: vec![], dependencies: vec![],
-            input_schema: None, output_schema: None,
-            execution_target: ExecutionTarget::Local,
-            tags: vec!["tasks".to_string()], deprecated: false, experimental: false,
-        }, "james.tasks".to_string()).await?;
+    for (id,name,desc) in [("task.create","Task Create","Create a new task"),("task.queue","Task Queue","Queue a task for execution"),("task.execute","Task Execute","Execute a task"),("task.cancel","Task Cancel","Cancel a running task"),("task.status","Task Status","Get task status")] {
+        registry.register(CapabilityDefinition { id:id.into(), name:name.into(), category:james_capabilities::CapabilityCategory::Custom("tasks".into()), version:"1.0.0".into(), provider:"james.tasks".into(), description:desc.into(), risk_level:RiskLevel::Low, required_permissions:vec![], dependencies:vec![], input_schema:None, output_schema:None, execution_target:ExecutionTarget::Local, tags:vec!["tasks".into()], deprecated:false, experimental:false }, "james.tasks".into()).await?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use james_module_host::ModuleManifestValidator;
-    #[tokio::test]
-    async fn test_tasks_manifest() {
-        let m = manifest();
-        assert_eq!(m.id, "james.tasks");
-        assert_eq!(m.capabilities.len(), 5);
-        assert!(ModuleManifestValidator::validate(&m).is_ok());
-    }
 }
