@@ -1,4 +1,4 @@
-[object Object]
+import pytest
 
 def test_ecosystem_capability_metadata_has_explicit_risk_permissions():
     from james_runtime.integration.nats_capabilities import NatsCapabilityBridge
