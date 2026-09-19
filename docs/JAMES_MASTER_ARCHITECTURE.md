@@ -125,7 +125,7 @@ The repository currently has substantial foundations for all major layers, but t
 - unified memory fabric
 - autonomous decision loop above heartbeat
 - candidate behavioral evaluation
-- promotion workflow
+- promotion workflow (implementation exists behind explicit `JAMES_SELFMADE_ALLOW_PROMOTION=1` policy gate; behavioral evaluation remains a prerequisite for autonomous use)
 - repository self-model/index
 - end-to-end contract/regression suite
 
