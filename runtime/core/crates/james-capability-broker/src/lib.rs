@@ -725,7 +725,7 @@ impl CapabilityBroker {
             capability_id: request.capability_id.clone(),
             target: request.target.clone(),
             scope: request.scope.clone(),
-            reason: format!("interactive approval required for {}", request.capability_id),
+            reason: request.reason.clone().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| format!("interactive approval required for {}", request.capability_id)),
             approved: false,
             created_at: now,
             expires_at,
