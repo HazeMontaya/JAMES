@@ -1,2 +1,6 @@
 [build]
 target-dir = "../../out/core"
+
+# sccache rejects Cargo incremental artifacts; keep the workspace deterministic.
+[env]
+CARGO_INCREMENTAL = { value = "0", force = true }
