@@ -6,16 +6,36 @@ they can participate in the existing JAMES tool execution contract.
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
+import time
 
 from james_runtime.tools.base import Tool, ToolResult
 from james_runtime.integration.ecosystem import EcosystemRegistry
 
 
 class EcosystemTool(Tool):
-    def __init__(self, name: str, description: str, parameters: dict[str, dict[str, Any]], registry: EcosystemRegistry, provider: str) -> None:
+    def __init__(self, name: str, description: str, parameters: dict[str, dict[str, Any]], registry: EcosystemRegistry, provider: str, event_sink: Callable[..., Any] | None = None) -> None:
         self.name, self.description, self.parameters = name, description, parameters
-        self.registry, self.provider = registry, provider
+        self.registry, self.provider, self.event_sink = registry, provider, event_sink
+
+    async def _execute(self, operation: str, awaitable: Any) -> ToolResult:
+        started = time.perf_counter()
+        try:
+            value = await awaitable
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            self.registry.mark_health(self.provider, True)
+            metadata = {"provider": self.provider, "operation": operation, "duration_ms": duration_ms}
+            if self.event_sink:
+                self.event_sink("ECOSYSTEM_TOOL_COMPLETED", metadata)
+            return ToolResult(success=True, output=json.dumps(value, ensure_ascii=False, default=str), metadata=metadata)
+        except Exception as exc:
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            error = f"{type(exc).__name__}: {exc}"
+            self.registry.mark_health(self.provider, False, error=error)
+            metadata = {"provider": self.provider, "operation": operation, "duration_ms": duration_ms}
+            if self.event_sink:
+                self.event_sink("ECOSYSTEM_TOOL_FAILED", {**metadata, "error_type": type(exc).__name__})
+            return ToolResult(success=False, output="", error=error, metadata=metadata)
 
     def adapter(self) -> Any:
         return self.registry.get(self.provider)
@@ -31,7 +51,7 @@ class FirecrawlSearchTool(EcosystemTool):
     async def _run(self, query: str = "", limit: int = 10, **kwargs: Any) -> ToolResult:
         if not query.strip():
             return ToolResult(False, "", "query is required")
-        return await self._json_result(await self.adapter().search(query, limit=max(1, min(limit, 50))))
+        return await self._execute("search", self.adapter().search(query, limit=max(1, min(limit, 50))))
 
 
 class FirecrawlScrapeTool(EcosystemTool):
@@ -41,7 +61,7 @@ class FirecrawlScrapeTool(EcosystemTool):
     async def _run(self, url: str = "", **kwargs: Any) -> ToolResult:
         if not url.strip():
             return ToolResult(False, "", "url is required")
-        return await self._json_result(await self.adapter().scrape(url))
+        return await self._execute("scrape", self.adapter().scrape(url))
 
 
 class DifyAgentTool(EcosystemTool):
@@ -51,7 +71,7 @@ class DifyAgentTool(EcosystemTool):
     async def _run(self, query: str = "", **kwargs: Any) -> ToolResult:
         if not query.strip():
             return ToolResult(False, "", "query is required")
-        return await self._json_result(await self.adapter().run_agent(query))
+        return await self._execute("run_agent", self.adapter().run_agent(query))
 
 
 class N8nWebhookTool(EcosystemTool):
@@ -61,10 +81,10 @@ class N8nWebhookTool(EcosystemTool):
     async def _run(self, webhook_path: str = "", payload: Mapping[str, Any] | None = None, **kwargs: Any) -> ToolResult:
         if not webhook_path.strip():
             return ToolResult(False, "", "webhook_path is required")
-        return await self._json_result(await self.adapter().trigger_webhook(webhook_path, payload or {}))
+        return await self._execute("trigger_webhook", self.adapter().trigger_webhook(webhook_path, payload or {}))
 
 
-def ecosystem_tools(registry: EcosystemRegistry) -> list[Tool]:
+def ecosystem_tools(registry: EcosystemRegistry, event_sink: Callable[..., Any] | None = None) -> list[Tool]:
     """Return only tools whose provider has been explicitly registered."""
     factories = {
         "firecrawl": (FirecrawlSearchTool, FirecrawlScrapeTool),
@@ -74,5 +94,5 @@ def ecosystem_tools(registry: EcosystemRegistry) -> list[Tool]:
     result: list[Tool] = []
     for provider, classes in factories.items():
         if provider in registry.enabled():
-            result.extend(cls(registry) for cls in classes)
+            result.extend(cls(registry, event_sink=event_sink) for cls in classes)
     return result
