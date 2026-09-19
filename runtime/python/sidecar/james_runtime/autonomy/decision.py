@@ -20,7 +20,7 @@ class AutonomousDecisionLoop:
         self.heartbeat = heartbeat
 
     def decide(self) -> AutonomousDecision:
-        events = self.event_log.tail(100)
+        events = self.event_log.tail(250)
         failed = [(name, self.heartbeat.failures(name)) for name in (
             "runtime.engine_health", "autonomy.decision"
         )]
@@ -34,6 +34,20 @@ class AutonomousDecisionLoop:
             return AutonomousDecision("run_health_sweep", 90,
                 "no autonomous health sweep has been recorded yet",
                 {"recent_events": len(events)})
+        selfmade = [e for e in events if e.event_type.startswith("selfmade.")]
+        failed_selfmade = [
+            e for e in selfmade
+            if e.event_type in {"selfmade.evaluation.completed", "selfmade.change.failed"}
+            and e.payload.get("passed") is False
+        ]
+        if failed_selfmade:
+            latest = failed_selfmade[-1]
+            return AutonomousDecision(
+                "inspect_selfmade_regression", 85,
+                "latest SelfMade candidate did not pass evaluation",
+                {"event_id": latest.event_id, "event_type": latest.event_type},
+            )
+
         errors = [e for e in events if e.event_type in {
             "INFERENCE_ERROR", "MODEL_FALLBACK", "ENGINE_ERROR"
         }]
@@ -42,8 +56,8 @@ class AutonomousDecisionLoop:
             return AutonomousDecision("inspect_inference_reliability", 70,
                 f"recent inference reliability event: {latest.event_type}",
                 {"event_id": latest.event_id, "event_type": latest.event_type})
-        return AutonomousDecision("observe", 10,
-            "runtime is healthy and no higher-priority observation is pending",
+        return AutonomousDecision("inspect_repository", 20,
+            "runtime is healthy; repository state is the next bounded observation target",
             {"recent_events": len(events),
              "observed_at": datetime.now(timezone.utc).isoformat()})
 
