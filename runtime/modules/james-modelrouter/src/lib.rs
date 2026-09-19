@@ -107,14 +107,12 @@ impl ModelRouterModule {
 
     pub async fn start(&self) -> Result<()> {
         *self.running.write().await = true;
-        self.models_module.start().await?;
         info!("James-ModelRouter started");
         Ok(())
     }
 
     pub async fn stop(&self) -> Result<()> {
         *self.running.write().await = false;
-        self.models_module.stop().await?;
         info!("James-ModelRouter stopped");
         Ok(())
     }
