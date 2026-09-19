@@ -144,9 +144,9 @@ struct AssemblyDevelopmentAgent {
     ai: Arc<AiModule>,
 }
 
-#[async_trait]
 impl DevelopmentAgent for AssemblyDevelopmentAgent {
-    async fn propose(&self, context: &str) -> Result<james_selfmade::EvolutionProposal> {
+    fn propose(&self, context: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<james_selfmade::EvolutionProposal>> + Send + '_>> {
+        Box::pin(async move {
         let prompt = format!(r#"You are JAMES's bounded software-development agent.
 Return ONLY valid JSON matching this schema:
 {{
@@ -187,9 +187,11 @@ Context:
         let proposal: james_selfmade::EvolutionProposal = serde_json::from_str(&raw)
             .map_err(|e| anyhow::anyhow!("development agent returned invalid proposal JSON: {e}"))?;
         Ok(proposal)
+        })
     }
 
-    async fn generate_patch(&self, context: &str) -> Result<String> {
+    fn generate_patch(&self, context: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<String>> + Send + '_>> {
+        Box::pin(async move {
         let root = std::env::var_os("JAMES_ROOT")
             .map(std::path::PathBuf::from)
             .unwrap_or(std::env::current_dir()?);
