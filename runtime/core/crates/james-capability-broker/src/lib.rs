@@ -178,6 +178,19 @@ impl CapabilityRequestV2 {
         self
     }
 
+    /// Preserve an existing execution trace when a request crosses subsystem
+    /// boundaries. Correlation identifies the trace; causation identifies the
+    /// event/request that directly caused this request.
+    pub fn with_correlation(
+        mut self,
+        correlation_id: impl Into<String>,
+        causation_id: Option<String>,
+    ) -> Self {
+        self.correlation_id = correlation_id.into();
+        self.causation_id = causation_id;
+        self
+    }
+
     pub fn with_confirmation_context(mut self, context: ConfirmationContext) -> Self {
         self.confirmation_context = context;
         self
