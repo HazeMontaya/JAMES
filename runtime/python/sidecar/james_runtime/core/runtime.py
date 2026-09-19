@@ -402,6 +402,26 @@ class JamesRuntime:
         # All fallbacks failed
         raise RuntimeError(f"All fallbacks exhausted. Original error: {original_error}")
     
+    async def liquid_generate(self, request: CompletionRequest, model_ids: list[str], *, min_delta: float = 8.0):
+        """Run candidate models through existing runtime engines with leader upgrades."""
+        async def generate(model_id: str):
+            candidate = request.model_copy(update={"model": model_id, "stream": False})
+            selection = await self.runtime_router.select_runtime(model_id, request.runtime_hint)
+            engine = self.engines.get(selection.engine_type)
+            if engine is None:
+                raise RuntimeError(f"No engine available for {selection.engine_type}")
+            return await engine.complete(candidate)
+
+        result = await liquid_race(model_ids, generate, min_delta=min_delta)
+        self._emit_event("LIQUID_RACE_COMPLETE", {
+            "models": model_ids,
+            "winner": result.winner.model if result.winner else None,
+            "winner_score": result.winner.score if result.winner else 0.0,
+            "upgrades": len(result.updates),
+            "results": [{"model": x.model, "score": x.score, "duration_ms": x.duration_ms, "success": x.success} for x in result.results],
+        })
+        return result
+
     # ============ Model Management ============
     
     async def load_model(self, model_id: str) -> Dict[str, Any]:
