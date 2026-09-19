@@ -84,6 +84,7 @@ class JamesRuntime:
         # Health
         self._health_check_task: Optional[asyncio.Task] = None
         self._heartbeat_task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None
     
     async def initialize(self) -> None:
         """Initialize all components"""
