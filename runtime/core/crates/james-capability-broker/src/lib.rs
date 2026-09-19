@@ -1193,6 +1193,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_permission_denial_happens_before_executor() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct CountingExecutor(Arc<AtomicUsize>);
+        #[async_trait::async_trait]
+        impl CapabilityExecutor for CountingExecutor {
+            async fn execute(&self, _capability_id: &str, _input: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Ok(serde_json::json!({"ok": true}))
+            }
+        }
+
+        let reg = registry_with(&[("protected.call", vec!["protected.execute"])]).await;
+        let broker = CapabilityBroker::new(reg).without_audit();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let err = broker.execute(
+            CapabilityRequest {
+                caller: "untrusted".to_string(),
+                capability_id: "protected.call".to_string(),
+                input: serde_json::json!({}),
+            },
+            &CountingExecutor(calls.clone()),
+        ).await.unwrap_err();
+
+        assert!(err.to_string().contains("permission denied"));
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "executor must never run before authorization");
+    }
+
+    #[tokio::test]
+    async fn test_v2_request_context_reaches_executor() {
+        struct ContextExecutor {
+            request_id: Arc<tokio::sync::Mutex<Option<String>>>,
+            correlation_id: Arc<tokio::sync::Mutex<Option<String>>>,
+            causation_id: Arc<tokio::sync::Mutex<Option<String>>>,
+        }
+        #[async_trait::async_trait]
+        impl CapabilityExecutor for ContextExecutor {
+            async fn execute(&self, _capability_id: &str, _input: serde_json::Value) -> anyhow::Result<serde_json::Value> {
+                Ok(serde_json::json!({"legacy": true}))
+            }
+            async fn execute_with_request(&self, request: &CapabilityRequestV2) -> anyhow::Result<serde_json::Value> {
+                *self.request_id.lock().await = Some(request.request_id.clone());
+                *self.correlation_id.lock().await = Some(request.correlation_id.clone());
+                *self.causation_id.lock().await = request.causation_id.clone();
+                Ok(serde_json::json!({"context": true}))
+            }
+        }
+
+        let reg = registry_with(&[("context.call", vec![])]).await;
+        let broker = CapabilityBroker::new(reg).without_audit();
+        let request_id = Arc::new(tokio::sync::Mutex::new(None));
+        let correlation_id = Arc::new(tokio::sync::Mutex::new(None));
+        let causation_id = Arc::new(tokio::sync::Mutex::new(None));
+        let mut request = CapabilityRequestV2::new("agent:test", "context.call", serde_json::json!({"x": 1}));
+        request.request_id = "req-contract-1".to_string();
+        request.correlation_id = "corr-contract-1".to_string();
+        request.causation_id = Some("cause-contract-1".to_string());
+
+        let outcome = broker.execute_v2(request.clone(), &ContextExecutor {
+            request_id: request_id.clone(), correlation_id: correlation_id.clone(), causation_id: causation_id.clone(),
+        }).await.unwrap();
+        assert!(outcome.executed);
+        assert_eq!(*request_id.lock().await, Some(request.request_id));
+        assert_eq!(*correlation_id.lock().await, Some(request.correlation_id));
+        assert_eq!(*causation_id.lock().await, request.causation_id);
+    }
+
+    #[tokio::test]
     async fn test_missing_permission_denied() {
         let reg = registry_with(&[("memory.read", vec!["memory.read"])]).await;
         let broker = CapabilityBroker::new(reg).without_audit();
