@@ -150,16 +150,26 @@ class JamesRuntime:
         self.missions.register("inspect_selfmade_opportunity", self._mission_inspect_selfmade_opportunity)
 
     async def _heartbeat_autonomy_decision(self) -> None:
+        correlation_id = str(uuid4())
         decision = self.autonomy.tick()
-        mission = await self.missions.dispatch(decision)
+        mission = await self.missions.dispatch(
+            decision,
+            correlation_id=correlation_id,
+            causation_id=decision.evidence.get("event_id"),
+        )
         if mission is not None:
-            self._emit_event("AUTONOMY_MISSION_RESULT", {
-                "mission_id": mission.mission_id,
-                "action": mission.action,
-                "status": mission.status,
-                "attempts": mission.attempts,
-                "error": mission.error,
-            })
+            self._emit_event(
+                "AUTONOMY_MISSION_RESULT",
+                {
+                    "mission_id": mission.mission_id,
+                    "action": mission.action,
+                    "status": mission.status,
+                    "attempts": mission.attempts,
+                    "error": mission.error,
+                    "correlation_id": mission.correlation_id,
+                    "causation_id": mission.causation_id,
+                },
+            )
 
     async def _mission_health_sweep(self, mission: AutonomousMission) -> dict[str, Any]:
         await self._heartbeat_engine_health()
