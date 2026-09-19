@@ -41,6 +41,28 @@ pub struct MemoryEntry {
     pub agent_id: Option<String>,
 }
 
+/// Versioned synchronization contract for projecting canonical Rust memory into sidecar adapters.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemorySyncEntry {
+    pub id: String,
+    pub memory_type: MemoryType,
+    pub content: String,
+    pub metadata: serde_json::Value,
+    pub importance: f32,
+    pub tags: Vec<String>,
+    pub session_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Versioned memory snapshot; Rust MemoryModule remains authoritative.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemorySyncSnapshot {
+    pub schema_version: u32,
+    pub authority: String,
+    pub entries: Vec<MemorySyncEntry>,
+}
+
 /// Memory query
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryQuery {
@@ -190,6 +212,24 @@ impl MemoryModule {
             .with_payload(serde_json::json!({"memory_id": entry.id, "type": entry.memory_type}))).await?;
 
         Ok(entry.id)
+    }
+
+    pub async fn sync_snapshot(&self) -> MemorySyncSnapshot {
+        MemorySyncSnapshot {
+            schema_version: 1,
+            authority: "rust_memory_module".to_string(),
+            entries: self.entries.read().await.iter().map(|entry| MemorySyncEntry {
+                id: entry.id.clone(),
+                memory_type: entry.memory_type,
+                content: entry.content.clone(),
+                metadata: entry.metadata.clone(),
+                importance: entry.importance,
+                tags: entry.tags.clone(),
+                session_id: entry.session_id.clone(),
+                agent_id: entry.agent_id.clone(),
+                updated_at: entry.updated_at,
+            }).collect(),
+        }
     }
 
     /// Query memories
