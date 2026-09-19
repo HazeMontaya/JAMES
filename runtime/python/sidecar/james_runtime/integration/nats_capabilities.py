@@ -177,11 +177,12 @@ class NatsCapabilityBridge:
                 caller,
             )
             result = await self.registry.execute(capability_id, args)
+            success = bool(result.get("success"))
             return {
                 "request_id": request_id,
-                "success": bool(result.get("success")),
-                "output": result.get("output"),
-                "error": result.get("error"),
+                "success": success,
+                "output": result.get("output") if success else None,
+                "error": None if success else "CapabilityExecutionError: capability execution failed",
                 "duration_ms": int((time.perf_counter() - started) * 1000),
             }
         except Exception as exc:
