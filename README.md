@@ -1,13 +1,40 @@
 # JAMES
 
-JAMES is a modular, model-agnostic AI runtime.
+JAMES is a modular, model-agnostic AI runtime with a Rust execution core, Python sidecar, first-party capability modules, controlled autonomy, persistent memory, repository-aware self-improvement, and the Void UI.
 
-## Current direction
+## Canonical repository layout
 
-The project is being built as a real runtime rather than a UI-only chatbot. The target architecture consists of runtime/orchestration core, model provider abstraction and routing, tool registry and permission boundaries, task/agent execution, persistent memory, project/repository inspection, validated self-improvement workflows, and API/UI layers.
+- `runtime/core/` — Rust core: identity, registry, capabilities, broker, policy boundaries, agents, platform, API, Python bridge.
+- `runtime/modules/` — first-party modules and `james-system` full assembly.
+- `runtime/python/sidecar/` — Python inference, memory, tools, integrations, autonomy and self-improvement runtime.
+- `runtime/tools/discovery/` — TypeScript environment discovery tool.
+- `ui/` — UI protocol and Void client.
+- `ops/` — operational startup/preflight scripts.
+- `scripts/` — development/bootstrap scripts.
+- `docs/` — authoritative architecture and project-state documentation.
+- `.james/` — local runtime state, models, logs and secrets; never source code.
+- `out/` — generated build artifacts; never source code.
 
-## Repository status
+There is deliberately **one runtime implementation**. The former parallel Python package tree is retired; new capabilities belong in the canonical runtime or an explicit first-party module.
 
-This repository is being bootstrapped from a minimal foundation. Features are added as executable modules with tests and explicit boundaries.
+## Execution model
 
-See docs/ARCHITECTURE.md for the current architecture.
+```
+request -> task -> plan -> capability resolution -> policy/broker -> execution -> observation -> evaluation -> memory -> result
+```
+
+Models propose and reason; deterministic runtime policy authorizes execution.
+
+## Start on Windows
+
+```powershell
+.\\ops\\scripts\\start-james.ps1
+```
+
+For local inference bootstrap:
+
+```powershell
+.\\scripts\\bootstrap-local.ps1
+```
+
+See `docs/README.md` for the authoritative documentation index and `docs/STRUCTURE.md` for repository invariants.
