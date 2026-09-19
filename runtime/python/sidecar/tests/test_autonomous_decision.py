@@ -84,3 +84,12 @@ def test_mission_layer_rejects_unregistered_action(tmp_path):
     assert mission.status == "failed"
     assert "no handler registered" in (mission.error or "")
     assert any(e.event_type == "MISSION_FAILED" for e in log.tail(10))
+
+
+def test_decision_loop_prioritizes_mission_failure(tmp_path):
+    log = EventLog(tmp_path / "events.jsonl")
+    heartbeat = DurableHeartbeat(tmp_path / "heartbeat.json")
+    log.append("MISSION_FAILED", {"action": "inspect_repository"})
+    decision = AutonomousDecisionLoop(log, heartbeat).tick()
+    assert decision.action == "inspect_mission_failure"
+    assert decision.priority == 95
