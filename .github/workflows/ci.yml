@@ -14,6 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  structure:
+    name: Repository structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Audit canonical layout
+        run: python scripts/audit-repository-structure.py
+
   rust:
     name: Rust workspace (Windows MSVC)
     runs-on: windows-latest
