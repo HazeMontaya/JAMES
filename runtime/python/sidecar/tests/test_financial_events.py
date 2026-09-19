@@ -21,4 +21,4 @@ async def test_service_emits_runtime_events():
     request = ForecastRequest(series=MarketSeries(symbol="TEST", timeframe="1m", bars=bars), pred_len=1)
     result = await FinancialCortexService(FakeRouter(), sink).forecast(request)
     assert result.request_id == "test-request"
-    assert events == ["MARKET_DATA_RECEIVED", "KRONOS_INFERENCE", "KRONOS_FORECAST_READY"]
+    assert events == ["MARKET_DATA_RECEIVED", "KRONOS_INFERENCE", "FORECAST_VERIFIED", "KRONOS_FORECAST_READY"]
