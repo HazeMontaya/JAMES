@@ -33,6 +33,7 @@ class AutonomousMission:
     result: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     correlation_id: str | None = None
+    causation_id: str | None = None
     attempts: int = 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -112,6 +113,7 @@ class AutonomousMissionManager:
         decision: AutonomousDecision,
         *,
         correlation_id: str | None = None,
+        causation_id: str | None = None,
     ) -> AutonomousMission | None:
         duplicate = self._recent_duplicate(decision.action)
         if duplicate is not None:
@@ -138,6 +140,7 @@ class AutonomousMissionManager:
             reason=decision.reason,
             evidence=dict(decision.evidence),
             correlation_id=correlation_id,
+            causation_id=causation_id,
         )
         self.missions[mission.mission_id] = mission
         self._persist()
@@ -169,6 +172,7 @@ class AutonomousMissionManager:
                 {"mission_id": mission.mission_id, "action": mission.action, "error": mission.error},
                 source="james-autonomy",
                 correlation_id=mission.correlation_id,
+                causation_id=mission.causation_id,
             )
             return mission
 
@@ -207,8 +211,18 @@ class AutonomousMissionManager:
             )
         return mission
 
-    async def dispatch(self, decision: AutonomousDecision) -> AutonomousMission | None:
-        mission = self.create(decision)
+    async def dispatch(
+        self,
+        decision: AutonomousDecision,
+        *,
+        correlation_id: str | None = None,
+        causation_id: str | None = None,
+    ) -> AutonomousMission | None:
+        mission = self.create(
+            decision,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+        )
         if mission is None or mission.status == "completed":
             return mission
         return await self.execute(mission)
