@@ -30,6 +30,14 @@ class AutonomousDecisionLoop:
             return AutonomousDecision("inspect_failure", 100,
                 f"background task {name} has {count} consecutive failure(s)",
                 {"task": name, "failures": count})
+        mission_failures = [e for e in events if e.event_type == "MISSION_FAILED"]
+        if mission_failures:
+            latest = mission_failures[-1]
+            return AutonomousDecision(
+                "inspect_mission_failure", 95,
+                "the autonomous mission layer recorded a failed mission",
+                {"event_id": latest.event_id, "action": latest.payload.get("action")},
+            )
         if not any(e.event_type == "AUTONOMY_HEALTH_SWEEP" for e in events):
             return AutonomousDecision("run_health_sweep", 90,
                 "no autonomous health sweep has been recorded yet",
