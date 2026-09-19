@@ -422,8 +422,9 @@ impl JamesAssembly {
             capability_registry.clone(),
         ));
 
-        // ---- Tasks (depends on memory) ----
-        let tasks = Arc::new(TasksModule::new(
+        // ---- Canonical task manager + module facade ----
+        // One TaskManager instance is shared by tasks, scheduler, and agents.
+        let tasks = Arc::new(TasksModule::from_manager(
             TasksModuleConfig {
                 database_path: options.tasks_path
                     .unwrap_or_else(|| ".james/tasks.json".to_string()),
@@ -432,9 +433,10 @@ impl JamesAssembly {
             event_bus.clone(),
             capability_registry.clone(),
             memory.clone(),
+            core_tasks.clone(),
         ));
 
-        // ---- Scheduler (depends on tasks) ----
+        // ---- Scheduler (delegates to the same canonical task manager) ----
         let scheduler = Arc::new(SchedulerModule::new(
             SchedulerModuleConfig {
                 database_path: options.scheduler_path
@@ -443,7 +445,7 @@ impl JamesAssembly {
             },
             event_bus.clone(),
             capability_registry.clone(),
-            tasks.clone(),
+            core_tasks.clone(),
         ));
 
         // ---- STT / TTS ----
