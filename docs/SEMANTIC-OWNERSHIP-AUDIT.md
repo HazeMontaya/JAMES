@@ -2,7 +2,7 @@
 
 Status: implementation baseline
 Date: 2026-09-19
-Branch: semantic-ownership-cleanup
+Baseline: main after merge of PR #21
 
 ## Canonical ownership decisions
 
@@ -27,7 +27,8 @@ The consequential duplicates are parallel domain objects, not merely same-named 
 - core TaskManager vs module TasksModule
 - core Scheduler vs module SchedulerModule
 - Rust ModelsModule vs Python ModelRegistry
-- Rust EventBus vs Python RuntimeEvent event model
+- Rust EventBus vs Python RuntimeEvent event envelope
+- Python FinancialEvent previously duplicated the event envelope and now subclasses RuntimeEvent
 - Rust persistent memory vs Python MemoryVault
 
 These require staged migration, not deletion.
@@ -94,7 +95,7 @@ Current Rust memory is JSON-backed and has explicit Working/Episodic/Semantic/Pr
 
 Python MemoryVault is Markdown-first persistent storage with a SQLite retrieval index.
 
-Neither should be deleted yet. They are semantically different stores. The next migration must establish durable canonical memory, derived retrieval index, session/working memory, and cache before consolidation.
+Neither should be deleted yet. They are semantically different stores. Rust MemoryModule is the runtime authority; Python MemoryVault is explicitly a sidecar projection whose Markdown is durable within that projection and whose SQLite database is a derived retrieval index. The next migration must establish the synchronization bridge and define durable canonical memory, derived retrieval index, session/working memory, and cache before consolidation.
 
 ## Required invariants
 
@@ -119,3 +120,22 @@ Neither should be deleted yet. They are semantically different stores. The next 
 6. Convert Python model registry to a sidecar cache/adapter.
 7. Define memory authority and migrate retrieval indexes without losing persistent data.
 8. Add architecture regression tests for ownership and dependency direction.
+
+
+## Current implementation status after merge
+
+- PR #21 is merged into main.
+- Generic Registry is metadata-only; capability ownership remains in CapabilityRegistry.
+- Task and scheduler facades are wired toward the core task/scheduler authorities.
+- Python tool execution is broker-gated and the NATS bridge is the only intended authorization marker.
+- Python runtime event consumers use RuntimeEvent as the common envelope; domain events may specialize it.
+- Python model registry is a snapshot/cache adapter rather than the Rust model authority.
+- Python MemoryVault is explicitly labeled as a sidecar projection; Rust MemoryModule remains the runtime authority.
+
+## Remaining migration work
+
+1. Finish replacing module-local task DTO/status persistence with core Task types at every caller.
+2. Finish replacing module-local scheduler persistence/loop assumptions with core scheduler state at every caller.
+3. Add a typed Rust/Python model snapshot bridge instead of relying on ad-hoc dictionaries.
+4. Add a typed Rust/Python memory synchronization bridge and migration/import tooling before changing durable storage.
+5. Keep architecture regression tests in CI so duplicate execution/authority paths cannot silently return.
