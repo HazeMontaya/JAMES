@@ -529,6 +529,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_plan_executor_marks_failed_provider_unavailable_and_fails_over() {
+        struct FailingExecutor;
+
+        #[async_trait::async_trait]
+        impl CapabilityExecutor for FailingExecutor {
+            async fn execute(
+                &self,
+                capability_id: &str,
+                _input: serde_json::Value,
+            ) -> anyhow::Result<serde_json::Value> {
+                Err(anyhow::anyhow!("simulated {} provider outage", capability_id))
+            }
+        }
+
+        let registry = Arc::new(james_capabilities::CapabilityRegistry::new());
+        register_test_capability(&registry, "failover.capability").await;
+        let broker = Arc::new(CapabilityBroker::new(registry).without_audit());
+
+        let shared = Arc::new(CapabilityResolver::new());
+        shared.register(ExecutorCandidate::new(
+            "failover.capability",
+            "python",
+            Arc::new(FailingExecutor),
+        ));
+        shared.register(ExecutorCandidate::new(
+            "failover.capability",
+            "backup",
+            Arc::new(james_capability_broker::NoopExecutor),
+        ));
+
+        let executor = PlanExecutor::new(broker);
+        executor.attach_resolver(shared);
+        let plan = test_plan("failover.capability");
+
+        let first = executor.execute(&plan, "agent:test").await.unwrap();
+        assert!(!first.success);
+        assert_eq!(
+            executor.resolver().provider_health("python"),
+            ProviderHealth::Unavailable
+        );
+
+        let second = executor.execute(&plan, "agent:test").await.unwrap();
+        assert!(second.success);
+        assert_eq!(
+            executor.resolver().resolve("failover.capability", &ResolutionContext::default())
+                .selected.unwrap().provider,
+            "backup"
+        );
+    }
+
+    #[tokio::test]
     async fn test_plan_executor_fails_cleanly_without_resolver_entry() {
         let registry = Arc::new(james_capabilities::CapabilityRegistry::new());
         register_test_capability(&registry, "missing.executor").await;
