@@ -156,6 +156,7 @@ class NatsCapabilityBridge:
     async def _execute_request(self, payload: bytes) -> dict[str, Any]:
         started = time.perf_counter()
         request_id = ""
+        capability_id = ""
         correlation_id = ""
         causation_id = None
         try:
@@ -189,7 +190,12 @@ class NatsCapabilityBridge:
                 capability_id,
                 caller,
             )
-            result = await self.registry.execute(capability_id, args)
+            result = await self.registry.execute(
+                capability_id,
+                args,
+                correlation_id=correlation_id or None,
+                causation_id=causation_id,
+            )
             success = bool(result.get("success"))
             self._capability_health[capability_id] = success
             return {
