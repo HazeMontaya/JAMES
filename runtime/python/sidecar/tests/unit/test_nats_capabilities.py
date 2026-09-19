@@ -44,11 +44,14 @@ async def test_execute_request_dispatches_calculator():
     registry.register(Calculator())
     bridge = NatsCapabilityBridge.__new__(NatsCapabilityBridge)
     bridge.registry = registry
+    bridge.bridge_token = "test-secret"
+    bridge._capability_health = {}
 
     response = await bridge._execute_request(json.dumps({
         "request_id": "test-1",
         "capability_id": "calculator",
         "caller": "agent-runtime",
+        "bridge_token": "test-secret",
         "input": {"operation": "multiply", "a": "25", "b": "4"},
     }).encode("utf-8"))
 
@@ -70,6 +73,7 @@ async def test_execute_request_rejects_unknown_capability():
         "request_id": "test-2",
         "capability_id": "does_not_exist",
         "caller": "agent-runtime",
+        "bridge_token": "test-secret",
         "input": {},
     }).encode("utf-8"))
 
@@ -89,6 +93,7 @@ async def test_execute_request_rejects_non_object_input():
         "request_id": "test-3",
         "capability_id": "calculator",
         "caller": "agent-runtime",
+        "bridge_token": "test-secret",
         "input": ["not", "an", "object"],
     }).encode("utf-8"))
 
