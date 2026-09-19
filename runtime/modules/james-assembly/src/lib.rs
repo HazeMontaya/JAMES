@@ -423,6 +423,7 @@ impl JamesAssembly {
         ));
 
         // ---- Canonical task manager + module facade ----
+        let core_tasks = Arc::new(james_tasks_core::TaskManager::new(Some(event_bus.clone())));
         // One TaskManager instance is shared by tasks, scheduler, and agents.
         let tasks = Arc::new(TasksModule::from_manager(
             TasksModuleConfig {
