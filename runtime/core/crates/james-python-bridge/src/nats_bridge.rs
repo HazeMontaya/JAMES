@@ -385,6 +385,38 @@ mod contract_tests {
 }
 
 #[cfg(test)]
+mod health_contract_tests {
+    use super::*;
+
+    #[test]
+    fn health_payload_deserializes_capability_health() {
+        let payload = serde_json::json!({
+            "service": "james-python",
+            "status": "degraded",
+            "timestamp": "2026-09-19T00:00:00Z",
+            "capabilities": ["web_search", "web_scrape"],
+            "capability_health": {"web_search": true, "web_scrape": false}
+        });
+        let health: HealthCheck = serde_json::from_value(payload).unwrap();
+        assert_eq!(health.status, "degraded");
+        assert_eq!(health.capability_health.get("web_search"), Some(&true));
+        assert_eq!(health.capability_health.get("web_scrape"), Some(&false));
+    }
+
+    #[test]
+    fn health_payload_without_capability_health_remains_compatible() {
+        let payload = serde_json::json!({
+            "service": "james-python",
+            "status": "healthy",
+            "timestamp": "2026-09-19T00:00:00Z",
+            "capabilities": []
+        });
+        let health: HealthCheck = serde_json::from_value(payload).unwrap();
+        assert!(health.capability_health.is_empty());
+    }
+}
+
+#[cfg(test)]
 mod request_contract_tests {
     use super::*;
 
