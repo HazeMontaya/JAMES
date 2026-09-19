@@ -5,6 +5,10 @@ from typing import Any, Dict, List, Optional
 
 from james_runtime.agents.memory import MemoryStore, MemoryTools
 from james_runtime.agents.reasoner import AgentResult, ReActReasoner
+from james_runtime.memory.bootstrap import bootstrap
+from james_runtime.memory.resolver import ContextResolver
+from james_runtime.memory.sessions import SessionRecorder
+from james_runtime.memory.skills import SkillStore
 from james_runtime.tools.builtins import default_tools
 from james_runtime.tools.registry import ToolRegistry
 
@@ -21,6 +25,10 @@ class AgentSystem:
 
         # Memory
         self.memory = MemoryStore(self.base_dir / "memory" / "memory.jsonl")
+        self.vault = bootstrap(self.base_dir / "vault")
+        self.skills = SkillStore(self.base_dir / "vault" / "skills")
+        self.context_resolver = ContextResolver(self.vault, self.skills)
+        self.sessions = SessionRecorder(self.base_dir / "vault")
 
         # Register built-in + memory tools
         self.tool_registry.register_many(default_tools())
@@ -50,18 +58,42 @@ class AgentSystem:
         # Inject only a small, relevant memory window so long-running sessions
         # do not grow the model context without bound.
         memories = self.memory.recall(query=query, namespace=agent_id, limit=5)
-        history = (
-            [{
+        resolved = self.context_resolver.resolve(query, skill_limit=3, memory_limit=5)
+        durable_context = []
+        for match in resolved:
+            if match.kind == "memory":
+                try:
+                    durable_context.append(self.vault.read_note(match.name)[:2500])
+                except KeyError:
+                    continue
+            else:
+                try:
+                    skill = self.skills.load(match.name)
+                    durable_context.append(
+                        f"Skill: {skill.name}\nDescription: {skill.description}\n"
+                        f"Procedure: {'; '.join(skill.procedure)}\nLessons: {'; '.join(skill.lessons[-5:])}"
+                    )
+                except KeyError:
+                    continue
+        history = []
+        if memories or durable_context:
+            history.append({
                 "role": "system",
-                "content": "Relevant persistent memories:\\n"
-                + "\\n".join(f"- {m['content']}" for m in reversed(memories)),
-            }]
-            if memories
-            else []
+                "content": "Relevant persistent context:\n"
+                + "\n\n".join([*(f"- {m['content']}" for m in reversed(memories)), *durable_context]),
+            })
+        session_id = __import__("uuid").uuid4().hex
+        self.sessions.start(query, session_id)
+        self.sessions.record(
+            action=f"Context primed: {len(resolved)} matches",
+            decision="; ".join(f"{m.kind}:{m.name} ({m.score:.2f})" for m in resolved[:5]) or "No durable context match",
         )
-
-        result = await agent.run(query, conversation_history=history)
-
+        try:
+            result = await agent.run(query, conversation_history=history)
+        except Exception as exc:
+            self.sessions.record(error=str(exc))
+            self.sessions.finish("failed")
+            raise
         if result.success:
             # Persist a compact interaction record. The full ReAct trace stays
             # in the returned result rather than being duplicated in memory.
@@ -73,6 +105,13 @@ class AgentSystem:
                     key=goal_id or None,
                 )
 
+        self.sessions.record(action=f"Agent completed: success={result.success}, tool_calls={result.tool_calls}")
+        if result.success:
+            self.sessions.record(lesson="Persist only verified successful outcomes; retain failures for diagnosis.")
+            self.sessions.finish("success")
+        else:
+            self.sessions.record(error=result.message or "agent run did not complete")
+            self.sessions.finish("incomplete")
         return result
 
     def status(self) -> Dict[str, Any]:
