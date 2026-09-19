@@ -121,6 +121,40 @@ pub trait DevelopmentAgent: Send + Sync {
     }
 }
 
+fn validate_patch_paths(patch: &str) -> Result<()> {
+    const PROTECTED: &[&str] = &[
+        "runtime/core/crates/james-capability-broker/",
+        "runtime/core/crates/james-core/",
+        "runtime/modules/james-system/src/main.rs",
+        "ops/scripts/start-james.ps1",
+    ];
+    let mut seen = 0usize;
+    for line in patch.lines() {
+        let raw = if line.starts_with("diff --git ") {
+            line.split_whitespace().nth(2).or_else(|| line.split_whitespace().nth(3))
+        } else if line.starts_with("--- ") || line.starts_with("+++ ") {
+            line.split_whitespace().nth(1)
+        } else {
+            None
+        };
+        let Some(raw) = raw else { continue };
+        if raw == "/dev/null" { continue; }
+        let normalized = raw.trim_start_matches("a/").trim_start_matches("b/").replace('\\', "/");
+        if normalized.starts_with('/')
+            || normalized.split('/').any(|component| component == "..")
+            || normalized.contains(':')
+            || PROTECTED.iter().any(|prefix| normalized == *prefix || normalized.starts_with(prefix))
+        {
+            bail!("selfmade patch targets unsafe or protected path: {normalized}");
+        }
+        seen += 1;
+    }
+    if seen == 0 {
+        bail!("selfmade patch contains no file paths");
+    }
+    Ok(())
+}
+
 pub struct SelfMadeModule {
     event_bus: Arc<EventBus>,
     capability_registry: Arc<CapabilityRegistry>,
@@ -506,37 +540,7 @@ impl SelfMadeModule {
         let diff = workspace.join(".james-selfmade.patch");
         tokio::fs::write(&diff, &proposal.patch).await?;
 
-        // Defense in depth: the model is never allowed to modify the authority
-        // layer even though it is instructed not to. Parse every file header
-        // before git sees the patch. Reject traversal/absolute paths as well as
-        // protected prefixes so a crafted diff cannot escape the repository.
-        const PROTECTED: &[&str] = &[
-            "runtime/core/crates/james-capability-broker/",
-            "runtime/core/crates/james-core/",
-            "runtime/modules/james-system/src/main.rs",
-            "ops/scripts/start-james.ps1",
-        ];
-        for line in proposal.patch.lines().filter(|line| line.starts_with("diff --git ")) {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() < 4 {
-                bail!("selfmade patch has malformed file header");
-            }
-            for raw in &parts[2..4] {
-                let path = raw.trim_start_matches("a/").trim_start_matches("b/");
-                let normalized = path.replace('\\', "/");
-                if normalized.starts_with('/')
-                    || normalized.split('/').any(|component| component == "..")
-                    || PROTECTED.iter().any(|prefix| normalized == *prefix || normalized.starts_with(prefix))
-                {
-                    self.emit("selfmade.change.rejected", serde_json::json!({
-                        "mission_id": proposal.mission_id,
-                        "proposal_id": proposal.id,
-                        "reason": "unsafe or protected authority path"
-                    })).await;
-                    bail!("selfmade patch targets unsafe or protected path: {path}");
-                }
-            }
-        }
+        // Defense in depth: validate every git diff path before git sees the patch.\n        validate_patch_paths(&proposal.patch)?;
 
         let check = Command::new("git")
             .current_dir(&workspace)
