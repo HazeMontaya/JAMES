@@ -37,8 +37,18 @@ class AgentSystem:
         # External ecosystems are opt-in via explicit environment URLs.
         # The registry is retained for health/routing introspection.
         self.ecosystems = configure_ecosystems(self.tool_registry, event_sink=self.runtime._emit_event)
+        self._capability_executor = None
 
         self._agents: Dict[str, ReActReasoner] = {}
+
+    def set_capability_executor(self, executor) -> None:
+        """Route agent tool execution through the production capability boundary."""
+        self._capability_executor = executor
+
+    async def execute_tool(self, name: str, args: dict, *, caller: str = "agent") -> dict:
+        if self._capability_executor is not None:
+            return await self._capability_executor(name, args, caller=caller)
+        return await self.tool_registry.execute(name, args)
 
     def get_reasoner(self, agent_id: str = "default", model: str = "llama-3.1-8b-instruct", goal_id: str = "") -> ReActReasoner:
         key = f"{agent_id}:{model}:{goal_id}"
@@ -49,6 +59,7 @@ class AgentSystem:
                 model=model,
                 agent_id=agent_id,
                 goal_id=goal_id,
+                tool_executor=self.execute_tool,
             )
             self._agents[key] = agent
         return self._agents[key]
