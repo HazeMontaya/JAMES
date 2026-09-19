@@ -37,6 +37,8 @@ from james_runtime.models.registry import ModelRegistry
 from james_runtime.models.pricing import PricingRegistry
 from james_runtime.telemetry.metrics import MetricsCollector
 from james_runtime.memory import EventLog
+from james_runtime.autonomy.heartbeat import DurableHeartbeat, HeartbeatTask
+from james_runtime.steering.liquid import liquid_race
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +76,7 @@ class JamesRuntime:
         # Durable event history mirrors Jared-style session continuity while
         # keeping runtime events machine-replayable. The log is outside source code.
         self.event_log = EventLog(Path(".james") / "events.jsonl")
+        self.heartbeat = DurableHeartbeat(Path(".james") / "heartbeat.json")
 
         # Agent system (lazy)
         self._agent_system = None
@@ -119,7 +122,9 @@ class JamesRuntime:
         self.cost_tracker = CostTracker(str(self.settings.db_path))
         self.budget_enforcer = BudgetEnforcer(self.settings.budget, self.cost_tracker)
         
-        # 6. Start background tasks
+        # 6. Restore autonomous scheduler state and start background tasks.
+        await self.heartbeat.restore()
+        self.heartbeat.register(HeartbeatTask("runtime.engine_health", 30.0, self._heartbeat_engine_health, timeout_seconds=15.0))
         self._health_check_task = asyncio.create_task(self._health_check_loop())
         
         self._initialized = True
@@ -407,10 +412,14 @@ class JamesRuntime:
         """Run candidate models through existing runtime engines with leader upgrades."""
         async def generate(model_id: str):
             candidate = request.model_copy(update={"model": model_id, "stream": False})
-            selection = await self.runtime_router.select_runtime(model_id, request.runtime_hint)
-            engine = self.engines.get(selection.engine_type)
+            model_spec = self.model_registry.get_model_spec(model_id)
+            if model_spec is None:
+                raise ModelUnavailableError(model_id, "model is not registered")
+            selection = self.runtime_router.select(model_spec)
+            engine = self.engine_registry.get(selection.engine_type.value)
             if engine is None:
-                raise RuntimeError(f"No engine available for {selection.engine_type}")
+                raise EngineNotFoundError(selection.engine_type.value)
+            candidate.runtime_hint = selection.engine_type.value
             return await engine.complete(candidate)
 
         result = await liquid_race(model_ids, generate, min_delta=min_delta)
@@ -422,6 +431,15 @@ class JamesRuntime:
             "results": [{"model": x.model, "score": x.score, "duration_ms": x.duration_ms, "success": x.success} for x in result.results],
         })
         return result
+
+    async def _heartbeat_engine_health(self):
+        """Autonomous maintenance task: probe all registered engines."""
+        health = await self.engine_registry.check_all_health()
+        unhealthy = [name for name, status in health.items() if not status.healthy]
+        self._emit_event("AUTONOMY_HEALTH_SWEEP", {
+            "engine_count": len(health),
+            "unhealthy_engines": unhealthy,
+        })
 
     async def heartbeat_tick(self):
         """Run registered background health/maintenance tasks once."""
