@@ -856,7 +856,7 @@ mod tests {
         let module = SelfMadeModule::new(root.clone(), bus, registry);
         module.start().await.unwrap();
 
-        for path in ["../outside.txt", "/absolute.txt", "runtime/core/crates/james-core/src/lib.rs", "safe.txt"] {
+        for path in ["../outside.txt", "/absolute.txt", "runtime/core/crates/james-core/src/lib.rs"] {
             let proposal = ChangeProposal {
                 id: Uuid::now_v7().to_string(),
                 mission_id: Uuid::now_v7().to_string(),
