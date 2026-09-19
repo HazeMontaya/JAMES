@@ -122,6 +122,7 @@ class AutonomousMissionManager:
                 {"mission_id": duplicate.mission_id, "action": decision.action},
                 source="james-autonomy",
                 correlation_id=correlation_id,
+                causation_id=causation_id,
             )
             return duplicate
         if len(self.active()) >= self.max_active:
@@ -197,6 +198,7 @@ class AutonomousMissionManager:
                 {"mission_id": mission.mission_id, "action": mission.action, "result": mission.result},
                 source="james-autonomy",
                 correlation_id=mission.correlation_id,
+                causation_id=mission.causation_id,
             )
         except Exception as exc:
             mission.status = "failed"
