@@ -40,31 +40,27 @@ class FeedbackStore:
         entry = self._state.setdefault(key, {"count": 0, "ema": {}})
         ema = entry.setdefault("ema", {})
 
-        # A first observation is the current behavior, not the configured target.
-        # This avoids inventing a midpoint before JAMES has seen feedback.
         for name in set(observed) | set(target):
             obs = float(observed.get(name, target.get(name, 0.0)))
             tgt = float(target.get(name, obs))
-            current = float(ema.get(name, obs))
 
-            if rating > 0:
-                desired = obs
+            if name not in ema:
+                # Positive feedback starts from the actual observed behavior.
+                # Negative feedback starts from the supplied target.
+                learned = obs if rating > 0 else tgt
+            elif rating > 0:
+                learned = float(ema[name]) + self.alpha * (obs - float(ema[name]))
             else:
-                # Negative feedback moves away from the observed value toward
-                # the supplied target, while remaining bounded by that reflection.
-                desired = 2.0 * tgt - obs
+                learned = float(ema[name]) + self.alpha * (tgt - float(ema[name]))
 
-            ema[name] = current + self.alpha * (desired - current)
+            ema[name] = learned
 
         entry["count"] = int(entry.get("count", 0)) + 1
         self._save()
         return {k: float(v) for k, v in ema.items()}
 
     def get(self, context: str) -> dict[str, float]:
-        return {
-            k: float(v)
-            for k, v in self._state.get(context, {}).get("ema", {}).items()
-        }
+        return {k: float(v) for k, v in self._state.get(context, {}).get("ema", {}).items()}
 
     def stats(self) -> dict:
         return {
