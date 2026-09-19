@@ -3,8 +3,7 @@
 //! Canonical task state lives in the core james-tasks::TaskManager.
 //! This module owns only the public module DTO/configuration boundary.
 
-use std::path::Path;
-use std::sync::Arc;
+use james_tasks_core::{RetryPolicy as CoreRetryPolicy, Task as CoreTask, TaskManager, TaskPriority as CoreTaskPriority, TaskStatus as CoreTaskStatus};use std::sync::Arc;
 use anyhow::Result;
 use james_capabilities::{CapabilityDefinition, CapabilityRegistry, ExecutionTarget, RiskLevel};
 use james_events::{Event, EventBus};
@@ -171,7 +170,7 @@ fn to_core(t: Task) -> Result<CoreTask> {
         task_type: t.capability.clone(),
         name: t.name,
         priority: t.priority,
-        status: match t.status { CoreTaskStatus::Created | CoreTaskStatus::Paused => CoreTaskStatus::Queued, s => s },
+        status: t.status,
         created_at: t.created_at,
         started_at: t.started_at,
         completed_at: t.completed_at,
