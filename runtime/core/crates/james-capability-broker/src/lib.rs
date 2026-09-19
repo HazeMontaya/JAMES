@@ -1445,6 +1445,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_confirmation_binding_rejects_wrong_caller_and_capability() {
+        let mut def = test_definition("file.write", vec!["file.write"]);
+        def.risk_level = RiskLevel::High;
+        let reg = registry_with(&[]).await;
+        reg.register(def, "test").await.unwrap();
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("agent:a", "file.write");
+        broker.grant_capability_permissions("agent:b", "file.write");
+
+        let request = CapabilityRequestV2::new(
+            "agent:a", "file.write", serde_json::json!({"path":"workspace/a.txt","content":"x"}),
+        );
+        let confirmation = broker.request_confirmation(&request).await.unwrap();
+        broker.approve_confirmation(&confirmation.confirmation_id, "human:1").await.unwrap();
+
+        let mut wrong_caller = request.clone();
+        wrong_caller.caller_identity = "agent:b".to_string();
+        wrong_caller.confirmation_context = ConfirmationContext {
+            required: true,
+            confirmation_id: Some(confirmation.confirmation_id.clone()),
+            expires_at: Some(confirmation.expires_at),
+            caller_identity: Some("agent:b".to_string()),
+            capability_id: Some("file.write".to_string()),
+            target: None,
+            scope: None,
+        };
+        assert!(broker.execute_v2(wrong_caller, &NoopExecutor).await.is_err());
+
+        let mut wrong_capability = request.clone();
+        wrong_capability.capability_id = "file.delete".to_string();
+        wrong_capability.confirmation_context = ConfirmationContext {
+            required: true,
+            confirmation_id: Some(confirmation.confirmation_id),
+            expires_at: Some(wrong_capability.deadline_at.unwrap_or_else(Utc::now)),
+            caller_identity: Some("agent:a".to_string()),
+            capability_id: Some("file.delete".to_string()),
+            target: None,
+            scope: None,
+        };
+        assert!(broker.execute_v2(wrong_capability, &NoopExecutor).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_expired_confirmation_is_rejected() {
+        let mut def = test_definition("file.write", vec!["file.write"]);
+        def.risk_level = RiskLevel::High;
+        let reg = registry_with(&[]).await;
+        reg.register(def, "test").await.unwrap();
+        let broker = CapabilityBroker::new(reg).without_audit();
+        broker.grant_capability_permissions("agent:test", "file.write");
+
+        let request = CapabilityRequestV2::new(
+            "agent:test", "file.write", serde_json::json!({"path":"workspace/a.txt","content":"x"}),
+        );
+        let confirmation = broker.request_confirmation(&request).await.unwrap();
+        broker.confirmations.get_mut(&confirmation.confirmation_id).unwrap().expires_at = Utc::now() - chrono::Duration::seconds(1);
+        let result = broker.approve_confirmation(&confirmation.confirmation_id, "human:1").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
     async fn test_confirmation_cannot_be_reused_for_another_target() {
         let mut def = test_definition("file.write", vec!["file.write"]);
         def.risk_level = RiskLevel::High;
