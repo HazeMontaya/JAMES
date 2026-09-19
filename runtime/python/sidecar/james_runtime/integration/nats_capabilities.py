@@ -166,6 +166,8 @@ class NatsCapabilityBridge:
                 raise PermissionError("invalid Python bridge authentication token")
             caller = str(request.get("caller", "unknown"))
             args = request.get("input", {})
+            correlation_id = str(request.get("correlation_id", ""))
+            causation_id = request.get("causation_id")
 
             if not request_id:
                 raise ValueError("missing request_id")
@@ -191,6 +193,8 @@ class NatsCapabilityBridge:
                 "output": result.get("output") if success else None,
                 "error": None if success else "CapabilityExecutionError: capability execution failed",
                 "duration_ms": int((time.perf_counter() - started) * 1000),
+                "correlation_id": correlation_id or None,
+                "causation_id": causation_id,
             }
         except Exception as exc:
             # Never return exception text to the caller: tool errors can contain
@@ -202,6 +206,8 @@ class NatsCapabilityBridge:
                 "output": None,
                 "error": f"{type(exc).__name__}: capability execution failed",
                 "duration_ms": int((time.perf_counter() - started) * 1000),
+                "correlation_id": correlation_id or None,
+                "causation_id": causation_id,
             }
 
     async def _handle_execute(self, msg: Any) -> None:
