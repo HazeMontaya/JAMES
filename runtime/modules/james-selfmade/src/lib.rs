@@ -877,9 +877,17 @@ mod tests {
             created_at: Utc::now(),
         };
         assert!(module.apply_proposal(&hidden_traversal).await.is_err());
-        }
 
         let _ = tokio::fs::remove_dir_all(root).await;
+    }
+
+    #[test]
+    fn patch_path_validation_is_independent_of_git() {
+        assert!(validate_patch_paths("diff --git a/../outside.txt b/../outside.txt\n").is_err());
+        assert!(validate_patch_paths("diff --git a//absolute.txt b//absolute.txt\n").is_err());
+        assert!(validate_patch_paths("diff --git a/runtime/core/crates/james-core/src/lib.rs b/runtime/core/crates/james-core/src/lib.rs\n").is_err());
+        assert!(validate_patch_paths("diff --git a/safe.txt b/safe.txt\n--- a/safe.txt\n+++ b/safe.txt\n").is_ok());
+        assert!(validate_patch_paths("not a diff\n").is_err());
     }
 
     #[tokio::test]
