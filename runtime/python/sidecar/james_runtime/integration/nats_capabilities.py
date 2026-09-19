@@ -193,6 +193,7 @@ class NatsCapabilityBridge:
             result = await self.registry.execute(
                 capability_id,
                 args,
+                broker_authorized=True,
                 correlation_id=correlation_id or None,
                 causation_id=causation_id,
             )
