@@ -61,7 +61,7 @@ impl JamesCore {
 
         let event_bus = Arc::new(EventBus::new(config.event_bus_buffer_size));
         let capability_registry = Arc::new(CapabilityRegistry::new());
-        let registry = Arc::new(Registry::new().with_capability_registry(capability_registry.clone()));
+        let registry = Arc::new(Registry::new());
         let service_registry = Arc::new(ServiceRegistry::new()
             .with_registry(registry.clone())
             .with_event_bus(event_bus.clone()));
