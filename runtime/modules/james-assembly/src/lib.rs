@@ -1066,19 +1066,19 @@ impl JamesAssembly {
     }
 
     async fn section_tasks(&self) -> Result<serde_json::Value> {
-        let tasks = self.tasks.list_tasks(None, 200).await.unwrap_or_default();
+        let tasks = self.task_manager.list_tasks();
         let items: Vec<serde_json::Value> = tasks
             .iter()
+            .take(200)
             .map(|t| {
                 json!({
                     "id": t.id,
                     "name": t.name,
-                    "description": t.description,
-                    "capability": t.capability,
+                    "capability": t.task_type,
                     "priority": format!("{:?}", t.priority),
                     "status": format!("{:?}", t.status),
-                    "retries": t.retries,
-                    "max_retries": t.max_retries,
+                    "retries": t.current_retry,
+                    "max_retries": t.retry_policy.max_retries,
                     "created_at": t.created_at,
                     "started_at": t.started_at,
                     "completed_at": t.completed_at,
