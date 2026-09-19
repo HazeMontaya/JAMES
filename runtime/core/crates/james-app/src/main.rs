@@ -477,6 +477,7 @@ async fn main() -> Result<()> {
                 .collect::<Vec<_>>();
             for stale_id in stale {
                 sync_service.executor.unregister_provider_executor(&stale_id, "python");
+                sync_service.executor.resolver().clear_capability_health(&stale_id, "python");
             }
         }
     });
