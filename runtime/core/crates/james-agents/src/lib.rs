@@ -164,8 +164,10 @@ impl Agent {
 
     /// Attach a shared capability resolver. Its candidates are merged into the
     /// agent's resolver; the agent's own registrations are layered underneath.
-    pub fn attach_resolver(&mut self, resolver: Arc<CapabilityResolver>) {
-        self.shared_resolver = Some(resolver.clone());
+    pub fn attach_resolver(&self, resolver: Arc<CapabilityResolver>) {
+        // Agent instances are commonly stored behind Arc. Copy the current
+        // shared candidates into the agent-local resolver; future registrations
+        // are refreshed by the factory before creating new agents.
         self.sync_shared_resolver(&resolver);
     }
 
