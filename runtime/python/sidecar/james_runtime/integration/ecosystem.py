@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping, Protocol, Sequence
+import time
 
 
 class IntegrationDomain(str, Enum):
@@ -93,6 +94,7 @@ class EcosystemRegistry:
         default_factory=lambda: {p.key: p for p in PROFILES}
     )
     adapters: dict[str, Any] = field(default_factory=dict)
+    _health: dict[str, tuple[bool, float, str | None]] = field(default_factory=dict)
 
     def register(self, key: str, adapter: Any) -> None:
         if key not in self.profiles:
@@ -112,3 +114,28 @@ class EcosystemRegistry:
         if key not in self.adapters:
             raise KeyError(f"integration is not enabled: {key}")
         return self.adapters[key]
+
+    def provider_for(self, capability: str) -> tuple[str, ...]:
+        """Return enabled providers advertising a capability, deterministically."""
+        return tuple(key for key in self.enabled() if capability in self.profiles[key].capabilities)
+
+    def capability_providers(self) -> dict[str, tuple[str, ...]]:
+        matrix: dict[str, list[str]] = {}
+        for provider in self.enabled():
+            for capability in self.profiles[provider].capabilities:
+                matrix.setdefault(capability, []).append(provider)
+        return {name: tuple(values) for name, values in sorted(matrix.items())}
+
+    def mark_health(self, provider: str, healthy: bool, error: str | None = None) -> None:
+        if provider not in self.profiles:
+            raise KeyError(f"unknown ecosystem integration: {provider}")
+        self._health[provider] = (healthy, time.time(), error)
+
+    def health(self, provider: str) -> dict[str, Any]:
+        if provider not in self.profiles:
+            raise KeyError(f"unknown ecosystem integration: {provider}")
+        healthy, checked_at, error = self._health.get(provider, (True, 0.0, None))
+        return {"provider": provider, "healthy": healthy, "checked_at": checked_at, "error": error}
+
+    def health_matrix(self) -> dict[str, dict[str, Any]]:
+        return {provider: self.health(provider) for provider in self.enabled()}
